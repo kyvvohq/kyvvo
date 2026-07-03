@@ -1,0 +1,17 @@
+{
+  "name": "kyvvo-panel",
+  "version": "1.0.0",
+  "description": "Kyvvo — painel web (E2: agenda e perfil)",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "fastify": "^4.28.1",
+    "@fastify/jwt": "^8.0.1",
+    "@fastify/cors": "^9.0.1",
+    "@fastify/static": "^7.0.4",
+    "pg": "^8.11.3",
+    "bcryptjs": "^2.4.3"
+  }
+}

@@ -1,0 +1,76 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'server/index.js'
+      - 'server/package.json'
+      - 'server/public/**'
+      - 'server/panel/**'
+  workflow_dispatch:
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      landing: ${{ steps.filter.outputs.landing }}
+      panel: ${{ steps.filter.outputs.panel }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            landing:
+              - 'server/index.js'
+              - 'server/package.json'
+              - 'server/public/**'
+            panel:
+              - 'server/panel/**'
+
+  deploy-landing:
+    needs: changes
+    if: needs.changes.outputs.landing == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Copiar arquivos da landing page pra EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "server/index.js,server/package.json,server/public/**"
+          target: "/opt/kyvvo/landing"
+          strip_components: 1
+      - name: Reiniciar container da landing
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: cd /opt/kyvvo && sudo docker compose restart landing
+
+  deploy-panel:
+    needs: changes
+    if: needs.changes.outputs.panel == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Copiar arquivos do painel pra EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "server/panel/**"
+          target: "/opt/kyvvo/panel"
+          strip_components: 2
+      - name: Reiniciar container do painel
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: cd /opt/kyvvo && sudo docker compose restart panel
