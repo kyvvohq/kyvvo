@@ -26,9 +26,19 @@ nav{
 .logo{font-family:var(--font-d);font-size:1.5rem;font-weight:800;letter-spacing:-.03em;text-decoration:none;color:var(--text);display:flex;align-items:center}
 .logo-vv{color:var(--accent-light);position:relative}
 .logo-vv::after{content:'';position:absolute;bottom:-2px;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--accent),var(--cyan));border-radius:2px}
+.nav-right{display:flex;align-items:center;gap:14px}
 .lang-toggle{display:flex;align-items:center;gap:4px;background:var(--surface);border:1px solid var(--border);border-radius:100px;padding:4px;cursor:pointer}
 .lang-btn{padding:5px 12px;border-radius:100px;font-size:.78rem;font-weight:500;font-family:var(--font-b);border:none;cursor:pointer;transition:all .2s;color:var(--muted);background:transparent}
 .lang-btn.active{background:var(--accent);color:#fff}
+.btn-login{padding:9px 20px;border-radius:100px;font-size:.82rem;font-weight:600;font-family:var(--font-b);color:#fff;background:linear-gradient(135deg,var(--accent),#5b3fd4);border:none;cursor:pointer;transition:all .2s;white-space:nowrap}
+.btn-login:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(124,92,252,.35)}
+
+.login-modal-overlay{display:none;position:fixed;inset:0;z-index:1000;background:rgba(5,7,14,.72);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:20px}
+.login-modal-overlay.open{display:flex}
+.login-modal{position:relative;width:100%;max-width:420px;height:min(560px,90vh);background:var(--bg2);border:1px solid var(--border);border-radius:16px;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,.5)}
+.login-modal iframe{width:100%;height:100%;border:none;background:var(--bg2)}
+.login-modal-close{position:absolute;top:10px;right:12px;z-index:1;width:32px;height:32px;border-radius:50%;border:none;background:rgba(255,255,255,.08);color:var(--text);font-size:1.1rem;line-height:1;cursor:pointer;transition:background .2s}
+.login-modal-close:hover{background:rgba(255,255,255,.16)}
 
 .hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:100px 6% 60px;text-align:center;position:relative;overflow:hidden}
 .glow-1{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(124,92,252,.15) 0%,transparent 65%);top:-200px;left:50%;transform:translateX(-50%);pointer-events:none}
@@ -116,11 +126,21 @@ footer{padding:48px 6%;border-top:1px solid var(--border);display:flex;align-ite
 
 <nav>
   <a class="logo" href="#">ky<span class="logo-vv">vv</span>o</a>
-  <div class="lang-toggle">
-    <button class="lang-btn active" onclick="setLang('pt')">PT</button>
-    <button class="lang-btn" onclick="setLang('en')">EN</button>
+  <div class="nav-right">
+    <div class="lang-toggle">
+      <button class="lang-btn active" onclick="setLang('pt')">PT</button>
+      <button class="lang-btn" onclick="setLang('en')">EN</button>
+    </div>
+    <button class="btn-login" id="btnLogin" onclick="openLoginModal()" data-pt="Entrar" data-en="Log in">Entrar</button>
   </div>
 </nav>
+
+<div class="login-modal-overlay" id="loginModalOverlay" onclick="if(event.target===this)closeLoginModal()">
+  <div class="login-modal">
+    <button class="login-modal-close" id="btnCloseLogin" onclick="closeLoginModal()" aria-label="Fechar">✕</button>
+    <iframe id="loginIframe" title="Login Kyvvo" src="about:blank"></iframe>
+  </div>
+</div>
 
 <section class="hero">
   <div class="glow-1"></div>
@@ -318,6 +338,37 @@ function setLang(lang) {
     el.placeholder = el.getAttribute('data-placeholder-' + lang) || '';
   });
 }
+
+const PANEL_ORIGIN = 'http://52.90.169.117:3001';
+
+function openLoginModal() {
+  const overlay = document.getElementById('loginModalOverlay');
+  const iframe = document.getElementById('loginIframe');
+  iframe.src = PANEL_ORIGIN + '/login.html';
+  overlay.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeLoginModal() {
+  const overlay = document.getElementById('loginModalOverlay');
+  const iframe = document.getElementById('loginIframe');
+  overlay.classList.remove('open');
+  document.body.style.overflow = '';
+  iframe.src = 'about:blank';
+}
+
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && document.getElementById('loginModalOverlay').classList.contains('open')) {
+    closeLoginModal();
+  }
+});
+
+window.addEventListener('message', (e) => {
+  if (e.origin !== PANEL_ORIGIN) return;
+  if (e.data && e.data.source === 'kyvvo-login' && e.data.status === 'success') {
+    window.top.location.href = PANEL_ORIGIN + '/painel.html';
+  }
+});
 
 function selectNicho(card) {
   document.querySelectorAll('.nicho-card').forEach(c => c.classList.remove('selected'));

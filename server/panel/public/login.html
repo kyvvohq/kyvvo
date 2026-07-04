@@ -33,9 +33,22 @@
   const emailInput = document.getElementById('email');
   const senhaInput = document.getElementById('senha');
   const toggleSenhaBtn = document.getElementById('btn-toggle-senha');
+  const inIframe = window.self !== window.top;
+
+  function irParaPainel() {
+    if (inIframe) {
+      // Carregado dentro do modal de login da landing: avisa o pai em vez de
+      // navegar só dentro do iframe, para a aba inteira ir para o painel.
+      try {
+        window.parent.postMessage({ source: 'kyvvo-login', status: 'success' }, '*');
+      } catch (e) {}
+    } else {
+      window.location.href = '/painel.html';
+    }
+  }
 
   if (localStorage.getItem('kyvvo_token')) {
-    window.location.href = '/painel.html';
+    irParaPainel();
   }
 
   toggleSenhaBtn.addEventListener('click', () => {
@@ -78,7 +91,7 @@
 
       localStorage.setItem('kyvvo_token', data.token);
       localStorage.setItem('kyvvo_nome', data.nome || '');
-      window.location.href = '/painel.html';
+      irParaPainel();
     } catch (err) {
       erroEl.textContent = 'Erro de conexão. Tente novamente.';
     } finally {
