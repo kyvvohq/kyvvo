@@ -113,6 +113,129 @@ async function start() {
     return reply.code(400).send({ error: 'Parâmetro "view" deve ser dia, semana ou mes' });
   });
 
+  fastify.patch('/api/agendamentos/:id', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const { tenantId } = request.user;
+    const { id } = request.params;
+    const { status, data_hora: dataHora } = request.body || {};
+
+    if (status === undefined && dataHora === undefined) {
+      return reply.code(400).send({ error: 'Informe "status" e/ou "data_hora" para atualizar' });
+    }
+    if (status !== undefined && !['confirmado', 'cancelado', 'reagendado'].includes(status)) {
+      return reply.code(400).send({ error: 'status inválido' });
+    }
+
+    const { rows: atuais } = await pool.query(
+      `SELECT a.id, a.profissional_id, s.duracao_minutos, p.nome AS profissional
+       FROM agendamentos a
+       JOIN servicos s ON s.id = a.servico_id
+       JOIN profissionais p ON p.id = a.profissional_id
+       WHERE a.id = $1 AND a.tenant_id = $2`,
+      [id, tenantId]
+    );
+    const atual = atuais[0];
+    if (!atual) {
+      return reply.code(404).send({ error: 'Agendamento não encontrado' });
+    }
+
+    if (dataHora !== undefined) {
+      const { rows: conflitos } = await pool.query(
+        `SELECT a.id
+         FROM agendamentos a
+         JOIN servicos s ON s.id = a.servico_id
+         WHERE a.tenant_id = $1
+           AND a.profissional_id = $2
+           AND a.status = 'confirmado'
+           AND a.id <> $3
+           AND a.data_hora < $4::timestamptz + ($5 * interval '1 minute')
+           AND $4::timestamptz < a.data_hora + (s.duracao_minutos * interval '1 minute')`,
+        [tenantId, atual.profissional_id, id, dataHora, atual.duracao_minutos]
+      );
+      if (conflitos.length > 0) {
+        return reply.code(409).send({
+          error: `Conflito de horário: ${atual.profissional} já tem agendamento neste período.`,
+        });
+      }
+    }
+
+    await pool.query(
+      `UPDATE agendamentos SET
+         status = COALESCE($2, status),
+         data_hora = COALESCE($3, data_hora),
+         updated_at = now()
+       WHERE id = $1`,
+      [id, status ?? null, dataHora ?? null]
+    );
+
+    const { rows: detalhado } = await pool.query(
+      `SELECT a.id, a.data_hora, a.status, a.encaixe, a.updated_at,
+              c.nome AS cliente, c.telefone AS cliente_telefone,
+              p.nome AS profissional, s.nome AS servico, s.duracao_minutos
+       FROM agendamentos a
+       JOIN clientes c ON c.id = a.cliente_id
+       JOIN profissionais p ON p.id = a.profissional_id
+       JOIN servicos s ON s.id = a.servico_id
+       WHERE a.id = $1`,
+      [id]
+    );
+
+    return detalhado[0];
+  });
+
+  const HORARIO_ABERTURA_HORA = 8;
+  const HORARIO_FECHAMENTO_HORA = 20;
+  const SLOT_INTERVALO_MINUTOS = 30;
+
+  fastify.get('/api/agendamentos/disponibilidade', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const { tenantId } = request.user;
+    const { data, profissional, servico } = request.query;
+
+    if (!data || !profissional || !servico) {
+      return reply.code(400).send({ error: 'Parâmetros "data", "profissional" e "servico" são obrigatórios' });
+    }
+
+    const { rows: servicoRows } = await pool.query(
+      'SELECT duracao_minutos FROM servicos WHERE id = $1 AND tenant_id = $2',
+      [servico, tenantId]
+    );
+    const servicoInfo = servicoRows[0];
+    if (!servicoInfo) {
+      return reply.code(404).send({ error: 'Serviço não encontrado' });
+    }
+
+    const { rows: ocupados } = await pool.query(
+      `SELECT a.data_hora, s.duracao_minutos
+       FROM agendamentos a
+       JOIN servicos s ON s.id = a.servico_id
+       WHERE a.tenant_id = $1 AND a.profissional_id = $2
+         AND a.status = 'confirmado'
+         AND a.data_hora::date = $3::date`,
+      [tenantId, profissional, data]
+    );
+
+    const duracaoMinutos = servicoInfo.duracao_minutos;
+    const slots = [];
+    for (
+      let minutos = HORARIO_ABERTURA_HORA * 60;
+      minutos + duracaoMinutos <= HORARIO_FECHAMENTO_HORA * 60;
+      minutos += SLOT_INTERVALO_MINUTOS
+    ) {
+      const inicioSlot = new Date(`${data}T00:00:00`);
+      inicioSlot.setMinutes(inicioSlot.getMinutes() + minutos);
+      const fimSlot = new Date(inicioSlot.getTime() + duracaoMinutos * 60000);
+
+      const conflita = ocupados.some((o) => {
+        const inicioOcupado = new Date(o.data_hora);
+        const fimOcupado = new Date(inicioOcupado.getTime() + o.duracao_minutos * 60000);
+        return inicioSlot < fimOcupado && inicioOcupado < fimSlot;
+      });
+
+      slots.push({ hora: inicioSlot.toISOString(), disponivel: !conflita });
+    }
+
+    return { data, profissional, servico, duracaoMinutos, slots };
+  });
+
   // ---------- Perfil ----------
   fastify.get('/api/perfil', { preHandler: [fastify.authenticate] }, async (request) => {
     const { tenantId } = request.user;
