@@ -1,7 +1,4 @@
 const token = localStorage.getItem('kyvvo_token');
-if (!token) {
-  window.location.href = '/login.html';
-}
 
 document.getElementById('btn-sair').addEventListener('click', () => {
   localStorage.removeItem('kyvvo_token');

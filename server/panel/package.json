@@ -4,7 +4,8 @@
   "description": "Kyvvo — painel web (E2: agenda e perfil)",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "fastify": "^4.28.1",
@@ -13,5 +14,8 @@
     "@fastify/static": "^7.0.4",
     "pg": "^8.11.3",
     "bcryptjs": "^2.4.3"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.1"
   }
 }
