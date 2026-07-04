@@ -85,6 +85,330 @@ function nomeDiaSemana(d) {
   return d.toLocaleDateString('pt-BR', { weekday: 'long', timeZone: 'America/Sao_Paulo' });
 }
 
+function formatarDataCurta(dataHoraISO) {
+  return new Date(dataHoraISO).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Sao_Paulo' });
+}
+
+// ---------- Toasts ----------
+function mostrarToast(mensagem, tipo = 'sucesso') {
+  let container = document.getElementById('toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    container.className = 'toast-container';
+    document.body.appendChild(container);
+  }
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${tipo}`;
+  toast.textContent = (tipo === 'sucesso' ? '✅ ' : '❌ ') + mensagem;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.classList.add('toast-saindo');
+    setTimeout(() => toast.remove(), 250);
+  }, 4000);
+}
+
+// ---------- Modal genérico ----------
+function escFecharModal(e) {
+  if (e.key === 'Escape') fecharModal();
+}
+
+function fecharModal() {
+  const overlay = document.getElementById('modal-overlay');
+  if (overlay) overlay.remove();
+  document.removeEventListener('keydown', escFecharModal);
+}
+
+function abrirModal(tituloHtml, conteudoHtml) {
+  fecharModal();
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal-card">
+      <button class="modal-close" id="modal-close" aria-label="Fechar">✕</button>
+      ${tituloHtml}
+      ${conteudoHtml}
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  document.getElementById('modal-close').addEventListener('click', fecharModal);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) fecharModal(); });
+  document.addEventListener('keydown', escFecharModal);
+  return overlay;
+}
+
+// ---------- Modal: cancelamento (ST08.4) ----------
+function abrirModalCancelar(ag) {
+  abrirModal(
+    '<h3>Cancelar agendamento</h3>',
+    `
+      <p class="modal-texto">Tem certeza que deseja cancelar o agendamento de <strong>${ag.cliente || ag.cliente_telefone}</strong> — ${ag.servico} — ${formatarDataCurta(ag.data_hora)} às ${formatarHora(ag.data_hora)}?</p>
+      <div class="modal-acoes">
+        <button class="btn-secundario" id="btn-voltar-cancelar">Voltar</button>
+        <button class="btn-perigo" id="btn-confirmar-cancelar">Confirmar cancelamento</button>
+      </div>
+    `
+  );
+
+  document.getElementById('btn-voltar-cancelar').addEventListener('click', fecharModal);
+  document.getElementById('btn-confirmar-cancelar').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-confirmar-cancelar');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    const resultado = await api(`/api/agendamentos/${ag.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'cancelado' }),
+    });
+
+    if (resultado && !resultado.error) {
+      fecharModal();
+      mostrarToast('Agendamento atualizado com sucesso.', 'sucesso');
+      render();
+    } else {
+      mostrarToast((resultado && resultado.error) || 'Erro ao cancelar agendamento.', 'erro');
+      btn.disabled = false;
+      btn.textContent = 'Confirmar cancelamento';
+    }
+  });
+}
+
+// ---------- Modal: reagendamento (ST08.5) ----------
+function popularSelectHorarios(select, slots) {
+  select.innerHTML = slots
+    .map((s) => `<option value="${s.hora}" ${!s.disponivel ? 'disabled' : ''}>${formatarHora(s.hora)}${!s.disponivel ? ' (ocupado)' : ''}</option>`)
+    .join('');
+  const primeiraDisponivel = slots.find((s) => s.disponivel);
+  if (primeiraDisponivel) select.value = primeiraDisponivel.hora;
+  return !!primeiraDisponivel;
+}
+
+function abrirModalReagendar(ag) {
+  const hoje = formatarDataISO(new Date());
+  abrirModal(
+    '<h3>Reagendar</h3>',
+    `
+      <div class="modal-erro" id="reagendar-erro"></div>
+      <label for="reagendar-data">Nova data</label>
+      <input type="date" id="reagendar-data" min="${hoje}" value="${ag.data_hora.slice(0, 10)}">
+      <label for="reagendar-horario">Novo horário</label>
+      <select id="reagendar-horario"><option>Carregando horários...</option></select>
+      <div class="modal-acoes">
+        <button class="btn-secundario" id="btn-voltar-reagendar">Voltar</button>
+        <button class="btn-primario" id="btn-confirmar-reagendar" disabled>Confirmar</button>
+      </div>
+    `
+  );
+
+  document.getElementById('btn-voltar-reagendar').addEventListener('click', fecharModal);
+
+  async function carregarSlots() {
+    const data = document.getElementById('reagendar-data').value;
+    const select = document.getElementById('reagendar-horario');
+    const btnConfirmar = document.getElementById('btn-confirmar-reagendar');
+    select.innerHTML = '<option>Carregando horários...</option>';
+    btnConfirmar.disabled = true;
+
+    const disponibilidade = await api(`/api/agendamentos/disponibilidade?data=${data}&profissional=${ag.profissional_id}&servico=${ag.servico_id}`);
+    if (!disponibilidade || disponibilidade.error) {
+      select.innerHTML = '<option>Erro ao carregar horários</option>';
+      return;
+    }
+    btnConfirmar.disabled = !popularSelectHorarios(select, disponibilidade.slots);
+  }
+
+  document.getElementById('reagendar-data').addEventListener('change', carregarSlots);
+  document.getElementById('reagendar-horario').addEventListener('change', (e) => {
+    const opt = e.target.selectedOptions[0];
+    document.getElementById('btn-confirmar-reagendar').disabled = !opt || opt.disabled;
+  });
+
+  document.getElementById('btn-confirmar-reagendar').addEventListener('click', async () => {
+    const erroEl = document.getElementById('reagendar-erro');
+    erroEl.textContent = '';
+    const btn = document.getElementById('btn-confirmar-reagendar');
+    btn.disabled = true;
+    btn.textContent = 'Confirmando...';
+
+    const resultado = await api(`/api/agendamentos/${ag.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ data_hora: document.getElementById('reagendar-horario').value }),
+    });
+
+    if (resultado && !resultado.error) {
+      fecharModal();
+      mostrarToast('Agendamento atualizado com sucesso.', 'sucesso');
+      render();
+    } else {
+      erroEl.textContent = (resultado && resultado.error) || 'Erro ao reagendar.';
+      btn.disabled = false;
+      btn.textContent = 'Confirmar';
+    }
+  });
+
+  carregarSlots();
+}
+
+// ---------- Modal: encaixe (ST08.6) ----------
+function abrirModalEncaixe(ag) {
+  const hoje = formatarDataISO(new Date());
+  abrirModal(
+    `<h3>Encaixe — ${ag.profissional}</h3>`,
+    `
+      <div class="modal-erro" id="encaixe-erro"></div>
+      <label for="encaixe-nome">Nome do cliente (opcional)</label>
+      <input type="text" id="encaixe-nome">
+      <label for="encaixe-whatsapp">WhatsApp</label>
+      <input type="tel" id="encaixe-whatsapp" placeholder="11999999999">
+      <label for="encaixe-servico">Serviço</label>
+      <select id="encaixe-servico"><option value="">Carregando serviços...</option></select>
+      <label for="encaixe-data">Data</label>
+      <input type="date" id="encaixe-data" min="${hoje}" value="${ag.data_hora.slice(0, 10)}">
+      <label for="encaixe-horario">Horário</label>
+      <select id="encaixe-horario"><option>Selecione um serviço primeiro</option></select>
+      <div class="modal-acoes">
+        <button class="btn-secundario" id="btn-voltar-encaixe">Voltar</button>
+        <button class="btn-primario" id="btn-confirmar-encaixe" disabled>Confirmar encaixe</button>
+      </div>
+    `
+  );
+
+  document.getElementById('btn-voltar-encaixe').addEventListener('click', fecharModal);
+
+  async function carregarSlotsEncaixe() {
+    const servicoId = document.getElementById('encaixe-servico').value;
+    const data = document.getElementById('encaixe-data').value;
+    const selectHorario = document.getElementById('encaixe-horario');
+    const btnConfirmar = document.getElementById('btn-confirmar-encaixe');
+    if (!servicoId) {
+      selectHorario.innerHTML = '<option>Selecione um serviço primeiro</option>';
+      btnConfirmar.disabled = true;
+      return;
+    }
+    selectHorario.innerHTML = '<option>Carregando horários...</option>';
+    btnConfirmar.disabled = true;
+
+    const disponibilidade = await api(`/api/agendamentos/disponibilidade?data=${data}&profissional=${ag.profissional_id}&servico=${servicoId}`);
+    if (!disponibilidade || disponibilidade.error) {
+      selectHorario.innerHTML = '<option>Erro ao carregar horários</option>';
+      return;
+    }
+    btnConfirmar.disabled = !popularSelectHorarios(selectHorario, disponibilidade.slots);
+  }
+
+  api('/api/servicos').then((resultado) => {
+    const select = document.getElementById('encaixe-servico');
+    if (!resultado || !resultado.servicos) {
+      select.innerHTML = '<option value="">Erro ao carregar serviços</option>';
+      return;
+    }
+    select.innerHTML = '<option value="">Selecione...</option>' +
+      resultado.servicos.map((s) => `<option value="${s.id}">${s.nome} (${s.duracao_minutos}min)</option>`).join('');
+  });
+
+  document.getElementById('encaixe-servico').addEventListener('change', carregarSlotsEncaixe);
+  document.getElementById('encaixe-data').addEventListener('change', carregarSlotsEncaixe);
+  document.getElementById('encaixe-horario').addEventListener('change', (e) => {
+    const opt = e.target.selectedOptions[0];
+    document.getElementById('btn-confirmar-encaixe').disabled = !opt || opt.disabled;
+  });
+
+  document.getElementById('btn-confirmar-encaixe').addEventListener('click', async () => {
+    const erroEl = document.getElementById('encaixe-erro');
+    erroEl.textContent = '';
+    const whatsapp = document.getElementById('encaixe-whatsapp').value.trim();
+    if (!whatsapp) {
+      erroEl.textContent = 'Informe o WhatsApp do cliente.';
+      return;
+    }
+    const btn = document.getElementById('btn-confirmar-encaixe');
+    btn.disabled = true;
+    btn.textContent = 'Confirmando...';
+
+    const resultado = await api('/api/agendamentos', {
+      method: 'POST',
+      body: JSON.stringify({
+        cliente_nome: document.getElementById('encaixe-nome').value.trim() || null,
+        cliente_telefone: whatsapp,
+        profissional_id: ag.profissional_id,
+        servico_id: document.getElementById('encaixe-servico').value,
+        data_hora: document.getElementById('encaixe-horario').value,
+        encaixe: true,
+      }),
+    });
+
+    if (resultado && !resultado.error) {
+      fecharModal();
+      mostrarToast('Agendamento atualizado com sucesso.', 'sucesso');
+      render();
+    } else {
+      erroEl.textContent = (resultado && resultado.error) || 'Erro ao criar encaixe.';
+      btn.disabled = false;
+      btn.textContent = 'Confirmar encaixe';
+    }
+  });
+
+  carregarSlotsEncaixe();
+}
+
+// ---------- Menu de ações inline (ST08.3) ----------
+let agendamentosAtuais = [];
+
+function renderAgendamentoItem(ag) {
+  const cancelado = ag.status === 'cancelado';
+  return `
+    <div class="agendamento-item${cancelado ? ' agendamento-cancelado' : ''}" data-id="${ag.id}">
+      <div class="agendamento-linha-principal" ${cancelado ? '' : `data-acoes-toggle="${ag.id}"`}>
+        <div>
+          <div class="agendamento-hora">${formatarHora(ag.data_hora)} — ${ag.servico}</div>
+          <div class="agendamento-detalhe">
+            ${ag.cliente || ag.cliente_telefone} · ${ag.profissional} · ${ag.duracao_minutos}min
+            ${ag.encaixe ? '<span class="badge badge-encaixe">Encaixe</span>' : ''}
+            ${cancelado ? '<span class="badge badge-cancelado">Cancelado</span>' : ''}
+          </div>
+        </div>
+        ${cancelado ? '' : '<button class="btn-acoes" aria-label="Ações">⋮</button>'}
+      </div>
+      ${cancelado ? '' : `
+        <div class="menu-acoes" id="menu-acoes-${ag.id}">
+          <button data-acao="reagendar" data-id="${ag.id}">Reagendar</button>
+          <button data-acao="encaixar" data-id="${ag.id}">Encaixar</button>
+          <button data-acao="cancelar" data-id="${ag.id}" class="acao-perigo">Cancelar</button>
+        </div>
+      `}
+    </div>
+  `;
+}
+
+conteudo.addEventListener('click', (e) => {
+  const toggleEl = e.target.closest('[data-acoes-toggle]');
+  if (toggleEl) {
+    const id = toggleEl.dataset.acoesToggle;
+    const menu = document.getElementById(`menu-acoes-${id}`);
+    const jaAberto = menu.classList.contains('aberto');
+    document.querySelectorAll('.menu-acoes.aberto').forEach((m) => m.classList.remove('aberto'));
+    if (!jaAberto) menu.classList.add('aberto');
+    return;
+  }
+
+  const acaoBtn = e.target.closest('[data-acao]');
+  if (acaoBtn) {
+    document.querySelectorAll('.menu-acoes.aberto').forEach((m) => m.classList.remove('aberto'));
+    const ag = agendamentosAtuais.find((a) => a.id === acaoBtn.dataset.id);
+    if (!ag) return;
+    if (acaoBtn.dataset.acao === 'cancelar') abrirModalCancelar(ag);
+    if (acaoBtn.dataset.acao === 'reagendar') abrirModalReagendar(ag);
+    if (acaoBtn.dataset.acao === 'encaixar') abrirModalEncaixe(ag);
+  }
+});
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.agendamento-item')) {
+    document.querySelectorAll('.menu-acoes.aberto').forEach((m) => m.classList.remove('aberto'));
+  }
+});
+
 const NOMES_DIAS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
 
 async function render() {
@@ -112,16 +436,13 @@ async function renderDia() {
     </div>
   `;
 
+  agendamentosAtuais = data.agendamentos;
+
   if (data.agendamentos.length === 0) {
     html += '<div class="vazio">Nenhum agendamento nesse dia.</div>';
   } else {
     for (const ag of data.agendamentos) {
-      html += `
-        <div class="agendamento-item">
-          <div class="agendamento-hora">${formatarHora(ag.data_hora)} — ${ag.servico}</div>
-          <div class="agendamento-detalhe">${ag.cliente} · ${ag.profissional} · ${ag.duracao_minutos}min</div>
-        </div>
-      `;
+      html += renderAgendamentoItem(ag);
     }
   }
 
@@ -141,6 +462,8 @@ async function renderSemana() {
   conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
   const data = await api(`/api/agendamentos?view=semana&data=${iso}`);
   if (!data) return;
+
+  agendamentosAtuais = data.agendamentos;
 
   const porDia = {};
   for (const ag of data.agendamentos) {
@@ -168,12 +491,7 @@ const diasFuncionamento = configuracao.dias_funcionamento || [1, 2, 3, 4, 5, 6];
       const d = new Date(diaISO + 'T12:00:00');
       html += `<div class="dia-header">${nomeDiaSemana(d)}, ${d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' })}</div>`;
       for (const ag of porDia[diaISO]) {
-        html += `
-          <div class="agendamento-item">
-            <div class="agendamento-hora">${formatarHora(ag.data_hora)} — ${ag.servico}</div>
-            <div class="agendamento-detalhe">${ag.cliente} · ${ag.profissional}</div>
-          </div>
-        `;
+        html += renderAgendamentoItem(ag);
       }
     }
   }
