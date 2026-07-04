@@ -19,3 +19,7 @@ Thumbs.db
 dist/
 build/
 .next/
+
+# Playwright
+test-results/
+playwright-report/
