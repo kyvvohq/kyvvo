@@ -24,7 +24,16 @@ async function start() {
     try {
       await request.jwtVerify();
     } catch (err) {
-      reply.code(401).send({ error: 'Não autenticado' });
+      return reply.code(401).send({ error: 'Não autenticado' });
+    }
+
+    const { rows } = await pool.query(
+      'SELECT token_version FROM usuarios WHERE id = $1',
+      [request.user.userId]
+    );
+    const usuario = rows[0];
+    if (!usuario || usuario.token_version !== request.user.tokenVersion) {
+      return reply.code(401).send({ error: 'Sessão expirada. Faça login novamente.' });
     }
   });
 
@@ -36,7 +45,7 @@ async function start() {
     }
 
     const { rows } = await pool.query(
-      'SELECT id, tenant_id, email, senha_hash, nome FROM usuarios WHERE email = $1',
+      'SELECT id, tenant_id, email, senha_hash, nome, token_version FROM usuarios WHERE email = $1',
       [email.toLowerCase().trim()]
     );
     const usuario = rows[0];
@@ -50,11 +59,22 @@ async function start() {
     }
 
     const token = fastify.jwt.sign(
-      { userId: usuario.id, tenantId: usuario.tenant_id, email: usuario.email },
+      { userId: usuario.id, tenantId: usuario.tenant_id, email: usuario.email, tokenVersion: usuario.token_version },
       { expiresIn: '7d' }
     );
 
     return { token, nome: usuario.nome, email: usuario.email };
+  });
+
+  // Invalida o token atual (e qualquer outro emitido antes dele) incrementando
+  // token_version: como o JWT é stateless, é essa comparação em `authenticate`
+  // que faz o logout ter efeito imediato no servidor, e não só no cliente.
+  fastify.post('/api/auth/logout', { preHandler: [fastify.authenticate] }, async (request) => {
+    await pool.query(
+      'UPDATE usuarios SET token_version = token_version + 1 WHERE id = $1',
+      [request.user.userId]
+    );
+    return { ok: true };
   });
 
   // ---------- Agenda ----------

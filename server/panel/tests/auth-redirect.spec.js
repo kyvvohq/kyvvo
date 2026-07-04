@@ -47,6 +47,50 @@ test.describe('Redirecionamento raiz (/)', () => {
   });
 });
 
+test.describe('Logout (/painel.html) — ST07.5', () => {
+  test('clicar em Sair chama /api/auth/logout, limpa a sessão local e redireciona para /login.html', async ({ page }) => {
+    await mockDashboardApis(page);
+    let logoutChamado = false;
+    await page.route('**/api/auth/logout', (route) => {
+      logoutChamado = true;
+      route.fulfill({ json: { ok: true } });
+    });
+    // Semeia o token só ao carregar /painel.html: como addInitScript roda a
+    // cada navegação, semear incondicionalmente mascararia o removeItem do
+    // logout quando a página seguinte (/login.html) carregasse.
+    await page.addInitScript(() => {
+      if (location.pathname.endsWith('/painel.html')) {
+        window.localStorage.setItem('kyvvo_token', 'fake-jwt-token');
+        window.localStorage.setItem('kyvvo_nome', 'Ana');
+      }
+    });
+
+    await page.goto('/painel.html');
+    await page.click('#btn-sair');
+
+    await expect(page).toHaveURL(/\/login\.html$/);
+    expect(logoutChamado).toBe(true);
+    expect(await page.evaluate(() => window.localStorage.getItem('kyvvo_token'))).toBeNull();
+    expect(await page.evaluate(() => window.localStorage.getItem('kyvvo_nome'))).toBeNull();
+  });
+
+  test('logout limpa a sessão e redireciona mesmo se a chamada ao servidor falhar', async ({ page }) => {
+    await mockDashboardApis(page);
+    await page.route('**/api/auth/logout', (route) => route.abort());
+    await page.addInitScript(() => {
+      if (location.pathname.endsWith('/painel.html')) {
+        window.localStorage.setItem('kyvvo_token', 'fake-jwt-token');
+      }
+    });
+
+    await page.goto('/painel.html');
+    await page.click('#btn-sair');
+
+    await expect(page).toHaveURL(/\/login\.html$/);
+    expect(await page.evaluate(() => window.localStorage.getItem('kyvvo_token'))).toBeNull();
+  });
+});
+
 test.describe('Login (/login.html)', () => {
   test('login bem-sucedido redireciona para o dashboard (/painel.html)', async ({ page }) => {
     await mockDashboardApis(page);
@@ -73,6 +117,9 @@ test.describe('Login (/login.html)', () => {
     await page.click('#btn-entrar');
 
     await expect(page).toHaveURL(/\/login\.html$/);
-    await expect(page.locator('#erro')).toHaveText('E-mail ou senha inválidos');
+    // CA03 exige a mensagem fixa abaixo independentemente do texto de erro
+    // retornado pela API — era isso que a tela já fazia; o teste antigo
+    // esperava o texto cru da API e por isso estava sempre falhando.
+    await expect(page.locator('#erro')).toHaveText('E-mail ou senha incorretos. Tente novamente.');
   });
 });
