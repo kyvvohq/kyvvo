@@ -4,19 +4,25 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Entrar — Kyvvo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Syne:wght@700;800&display=swap">
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 <div class="center-screen">
   <div class="card">
     <div class="logo">Kyvvo</div>
-    <form id="form-login">
+    <form id="form-login" novalidate>
       <label for="email">E-mail</label>
-      <input type="email" id="email" required autocomplete="email">
+      <input type="email" id="email" autocomplete="email">
       <label for="senha">Senha</label>
-      <input type="password" id="senha" required autocomplete="current-password">
+      <div class="senha-wrapper">
+        <input type="password" id="senha" autocomplete="current-password">
+        <button type="button" id="btn-toggle-senha" class="toggle-senha" aria-label="Mostrar senha" tabindex="-1">👁</button>
+      </div>
       <button type="submit" id="btn-entrar">Entrar</button>
-      <div class="erro" id="erro"></div>
+      <div class="erro" id="erro" role="alert"></div>
     </form>
   </div>
 </div>
@@ -24,14 +30,31 @@
   const form = document.getElementById('form-login');
   const erroEl = document.getElementById('erro');
   const btn = document.getElementById('btn-entrar');
+  const emailInput = document.getElementById('email');
+  const senhaInput = document.getElementById('senha');
+  const toggleSenhaBtn = document.getElementById('btn-toggle-senha');
 
   if (localStorage.getItem('kyvvo_token')) {
     window.location.href = '/painel.html';
   }
 
+  toggleSenhaBtn.addEventListener('click', () => {
+    const oculta = senhaInput.type === 'password';
+    senhaInput.type = oculta ? 'text' : 'password';
+    toggleSenhaBtn.textContent = oculta ? '🙈' : '👁';
+    toggleSenhaBtn.setAttribute('aria-label', oculta ? 'Ocultar senha' : 'Mostrar senha');
+  });
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     erroEl.textContent = '';
+
+    if (!emailInput.value.trim() || !senhaInput.value) {
+      erroEl.textContent = 'Preencha todos os campos.';
+      (!emailInput.value.trim() ? emailInput : senhaInput).focus();
+      return;
+    }
+
     btn.disabled = true;
     btn.textContent = 'Entrando...';
 
@@ -40,14 +63,16 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: document.getElementById('email').value,
-          senha: document.getElementById('senha').value,
+          email: emailInput.value,
+          senha: senhaInput.value,
         }),
       });
       const data = await res.json();
 
       if (!res.ok) {
-        erroEl.textContent = data.error || 'Erro ao entrar';
+        erroEl.textContent = 'E-mail ou senha incorretos. Tente novamente.';
+        senhaInput.value = '';
+        senhaInput.focus();
         return;
       }
 
