@@ -65,8 +65,8 @@ async function start() {
     if (view === 'dia') {
       const dataRef = data || new Date().toISOString().slice(0, 10);
       const { rows } = await pool.query(
-        `SELECT a.id, a.data_hora, a.status, c.nome AS cliente, c.telefone AS cliente_telefone,
-                p.nome AS profissional, s.nome AS servico, s.duracao_minutos
+        `SELECT a.id, a.data_hora, a.status, a.encaixe, c.nome AS cliente, c.telefone AS cliente_telefone,
+                a.profissional_id, p.nome AS profissional, a.servico_id, s.nome AS servico, s.duracao_minutos
          FROM agendamentos a
          JOIN clientes c ON c.id = a.cliente_id
          JOIN profissionais p ON p.id = a.profissional_id
@@ -81,8 +81,8 @@ async function start() {
     if (view === 'semana') {
       const dataRef = data || new Date().toISOString().slice(0, 10);
       const { rows } = await pool.query(
-        `SELECT a.id, a.data_hora, a.status, c.nome AS cliente,
-                p.nome AS profissional, s.nome AS servico, s.duracao_minutos
+        `SELECT a.id, a.data_hora, a.status, a.encaixe, c.nome AS cliente,
+                a.profissional_id, p.nome AS profissional, a.servico_id, s.nome AS servico, s.duracao_minutos
          FROM agendamentos a
          JOIN clientes c ON c.id = a.cliente_id
          JOIN profissionais p ON p.id = a.profissional_id
@@ -234,6 +234,100 @@ async function start() {
     }
 
     return { data, profissional, servico, duracaoMinutos, slots };
+  });
+
+  fastify.get('/api/servicos', { preHandler: [fastify.authenticate] }, async (request) => {
+    const { tenantId } = request.user;
+    const { rows } = await pool.query(
+      'SELECT id, nome, duracao_minutos FROM servicos WHERE tenant_id = $1 ORDER BY nome',
+      [tenantId]
+    );
+    return { servicos: rows };
+  });
+
+  fastify.post('/api/agendamentos', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const { tenantId } = request.user;
+    const {
+      cliente_nome: clienteNome,
+      cliente_telefone: clienteTelefone,
+      profissional_id: profissionalId,
+      servico_id: servicoId,
+      data_hora: dataHora,
+      encaixe,
+    } = request.body || {};
+
+    if (!clienteTelefone || !profissionalId || !servicoId || !dataHora) {
+      return reply.code(400).send({
+        error: 'Campos "cliente_telefone", "profissional_id", "servico_id" e "data_hora" são obrigatórios',
+      });
+    }
+
+    const { rows: servicoRows } = await pool.query(
+      'SELECT duracao_minutos FROM servicos WHERE id = $1 AND tenant_id = $2',
+      [servicoId, tenantId]
+    );
+    const servicoInfo = servicoRows[0];
+    if (!servicoInfo) {
+      return reply.code(404).send({ error: 'Serviço não encontrado' });
+    }
+
+    const { rows: profissionalRows } = await pool.query(
+      'SELECT nome FROM profissionais WHERE id = $1 AND tenant_id = $2',
+      [profissionalId, tenantId]
+    );
+    const profissionalInfo = profissionalRows[0];
+    if (!profissionalInfo) {
+      return reply.code(404).send({ error: 'Profissional não encontrado' });
+    }
+
+    const { rows: conflitos } = await pool.query(
+      `SELECT a.id
+       FROM agendamentos a
+       JOIN servicos s ON s.id = a.servico_id
+       WHERE a.tenant_id = $1
+         AND a.profissional_id = $2
+         AND a.status = 'confirmado'
+         AND a.data_hora < $3::timestamptz + ($4 * interval '1 minute')
+         AND $3::timestamptz < a.data_hora + (s.duracao_minutos * interval '1 minute')`,
+      [tenantId, profissionalId, dataHora, servicoInfo.duracao_minutos]
+    );
+    if (conflitos.length > 0) {
+      return reply.code(409).send({
+        error: `Conflito de horário: ${profissionalInfo.nome} já tem agendamento neste período.`,
+      });
+    }
+
+    const { rows: clienteRows } = await pool.query(
+      `INSERT INTO clientes (tenant_id, nome, telefone)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (tenant_id, telefone) DO UPDATE SET nome = COALESCE(EXCLUDED.nome, clientes.nome)
+       RETURNING id`,
+      [tenantId, clienteNome || null, clienteTelefone]
+    );
+    const clienteId = clienteRows[0].id;
+
+    const { rows: criado } = await pool.query(
+      `INSERT INTO agendamentos (tenant_id, cliente_id, profissional_id, servico_id, data_hora, encaixe)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id`,
+      [tenantId, clienteId, profissionalId, servicoId, dataHora, !!encaixe]
+    );
+
+    const { rows: detalhado } = await pool.query(
+      `SELECT a.id, a.data_hora, a.status, a.encaixe, a.updated_at,
+              a.profissional_id, p.nome AS profissional,
+              a.servico_id, s.nome AS servico, s.duracao_minutos,
+              c.nome AS cliente, c.telefone AS cliente_telefone
+       FROM agendamentos a
+       JOIN clientes c ON c.id = a.cliente_id
+       JOIN profissionais p ON p.id = a.profissional_id
+       JOIN servicos s ON s.id = a.servico_id
+       WHERE a.id = $1`,
+      [criado[0].id]
+    );
+
+    reply.code(201);
+    return detalhado[0];
   });
 
   // ---------- Perfil ----------
