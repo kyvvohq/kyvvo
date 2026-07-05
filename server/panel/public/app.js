@@ -1,6 +1,14 @@
 const token = localStorage.getItem('kyvvo_token');
 
-document.getElementById('btn-sair').addEventListener('click', () => {
+document.getElementById('btn-sair').addEventListener('click', async () => {
+  try {
+    await fetch('/api/auth/logout', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch (e) {
+    // Sem conexão: prossegue com o logout local mesmo assim.
+  }
   localStorage.removeItem('kyvvo_token');
   localStorage.removeItem('kyvvo_nome');
   window.location.href = '/login.html';
