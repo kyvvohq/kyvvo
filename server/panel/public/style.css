@@ -145,6 +145,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .subtabs {
   display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 16px 24px 0;
 }
@@ -158,6 +160,20 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 .tab.active { background: #7c5cfc; color: white; }
+
+.btn-novo-agendamento {
+  width: auto;
+  margin: 0 0 0 auto;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  background: #7c5cfc;
+  color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(124, 92, 252, 0.35);
+}
+
+.btn-novo-agendamento:hover { background: #6a4ce0; }
 
 .conteudo { padding: 24px; max-width: 720px; margin: 0 auto; }
 
