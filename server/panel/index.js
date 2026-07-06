@@ -287,6 +287,17 @@ async function start() {
     return { servicos: rows };
   });
 
+  // Lista de profissionais do tenant, usada para popular o dropdown do
+  // formulário de novo agendamento (ST09.2 / US09).
+  fastify.get('/api/profissionais', { preHandler: [fastify.authenticate] }, async (request) => {
+    const { tenantId } = request.user;
+    const { rows } = await pool.query(
+      'SELECT id, nome FROM profissionais WHERE tenant_id = $1 ORDER BY nome',
+      [tenantId]
+    );
+    return { profissionais: rows };
+  });
+
   fastify.post('/api/agendamentos', { preHandler: [fastify.authenticate] }, async (request, reply) => {
     const { tenantId } = request.user;
     const {
