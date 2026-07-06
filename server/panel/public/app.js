@@ -146,6 +146,24 @@ function abrirModal(tituloHtml, conteudoHtml) {
   return overlay;
 }
 
+// ---------- Modal: novo agendamento (ST09.1) ----------
+// Ponto de entrada do fluxo de cadastro manual (US09). Este subtask entrega
+// apenas o botão em destaque na agenda e a abertura do modal; os campos do
+// formulário e suas validações chegam na ST09.2 e a carga de slots na ST09.3,
+// preenchendo o container #form-novo-agendamento abaixo.
+function abrirModalNovoAgendamento() {
+  abrirModal(
+    '<h3>Novo agendamento</h3>',
+    `
+      <div id="form-novo-agendamento">
+        <p class="modal-texto">Formulário de cadastro em breve.</p>
+      </div>
+    `
+  );
+}
+
+document.getElementById('btn-novo-agendamento').addEventListener('click', abrirModalNovoAgendamento);
+
 // ---------- Modal: cancelamento (ST08.4) ----------
 function abrirModalCancelar(ag) {
   abrirModal(
