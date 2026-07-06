@@ -37,6 +37,28 @@ async function start() {
     }
   });
 
+  // requireModulo('financeiro') devolve um preHandler que barra a rota com 403
+  // se o tenant autenticado não tiver aquele módulo ativo em tenant_modulos
+  // (US10 / CA03). Deve ser encadeado SEMPRE depois de `authenticate` no array
+  // de preHandler, pois depende de request.user.tenantId já resolvido.
+  // Uso: preHandler: [fastify.authenticate, fastify.requireModulo('financeiro')]
+  fastify.decorate('requireModulo', (moduloKey) => async (request, reply) => {
+    const { tenantId } = request.user || {};
+    if (!tenantId) {
+      return reply.code(401).send({ error: 'Não autenticado' });
+    }
+
+    const { rows } = await pool.query(
+      'SELECT 1 FROM tenant_modulos WHERE tenant_id = $1 AND modulo_key = $2 AND ativo LIMIT 1',
+      [tenantId, moduloKey]
+    );
+    if (rows.length === 0) {
+      return reply.code(403).send({
+        error: `Módulo "${moduloKey}" não está ativo para este salão.`,
+      });
+    }
+  });
+
   // ---------- Auth ----------
   fastify.post('/api/auth/login', async (request, reply) => {
     const { email, senha } = request.body || {};
@@ -411,6 +433,22 @@ async function start() {
       [tenantId, diasFuncionamento ? JSON.stringify(diasFuncionamento) : null, formatoHora]
     );
     return rows[0];
+  });
+
+  // ---------- Módulos ----------
+  // CA04 — lista os módulos ativos do tenant logado (key, nome de exibição e
+  // preço mensal). É o que o painel usa para montar o menu dinâmico (CA05).
+  fastify.get('/api/tenant/modulos', { preHandler: [fastify.authenticate] }, async (request) => {
+    const { tenantId } = request.user;
+    const { rows } = await pool.query(
+      `SELECT m.key, m.nome, m.preco_mensal
+       FROM tenant_modulos tm
+       JOIN modulos m ON m.key = tm.modulo_key
+       WHERE tm.tenant_id = $1 AND tm.ativo
+       ORDER BY m.nome`,
+      [tenantId]
+    );
+    return { modulos: rows };
   });
 
   await fastify.listen({ port: PORT, host: '0.0.0.0' });
