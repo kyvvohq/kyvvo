@@ -274,6 +274,7 @@ async function start() {
       servico_id: servicoId,
       data_hora: dataHora,
       encaixe,
+      origem,
     } = request.body || {};
 
     if (!clienteTelefone || !profissionalId || !servicoId || !dataHora) {
@@ -281,6 +282,14 @@ async function start() {
         error: 'Campos "cliente_telefone", "profissional_id", "servico_id" e "data_hora" são obrigatórios',
       });
     }
+
+    // Canal de origem (CA09). Como este endpoint é o do portal (autenticado), o
+    // padrão é 'portal'; 'whatsapp' fica aceito para consistência caso o bot
+    // passe a usar a mesma rota no futuro.
+    if (origem !== undefined && !['portal', 'whatsapp'].includes(origem)) {
+      return reply.code(400).send({ error: 'origem deve ser "portal" ou "whatsapp"' });
+    }
+    const origemFinal = origem || 'portal';
 
     const { rows: servicoRows } = await pool.query(
       'SELECT duracao_minutos FROM servicos WHERE id = $1 AND tenant_id = $2',
@@ -333,14 +342,14 @@ async function start() {
     const clienteId = clienteRows[0].id;
 
     const { rows: criado } = await pool.query(
-      `INSERT INTO agendamentos (tenant_id, cliente_id, profissional_id, servico_id, data_hora, encaixe)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO agendamentos (tenant_id, cliente_id, profissional_id, servico_id, data_hora, encaixe, origem)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING id`,
-      [tenantId, clienteId, profissionalId, servicoId, dataHora, !!encaixe]
+      [tenantId, clienteId, profissionalId, servicoId, dataHora, !!encaixe, origemFinal]
     );
 
     const { rows: detalhado } = await pool.query(
-      `SELECT a.id, a.data_hora, a.status, a.encaixe, a.updated_at,
+      `SELECT a.id, a.data_hora, a.status, a.encaixe, a.origem, a.updated_at,
               a.profissional_id, p.nome AS profissional,
               a.servico_id, s.nome AS servico, s.duracao_minutos,
               c.nome AS cliente, c.telefone AS cliente_telefone
