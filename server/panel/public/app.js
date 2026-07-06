@@ -146,20 +146,110 @@ function abrirModal(tituloHtml, conteudoHtml) {
   return overlay;
 }
 
-// ---------- Modal: novo agendamento (ST09.1) ----------
-// Ponto de entrada do fluxo de cadastro manual (US09). Este subtask entrega
-// apenas o botão em destaque na agenda e a abertura do modal; os campos do
-// formulário e suas validações chegam na ST09.2 e a carga de slots na ST09.3,
-// preenchendo o container #form-novo-agendamento abaixo.
+// ---------- Modal: novo agendamento (ST09.1 / ST09.2) ----------
+// Ponto de entrada do fluxo de cadastro manual (US09). A ST09.1 entregou o
+// botão em destaque na agenda e a abertura do modal; a ST09.2 (aqui) monta o
+// formulário com todos os campos e a validação de obrigatórios com destaque
+// visual em vermelho. Ainda ficam para as próximas subtasks: a carga dos slots
+// de horário via GET /agendamentos/disponibilidade (ST09.3) e o salvamento com
+// toast e atualização da agenda (ST09.5).
+
+// Marca em vermelho os campos [data-obrigatorio] vazios e devolve o primeiro
+// inválido (ou null se estiver tudo preenchido).
+function validarObrigatorios(form) {
+  let primeiroInvalido = null;
+  form.querySelectorAll('[data-obrigatorio]').forEach((campo) => {
+    const vazio = !campo.value || !campo.value.trim();
+    campo.classList.toggle('campo-invalido', vazio);
+    if (vazio && !primeiroInvalido) primeiroInvalido = campo;
+  });
+  return primeiroInvalido;
+}
+
 function abrirModalNovoAgendamento() {
+  const hoje = formatarDataISO(new Date());
   abrirModal(
     '<h3>Novo agendamento</h3>',
     `
-      <div id="form-novo-agendamento">
-        <p class="modal-texto">Formulário de cadastro em breve.</p>
-      </div>
+      <form id="form-novo-agendamento" novalidate>
+        <div class="modal-erro" id="novo-ag-erro"></div>
+
+        <label for="novo-ag-nome">Nome do cliente *</label>
+        <input type="text" id="novo-ag-nome" data-obrigatorio autocomplete="off">
+
+        <label for="novo-ag-telefone">Telefone (opcional)</label>
+        <input type="tel" id="novo-ag-telefone" placeholder="11999999999" autocomplete="off">
+
+        <label for="novo-ag-servico">Serviço *</label>
+        <select id="novo-ag-servico" data-obrigatorio><option value="">Carregando serviços...</option></select>
+
+        <label for="novo-ag-profissional">Profissional *</label>
+        <select id="novo-ag-profissional" data-obrigatorio><option value="">Carregando profissionais...</option></select>
+
+        <label for="novo-ag-data">Data *</label>
+        <input type="date" id="novo-ag-data" min="${hoje}" data-obrigatorio>
+
+        <label for="novo-ag-horario">Horário *</label>
+        <select id="novo-ag-horario" data-obrigatorio><option value="">Selecione serviço, profissional e data</option></select>
+
+        <label for="novo-ag-observacoes">Observações (opcional)</label>
+        <textarea id="novo-ag-observacoes" rows="3" placeholder="Anotações internas sobre o agendamento"></textarea>
+
+        <div class="modal-acoes">
+          <button type="button" class="btn-secundario" id="btn-cancelar-novo-ag">Cancelar</button>
+          <button type="submit" class="btn-primario" id="btn-salvar-novo-ag">Salvar agendamento</button>
+        </div>
+      </form>
     `
   );
+
+  const form = document.getElementById('form-novo-agendamento');
+  const erroEl = document.getElementById('novo-ag-erro');
+
+  document.getElementById('btn-cancelar-novo-ag').addEventListener('click', fecharModal);
+
+  // Ao corrigir um campo, remove o destaque vermelho imediatamente.
+  form.querySelectorAll('[data-obrigatorio]').forEach((campo) => {
+    const limpar = () => campo.classList.remove('campo-invalido');
+    campo.addEventListener('input', limpar);
+    campo.addEventListener('change', limpar);
+  });
+
+  // Popula serviços (reutiliza GET /api/servicos, como no encaixe da ST08.6).
+  api('/api/servicos').then((resultado) => {
+    const select = document.getElementById('novo-ag-servico');
+    if (!resultado || !resultado.servicos) {
+      select.innerHTML = '<option value="">Erro ao carregar serviços</option>';
+      return;
+    }
+    select.innerHTML = '<option value="">Selecione...</option>' +
+      resultado.servicos.map((s) => `<option value="${s.id}">${s.nome} (${s.duracao_minutos}min)</option>`).join('');
+  });
+
+  // Popula profissionais (GET /api/profissionais).
+  api('/api/profissionais').then((resultado) => {
+    const select = document.getElementById('novo-ag-profissional');
+    if (!resultado || !resultado.profissionais) {
+      select.innerHTML = '<option value="">Erro ao carregar profissionais</option>';
+      return;
+    }
+    select.innerHTML = '<option value="">Selecione...</option>' +
+      resultado.profissionais.map((p) => `<option value="${p.id}">${p.nome}</option>`).join('');
+  });
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    erroEl.textContent = '';
+    const invalido = validarObrigatorios(form);
+    if (invalido) {
+      erroEl.textContent = 'Preencha os campos obrigatórios destacados em vermelho.';
+      invalido.focus();
+      return;
+    }
+    // ST09.5: persistir via POST /api/agendamentos, exibir toast de sucesso e
+    // atualizar a agenda sem recarregar. A ST09.3 preenche o dropdown de horário
+    // com os slots reais de GET /agendamentos/disponibilidade.
+  });
 }
 
 document.getElementById('btn-novo-agendamento').addEventListener('click', abrirModalNovoAgendamento);
