@@ -183,13 +183,13 @@ function abrirModalCancelar(ag) {
 }
 
 // ---------- Modal: reagendamento (ST08.5) ----------
-function popularSelectHorarios(select, slots) {
+function popularSelectHorarios(select, slots, bloquearOcupado = true) {
   select.innerHTML = slots
-    .map((s) => `<option value="${s.hora}" ${!s.disponivel ? 'disabled' : ''}>${formatarHora(s.hora)}${!s.disponivel ? ' (ocupado)' : ''}</option>`)
+    .map((s) => `<option value="${s.hora}" ${!s.disponivel && bloquearOcupado ? 'disabled' : ''}>${formatarHora(s.hora)}${!s.disponivel ? ' (ocupado)' : ''}</option>`)
     .join('');
-  const primeiraDisponivel = slots.find((s) => s.disponivel);
-  if (primeiraDisponivel) select.value = primeiraDisponivel.hora;
-  return !!primeiraDisponivel;
+  const primeiraSelecionavel = bloquearOcupado ? slots.find((s) => s.disponivel) : slots[0];
+  if (primeiraSelecionavel) select.value = primeiraSelecionavel.hora;
+  return !!primeiraSelecionavel;
 }
 
 function abrirModalReagendar(ag) {
@@ -275,6 +275,7 @@ function abrirModalEncaixe(ag) {
       <input type="date" id="encaixe-data" min="${hoje}" value="${ag.data_hora.slice(0, 10)}">
       <label for="encaixe-horario">Horário</label>
       <select id="encaixe-horario"><option>Selecione um serviço primeiro</option></select>
+      <p class="modal-texto">Encaixe pode sobrepor um horário já ocupado — os marcados "(ocupado)" continuam selecionáveis de propósito.</p>
       <div class="modal-acoes">
         <button class="btn-secundario" id="btn-voltar-encaixe">Voltar</button>
         <button class="btn-primario" id="btn-confirmar-encaixe" disabled>Confirmar encaixe</button>
@@ -302,7 +303,7 @@ function abrirModalEncaixe(ag) {
       selectHorario.innerHTML = '<option>Erro ao carregar horários</option>';
       return;
     }
-    btnConfirmar.disabled = !popularSelectHorarios(selectHorario, disponibilidade.slots);
+    btnConfirmar.disabled = !popularSelectHorarios(selectHorario, disponibilidade.slots, false);
   }
 
   api('/api/servicos').then((resultado) => {
