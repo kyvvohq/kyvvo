@@ -300,21 +300,27 @@ async function start() {
       return reply.code(404).send({ error: 'Profissional não encontrado' });
     }
 
-    const { rows: conflitos } = await pool.query(
-      `SELECT a.id
-       FROM agendamentos a
-       JOIN servicos s ON s.id = a.servico_id
-       WHERE a.tenant_id = $1
-         AND a.profissional_id = $2
-         AND a.status = 'confirmado'
-         AND a.data_hora < $3::timestamptz + ($4 * interval '1 minute')
-         AND $3::timestamptz < a.data_hora + (s.duracao_minutos * interval '1 minute')`,
-      [tenantId, profissionalId, dataHora, servicoInfo.duracao_minutos]
-    );
-    if (conflitos.length > 0) {
-      return reply.code(409).send({
-        error: `Conflito de horário: ${profissionalInfo.nome} já tem agendamento neste período.`,
-      });
+    // Encaixe é uma exceção manual feita pela dona do salão: sobrepor um
+    // horário já ocupado é o próprio propósito da funcionalidade (procedimentos
+    // simples/rápidos encaixados ao lado de um atendimento já agendado), então
+    // a validação de conflito só se aplica a agendamentos normais.
+    if (!encaixe) {
+      const { rows: conflitos } = await pool.query(
+        `SELECT a.id
+         FROM agendamentos a
+         JOIN servicos s ON s.id = a.servico_id
+         WHERE a.tenant_id = $1
+           AND a.profissional_id = $2
+           AND a.status = 'confirmado'
+           AND a.data_hora < $3::timestamptz + ($4 * interval '1 minute')
+           AND $3::timestamptz < a.data_hora + (s.duracao_minutos * interval '1 minute')`,
+        [tenantId, profissionalId, dataHora, servicoInfo.duracao_minutos]
+      );
+      if (conflitos.length > 0) {
+        return reply.code(409).send({
+          error: `Conflito de horário: ${profissionalInfo.nome} já tem agendamento neste período.`,
+        });
+      }
     }
 
     const { rows: clienteRows } = await pool.query(
