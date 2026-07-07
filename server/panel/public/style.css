@@ -449,6 +449,33 @@ textarea:focus { outline: none; border-color: #7c5cfc; }
   border-color: #ff6b6b;
 }
 
+/* Skeleton loader do dropdown de horários enquanto os slots carregam (ST09.3) */
+.skeleton-horario {
+  height: 46px;
+  border-radius: 8px;
+  border: 1px solid #2a2f52;
+  background: linear-gradient(90deg, #0d1122 25%, #1a1f3a 37%, #0d1122 63%);
+  background-size: 400% 100%;
+  animation: skeleton-brilho 1.4s ease infinite;
+}
+
+.skeleton-horario[hidden] { display: none; }
+
+@keyframes skeleton-brilho {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+/* Aviso inline abaixo do horário (ex.: nenhum slot livre na data — ST09.3) */
+.campo-aviso {
+  color: #f0b354;
+  font-size: 13px;
+  min-height: 16px;
+  margin-top: 6px;
+}
+
+.campo-aviso:empty { min-height: 0; margin-top: 0; }
+
 .spinner {
   display: inline-block;
   width: 14px;
