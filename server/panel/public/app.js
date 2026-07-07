@@ -146,13 +146,15 @@ function abrirModal(tituloHtml, conteudoHtml) {
   return overlay;
 }
 
-// ---------- Modal: novo agendamento (ST09.1 / ST09.2) ----------
+// ---------- Modal: novo agendamento (ST09.1 / ST09.2 / ST09.3) ----------
 // Ponto de entrada do fluxo de cadastro manual (US09). A ST09.1 entregou o
-// botão em destaque na agenda e a abertura do modal; a ST09.2 (aqui) monta o
+// botão em destaque na agenda e a abertura do modal; a ST09.2 montou o
 // formulário com todos os campos e a validação de obrigatórios com destaque
-// visual em vermelho. Ainda ficam para as próximas subtasks: a carga dos slots
-// de horário via GET /agendamentos/disponibilidade (ST09.3) e o salvamento com
-// toast e atualização da agenda (ST09.5).
+// visual em vermelho; a ST09.3 (aqui) integra o dropdown de horário com
+// GET /agendamentos/disponibilidade — slots ocupados desabilitados, skeleton
+// loader durante a carga e aviso quando não há horário livre na data. Ainda
+// fica para a próxima subtask o salvamento com toast e atualização da agenda
+// (ST09.5).
 
 // Marca em vermelho os campos [data-obrigatorio] vazios e devolve o primeiro
 // inválido (ou null se estiver tudo preenchido).
@@ -191,6 +193,8 @@ function abrirModalNovoAgendamento() {
 
         <label for="novo-ag-horario">Horário *</label>
         <select id="novo-ag-horario" data-obrigatorio><option value="">Selecione serviço, profissional e data</option></select>
+        <div class="skeleton-horario" id="novo-ag-horario-skeleton" hidden aria-hidden="true"></div>
+        <div class="campo-aviso" id="novo-ag-horario-aviso"></div>
 
         <label for="novo-ag-observacoes">Observações (opcional)</label>
         <textarea id="novo-ag-observacoes" rows="3" placeholder="Anotações internas sobre o agendamento"></textarea>
@@ -237,6 +241,62 @@ function abrirModalNovoAgendamento() {
       resultado.profissionais.map((p) => `<option value="${p.id}">${p.nome}</option>`).join('');
   });
 
+  // ST09.3 — Carrega os slots reais de GET /agendamentos/disponibilidade sempre
+  // que serviço, profissional e data estiverem selecionados (os três parâmetros
+  // exigidos pelo endpoint; o serviço define a duração usada para montar os
+  // slots). Reutiliza o mesmo endpoint da ST08.2 e o helper popularSelectHorarios
+  // do reagendamento/encaixe. Slots ocupados ficam desabilitados com "(ocupado)".
+  async function carregarSlotsNovoAgendamento() {
+    const servicoId = document.getElementById('novo-ag-servico').value;
+    const profissionalId = document.getElementById('novo-ag-profissional').value;
+    const data = document.getElementById('novo-ag-data').value;
+    const select = document.getElementById('novo-ag-horario');
+    const skeleton = document.getElementById('novo-ag-horario-skeleton');
+    const aviso = document.getElementById('novo-ag-horario-aviso');
+
+    aviso.textContent = '';
+
+    if (!servicoId || !profissionalId || !data) {
+      select.hidden = false;
+      select.innerHTML = '<option value="">Selecione serviço, profissional e data</option>';
+      return;
+    }
+
+    // Skeleton loader (CA08): esconde o select e mostra a barra de carregamento.
+    select.hidden = true;
+    select.innerHTML = '<option value="">Carregando horários...</option>';
+    skeleton.hidden = false;
+
+    const disponibilidade = await api(
+      `/api/agendamentos/disponibilidade?data=${data}&profissional=${profissionalId}&servico=${servicoId}`
+    );
+
+    skeleton.hidden = true;
+    select.hidden = false;
+
+    if (!disponibilidade || disponibilidade.error || !Array.isArray(disponibilidade.slots)) {
+      select.innerHTML = '<option value="">Erro ao carregar horários</option>';
+      aviso.textContent = (disponibilidade && disponibilidade.error) || 'Não foi possível carregar os horários. Tente novamente.';
+      return;
+    }
+
+    // CA03: sem nenhum horário livre na data selecionada.
+    if (!disponibilidade.slots.some((s) => s.disponivel)) {
+      select.innerHTML = '<option value="">Nenhum horário disponível</option>';
+      aviso.textContent = 'Nenhum horário disponível nesta data. Tente outra data.';
+      return;
+    }
+
+    popularSelectHorarios(select, disponibilidade.slots);
+    // O valor é definido programaticamente (não dispara "change"), então limpa
+    // o destaque de erro manualmente caso a validação já o tivesse marcado.
+    select.classList.remove('campo-invalido');
+  }
+
+  ['novo-ag-servico', 'novo-ag-profissional', 'novo-ag-data'].forEach((id) => {
+    document.getElementById(id).addEventListener('change', carregarSlotsNovoAgendamento);
+  });
+
   form.addEventListener('submit', (e) => {
     e.preventDefault();
     erroEl.textContent = '';
@@ -247,8 +307,8 @@ function abrirModalNovoAgendamento() {
       return;
     }
     // ST09.5: persistir via POST /api/agendamentos, exibir toast de sucesso e
-    // atualizar a agenda sem recarregar. A ST09.3 preenche o dropdown de horário
-    // com os slots reais de GET /agendamentos/disponibilidade.
+    // atualizar a agenda sem recarregar. O dropdown de horário já é preenchido
+    // com os slots reais de GET /agendamentos/disponibilidade (ST09.3).
   });
 }
 
