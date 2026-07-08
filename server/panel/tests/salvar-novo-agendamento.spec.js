@@ -53,6 +53,7 @@ test.describe('Novo agendamento — salvar (ST09.5)', () => {
     });
     await page.goto('/painel.html');
     await preencherFormulario(page);
+    await page.fill('#novo-ag-observacoes', 'Cliente prefere corte curto');
 
     await page.click('#btn-salvar-novo-ag');
 
@@ -62,8 +63,34 @@ test.describe('Novo agendamento — salvar (ST09.5)', () => {
       cliente_nome: 'Maria',
       servico_id: 's1',
       profissional_id: 'p1',
+      observacoes: 'Cliente prefere corte curto',
       origem: 'portal',
     });
+  });
+
+  test('telefone em branco não bloqueia o salvamento (é opcional)', async ({ page }) => {
+    await mockDashboardApis(page);
+    let corpoEnviado = null;
+    await page.route('**/api/agendamentos', (route) => {
+      if (route.request().method() === 'POST') {
+        corpoEnviado = route.request().postDataJSON();
+        return route.fulfill({ json: { id: 'ag1', ...corpoEnviado } });
+      }
+      return route.fulfill({ json: { view: 'dia', data: '2026-07-06', agendamentos: [] } });
+    });
+
+    await page.addInitScript(() => {
+      window.localStorage.setItem('kyvvo_token', 'fake-jwt-token');
+      window.localStorage.setItem('kyvvo_nome', 'Ana');
+    });
+    await page.goto('/painel.html');
+    await preencherFormulario(page);
+    // Telefone deliberadamente deixado em branco.
+
+    await page.click('#btn-salvar-novo-ag');
+
+    await expect(page.locator('#modal-overlay')).toHaveCount(0);
+    expect(corpoEnviado.cliente_telefone).toBe('');
   });
 
   test('conflito de horário: mostra o erro no modal sem fechar', async ({ page }) => {

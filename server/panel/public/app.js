@@ -359,6 +359,7 @@ function abrirModalNovoAgendamento() {
         servico_id: document.getElementById('novo-ag-servico').value,
         profissional_id: document.getElementById('novo-ag-profissional').value,
         data_hora: document.getElementById('novo-ag-horario').value,
+        observacoes: document.getElementById('novo-ag-observacoes').value.trim() || null,
         origem: 'portal',
       }),
     });
@@ -673,10 +674,15 @@ async function renderDia() {
 
   const dataLabel = dataRef.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'America/Sao_Paulo' });
 
+  // US02.5 — nome do dia da semana logo abaixo da data, mesmo padrão que a
+  // view Semana já usa nos cabeçalhos de cada dia.
   let html = `
     <div class="nav-periodo">
       <button data-nav="-1">← Anterior</button>
-      <strong>${dataLabel}</strong>
+      <div class="nav-periodo-data">
+        <strong>${dataLabel}</strong>
+        <div class="nav-periodo-dia-semana">${nomeDiaSemana(dataRef)}</div>
+      </div>
       <button data-nav="1">Próximo →</button>
     </div>
   `;
@@ -758,9 +764,13 @@ async function renderMes() {
   const data = await api(`/api/agendamentos?view=mes&data=${mesISO}`);
   if (!data) return;
 
-  const contagem = {};
-  for (const item of data.contagemPorDia) {
-    contagem[item.dia.slice(0, 10)] = item.total;
+  // US02.6 — antes mostrava só a contagem de agendamentos por dia; agora
+  // agrupa por dia e lista horário-duração de cada um, empilhados na célula.
+  const porDia = {};
+  for (const ag of data.agendamentos) {
+    const diaISO = ag.data_hora.slice(0, 10);
+    if (!porDia[diaISO]) porDia[diaISO] = [];
+    porDia[diaISO].push(ag);
   }
 
   const ano = dataRef.getFullYear();
@@ -786,13 +796,21 @@ async function renderMes() {
   const diasFuncionamentoMes = configuracao.dias_funcionamento || [1, 2, 3, 4, 5, 6];
   for (let dia = 1; dia <= ultimoDia.getDate(); dia++) {
     const diaISO = `${ano}-${String(mes + 1).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
-    const total = contagem[diaISO];
+    const agsDoDia = porDia[diaISO] || [];
     const diaSemana = new Date(ano, mes, dia).getDay();
     const fechado = !diasFuncionamentoMes.includes(diaSemana);
+    const listaAgendamentos = agsDoDia.length
+      ? `<div class="dia-cel-agendamentos">${agsDoDia
+          .map(
+            (ag) =>
+              `<div class="dia-cel-ag${ag.status === 'cancelado' ? ' dia-cel-ag-cancelado' : ''}">${formatarHora(ag.data_hora)}-${ag.duracao_minutos}min</div>`
+          )
+          .join('')}</div>`
+      : '';
     html += `
       <div class="dia-cel${fechado ? ' dia-cel-fechado' : ''}">
         <div class="num">${dia}</div>
-        ${total ? `<div class="count">${total}</div>` : ''}
+        ${listaAgendamentos}
       </div>
     `;
   }

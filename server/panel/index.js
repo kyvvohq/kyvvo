@@ -140,16 +140,19 @@ async function start() {
 
     if (view === 'mes') {
       const mesRef = data || new Date().toISOString().slice(0, 7); // YYYY-MM
+      // US02.6 — a view Mês mostrava só a contagem de agendamentos por dia;
+      // agora traz data_hora + duração de cada um pra listar horário-duração
+      // empilhados na célula do dia (o agrupamento por dia é feito no front).
       const { rows } = await pool.query(
-        `SELECT a.data_hora::date AS dia, COUNT(*)::int AS total
+        `SELECT a.data_hora, a.status, s.duracao_minutos
          FROM agendamentos a
+         JOIN servicos s ON s.id = a.servico_id
          WHERE a.tenant_id = $1
            AND to_char(a.data_hora, 'YYYY-MM') = $2
-         GROUP BY a.data_hora::date
-         ORDER BY dia`,
+         ORDER BY a.data_hora`,
         [tenantId, mesRef]
       );
-      return { view: 'mes', mes: mesRef, contagemPorDia: rows };
+      return { view: 'mes', mes: mesRef, agendamentos: rows };
     }
 
     return reply.code(400).send({ error: 'Parâmetro "view" deve ser dia, semana ou mes' });
@@ -302,17 +305,25 @@ async function start() {
     const { tenantId } = request.user;
     const {
       cliente_nome: clienteNome,
-      cliente_telefone: clienteTelefone,
+      cliente_telefone: clienteTelefoneBruto,
       profissional_id: profissionalId,
       servico_id: servicoId,
       data_hora: dataHora,
       encaixe,
       origem,
+      observacoes,
     } = request.body || {};
 
-    if (!clienteTelefone || !profissionalId || !servicoId || !dataHora) {
+    // Telefone é opcional no cadastro manual pelo portal (US09/CA02) — nem
+    // toda cliente sem WhatsApp quer informar telefone. NULL não conflita com
+    // a constraint unique(tenant_id, telefone), então cada cliente sem
+    // telefone vira uma linha nova (sem risco de "roubar" o cadastro de outro
+    // cliente por engano).
+    const clienteTelefone = clienteTelefoneBruto ? clienteTelefoneBruto.trim() || null : null;
+
+    if (!profissionalId || !servicoId || !dataHora) {
       return reply.code(400).send({
-        error: 'Campos "cliente_telefone", "profissional_id", "servico_id" e "data_hora" são obrigatórios',
+        error: 'Campos "profissional_id", "servico_id" e "data_hora" são obrigatórios',
       });
     }
 
@@ -375,14 +386,14 @@ async function start() {
     const clienteId = clienteRows[0].id;
 
     const { rows: criado } = await pool.query(
-      `INSERT INTO agendamentos (tenant_id, cliente_id, profissional_id, servico_id, data_hora, encaixe, origem)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO agendamentos (tenant_id, cliente_id, profissional_id, servico_id, data_hora, encaixe, origem, observacoes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING id`,
-      [tenantId, clienteId, profissionalId, servicoId, dataHora, !!encaixe, origemFinal]
+      [tenantId, clienteId, profissionalId, servicoId, dataHora, !!encaixe, origemFinal, observacoes || null]
     );
 
     const { rows: detalhado } = await pool.query(
-      `SELECT a.id, a.data_hora, a.status, a.encaixe, a.origem, a.updated_at,
+      `SELECT a.id, a.data_hora, a.status, a.encaixe, a.origem, a.observacoes, a.updated_at,
               a.profissional_id, p.nome AS profissional,
               a.servico_id, s.nome AS servico, s.duracao_minutos,
               c.nome AS cliente, c.telefone AS cliente_telefone
