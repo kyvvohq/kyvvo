@@ -283,6 +283,7 @@ function abrirModalNovoAgendamento() {
 
     if (!servicoId || !profissionalId || !data) {
       select.hidden = false;
+      skeleton.hidden = true;
       select.innerHTML = '<option value="">Selecione serviço, profissional e data</option>';
       return;
     }
@@ -292,12 +293,21 @@ function abrirModalNovoAgendamento() {
     select.innerHTML = '<option value="">Carregando horários...</option>';
     skeleton.hidden = false;
 
-    const disponibilidade = await api(
-      `/api/agendamentos/disponibilidade?data=${data}&profissional=${profissionalId}&servico=${servicoId}`
-    );
-
-    skeleton.hidden = true;
-    select.hidden = false;
+    // O select e o skeleton precisam voltar ao estado visível mesmo se a
+    // chamada falhar (erro de rede, backend fora do ar etc.) — sem o
+    // try/finally, uma falha aqui deixava o dropdown escondido pra sempre e o
+    // formulário ficava impossível de preencher/salvar.
+    let disponibilidade;
+    try {
+      disponibilidade = await api(
+        `/api/agendamentos/disponibilidade?data=${data}&profissional=${profissionalId}&servico=${servicoId}`
+      );
+    } catch (erro) {
+      disponibilidade = null;
+    } finally {
+      skeleton.hidden = true;
+      select.hidden = false;
+    }
 
     if (!disponibilidade || disponibilidade.error || !Array.isArray(disponibilidade.slots)) {
       select.innerHTML = '<option value="">Erro ao carregar horários</option>';
@@ -321,6 +331,11 @@ function abrirModalNovoAgendamento() {
   ['novo-ag-servico', 'novo-ag-profissional', 'novo-ag-data'].forEach((id) => {
     document.getElementById(id).addEventListener('change', carregarSlotsNovoAgendamento);
   });
+  // O calendário nativo já dispara "change" ao escolher uma data. Para quem
+  // prefere digitar a data direto no campo, o "input" garante que os horários
+  // recarreguem assim que a data digitada ficar completa/válida, sem precisar
+  // esperar o campo perder o foco.
+  document.getElementById('novo-ag-data').addEventListener('input', carregarSlotsNovoAgendamento);
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
