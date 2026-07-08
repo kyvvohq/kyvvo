@@ -26,7 +26,7 @@ const nomeUsuario = (localStorage.getItem('kyvvo_nome') || '').split(' ')[0] || 
 document.getElementById('saudacao').textContent = `${saudacaoPorHorario()}${nomeUsuario ? ', ' + nomeUsuario : ''}!`;
 
 const conteudo = document.getElementById('conteudo');
-const menuItems = document.querySelectorAll('.menu-item');
+const menuEl = document.querySelector('.menu');
 const subtabsEl = document.getElementById('subtabs');
 const tabs = document.querySelectorAll('.tab');
 let menuAtual = 'agendamento';
@@ -39,16 +39,40 @@ async function carregarConfiguracao() {
   if (dados) configuracao = dados;
 }
 
-menuItems.forEach((item) => {
-  item.addEventListener('click', () => {
-    menuItems.forEach((i) => i.classList.remove('active'));
-    item.classList.add('active');
-    menuAtual = item.dataset.menu;
-    subtabsEl.style.display = menuAtual === 'agendamento' ? 'flex' : 'none';
-    dataRef = new Date();
-    render();
-  });
+function ativarMenuItem(item) {
+  menuEl.querySelectorAll('.menu-item').forEach((i) => i.classList.remove('active'));
+  item.classList.add('active');
+  menuAtual = item.dataset.menu;
+  subtabsEl.style.display = menuAtual === 'agendamento' ? 'flex' : 'none';
+  dataRef = new Date();
+  render();
+}
+
+menuEl.querySelectorAll('.menu-item').forEach((item) => {
+  item.addEventListener('click', () => ativarMenuItem(item));
 });
+
+// ---------- Menu dinâmico por módulo (ST10.3) ----------
+// Os itens fixos (Agendamento/Perfil/Configuração) continuam sempre visíveis
+// (CA05). Aqui só acrescentamos um item de menu por módulo ativo do tenant,
+// além do "agenda_inteligente" (que já é coberto pelo item fixo
+// "Agendamento"). As telas de cada módulo (financeiro, dashboards etc.) são
+// escopo de USs futuras — o clique mostra só um aviso de "em breve".
+async function carregarModulosNoMenu() {
+  const resultado = await api('/api/tenant/modulos');
+  if (!resultado || !Array.isArray(resultado.modulos)) return;
+
+  resultado.modulos
+    .filter((m) => m.key !== 'agenda_inteligente')
+    .forEach((m) => {
+      const item = document.createElement('div');
+      item.className = 'menu-item';
+      item.dataset.menu = `modulo:${m.key}`;
+      item.textContent = m.nome;
+      item.addEventListener('click', () => ativarMenuItem(item));
+      menuEl.appendChild(item);
+    });
+}
 
 tabs.forEach((tab) => {
   tab.addEventListener('click', () => {
@@ -146,15 +170,16 @@ function abrirModal(tituloHtml, conteudoHtml) {
   return overlay;
 }
 
-// ---------- Modal: novo agendamento (ST09.1 / ST09.2 / ST09.3) ----------
+// ---------- Modal: novo agendamento (ST09.1 a ST09.5) ----------
 // Ponto de entrada do fluxo de cadastro manual (US09). A ST09.1 entregou o
 // botão em destaque na agenda e a abertura do modal; a ST09.2 montou o
 // formulário com todos os campos e a validação de obrigatórios com destaque
-// visual em vermelho; a ST09.3 (aqui) integra o dropdown de horário com
+// visual em vermelho; a ST09.3 integra o dropdown de horário com
 // GET /agendamentos/disponibilidade — slots ocupados desabilitados, skeleton
-// loader durante a carga e aviso quando não há horário livre na data. Ainda
-// fica para a próxima subtask o salvamento com toast e atualização da agenda
-// (ST09.5).
+// loader durante a carga e aviso quando não há horário livre na data; a
+// ST09.5 (submit) salva via POST /api/agendamentos (origem "portal", que a
+// ST09.4 já faz upsert de cliente por telefone), fecha o modal, atualiza a
+// agenda e exibe o toast de sucesso.
 
 // Marca em vermelho os campos [data-obrigatorio] vazios e devolve o primeiro
 // inválido (ou null se estiver tudo preenchido).
@@ -297,7 +322,7 @@ function abrirModalNovoAgendamento() {
     document.getElementById(id).addEventListener('change', carregarSlotsNovoAgendamento);
   });
 
-  form.addEventListener('submit', (e) => {
+  form.addEventListener('submit', async (e) => {
     e.preventDefault();
     erroEl.textContent = '';
     const invalido = validarObrigatorios(form);
@@ -306,9 +331,32 @@ function abrirModalNovoAgendamento() {
       invalido.focus();
       return;
     }
-    // ST09.5: persistir via POST /api/agendamentos, exibir toast de sucesso e
-    // atualizar a agenda sem recarregar. O dropdown de horário já é preenchido
-    // com os slots reais de GET /agendamentos/disponibilidade (ST09.3).
+
+    const btn = document.getElementById('btn-salvar-novo-ag');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    const resultado = await api('/api/agendamentos', {
+      method: 'POST',
+      body: JSON.stringify({
+        cliente_nome: document.getElementById('novo-ag-nome').value.trim(),
+        cliente_telefone: document.getElementById('novo-ag-telefone').value.trim(),
+        servico_id: document.getElementById('novo-ag-servico').value,
+        profissional_id: document.getElementById('novo-ag-profissional').value,
+        data_hora: document.getElementById('novo-ag-horario').value,
+        origem: 'portal',
+      }),
+    });
+
+    if (resultado && !resultado.error) {
+      fecharModal();
+      mostrarToast('Agendamento cadastrado com sucesso.', 'sucesso');
+      render();
+    } else {
+      erroEl.textContent = (resultado && resultado.error) || 'Erro ao salvar agendamento.';
+      btn.disabled = false;
+      btn.textContent = 'Salvar agendamento';
+    }
   });
 }
 
@@ -591,10 +639,15 @@ const NOMES_DIAS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta',
 async function render() {
   if (menuAtual === 'configuracao') return renderConfiguracao();
   if (menuAtual === 'perfil') return renderPerfil();
+  if (menuAtual.startsWith('modulo:')) return renderModuloEmBreve();
 
   if (abaAtual === 'dia') return renderDia();
   if (abaAtual === 'semana') return renderSemana();
   if (abaAtual === 'mes') return renderMes();
+}
+
+function renderModuloEmBreve() {
+  conteudo.innerHTML = '<div class="vazio">🚧 Em breve — este módulo ainda está em desenvolvimento.</div>';
 }
 
 async function renderDia() {
@@ -837,3 +890,4 @@ async function renderConfiguracao() {
 }
 
 carregarConfiguracao().then(render);
+carregarModulosNoMenu();
