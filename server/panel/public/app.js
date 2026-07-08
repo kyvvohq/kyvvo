@@ -204,7 +204,7 @@ function abrirModalNovoAgendamento() {
         <label for="novo-ag-nome">Nome do cliente *</label>
         <input type="text" id="novo-ag-nome" data-obrigatorio autocomplete="off">
 
-        <label for="novo-ag-telefone">Telefone (opcional)</label>
+        <label for="novo-ag-telefone">Telefone</label>
         <input type="tel" id="novo-ag-telefone" placeholder="11999999999" autocomplete="off">
 
         <label for="novo-ag-servico">Serviço *</label>
@@ -221,7 +221,7 @@ function abrirModalNovoAgendamento() {
         <div class="skeleton-horario" id="novo-ag-horario-skeleton" hidden aria-hidden="true"></div>
         <div class="campo-aviso" id="novo-ag-horario-aviso"></div>
 
-        <label for="novo-ag-observacoes">Observações (opcional)</label>
+        <label for="novo-ag-observacoes">Observações</label>
         <textarea id="novo-ag-observacoes" rows="3" placeholder="Anotações internas sobre o agendamento"></textarea>
 
         <div class="modal-acoes">
@@ -870,6 +870,10 @@ async function renderConfiguracao() {
   await carregarConfiguracao();
   const dias = configuracao.dias_funcionamento || [1, 2, 3, 4, 5, 6];
   const formato = configuracao.formato_hora || '24h';
+  // "time" do Postgres vem com segundos ("08:00:00"); <input type="time">
+  // espera "HH:MM".
+  const horarioAbertura = (configuracao.horario_abertura || '08:00').slice(0, 5);
+  const horarioFechamento = (configuracao.horario_fechamento || '20:00').slice(0, 5);
 
   const checkboxesDias = NOMES_DIAS.map((nome, idx) => `
     <label class="dia-checkbox">
@@ -895,6 +899,19 @@ async function renderConfiguracao() {
         </label>
       </div>
 
+      <label>Horário de funcionamento</label>
+      <div class="formato-hora-opcoes">
+        <div>
+          <label for="config-horario-abertura">Abertura</label>
+          <input type="time" id="config-horario-abertura" value="${horarioAbertura}">
+        </div>
+        <div>
+          <label for="config-horario-fechamento">Fechamento</label>
+          <input type="time" id="config-horario-fechamento" value="${horarioFechamento}">
+        </div>
+      </div>
+      <div class="modal-texto">Agendamentos só podem ser feitos dentro desse intervalo.</div>
+
       <button type="submit">Salvar</button>
       <div class="erro" id="config-msg"></div>
     </form>
@@ -908,16 +925,21 @@ async function renderConfiguracao() {
 
     const diasFuncionamento = Array.from(document.querySelectorAll('.dias-grid input:checked')).map((el) => parseInt(el.value, 10));
     const formatoHora = document.querySelector('input[name="formato"]:checked').value;
+    const horarioAbertura = document.getElementById('config-horario-abertura').value;
+    const horarioFechamento = document.getElementById('config-horario-fechamento').value;
 
     const resultado = await api('/api/configuracao', {
       method: 'PATCH',
-      body: JSON.stringify({ diasFuncionamento, formatoHora }),
+      body: JSON.stringify({ diasFuncionamento, formatoHora, horarioAbertura, horarioFechamento }),
     });
 
-    if (resultado) {
+    if (resultado && !resultado.error) {
       configuracao = resultado;
       msg.style.color = '#4ade80';
       msg.textContent = 'Salvo com sucesso!';
+    } else {
+      msg.style.color = '#ff6b6b';
+      msg.textContent = (resultado && resultado.error) || 'Erro ao salvar configuração.';
     }
   });
 }
