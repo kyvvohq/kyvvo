@@ -117,6 +117,38 @@ test.describe('Novo agendamento — dropdown de slots (ST09.3)', () => {
     await expect(page.locator('#novo-ag-horario')).toHaveClass(/campo-invalido/);
   });
 
+  test('erro no backend não deixa o select de horário travado escondido', async ({ page }) => {
+    await abrirFormulario(page);
+    await page.route('**/api/agendamentos/disponibilidade**', (route) =>
+      route.fulfill({ status: 500, contentType: 'text/html', body: '<html>Internal Server Error</html>' })
+    );
+
+    await preencherContexto(page);
+
+    // Antes da correção, uma falha aqui (resposta não-JSON) deixava o select
+    // escondido pra sempre e o formulário ficava impossível de preencher.
+    await expect(page.locator('#novo-ag-horario')).toBeVisible();
+    await expect(page.locator('#novo-ag-horario-skeleton')).toBeHidden();
+    await expect(page.locator('#novo-ag-horario-aviso')).not.toHaveText('');
+  });
+
+  test('digitar a data (sem usar o calendário) também carrega os horários', async ({ page }) => {
+    await abrirFormulario(page);
+    await page.route('**/api/agendamentos/disponibilidade**', (route) =>
+      route.fulfill({
+        json: { data: '2026-07-10', slots: [{ hora: '2026-07-10T11:00:00.000Z', disponivel: true }] },
+      })
+    );
+
+    await page.selectOption('#novo-ag-servico', 's1');
+    await page.selectOption('#novo-ag-profissional', 'p1');
+    // pressSequentially digita caractere a caractere (evento "input"), sem
+    // passar pelo calendário nativo nem disparar "change" via blur.
+    await page.locator('#novo-ag-data').pressSequentially('2026-07-10');
+
+    await expect(page.locator('#novo-ag-horario')).toHaveValue('2026-07-10T11:00:00.000Z');
+  });
+
   test('não busca disponibilidade enquanto faltar serviço, profissional ou data', async ({ page }) => {
     await abrirFormulario(page);
     let chamou = false;
