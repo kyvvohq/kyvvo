@@ -227,21 +227,41 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 .dia-cel {
-  aspect-ratio: 1;
+  min-height: 64px;
   border-radius: 8px;
   background: #12162a;
   border: 1px solid #232847;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  padding: 8px 4px;
   font-size: 13px;
 }
 
 .dia-cel .num { color: #f2f2f7; }
-.dia-cel .count { color: #00d4ff; font-size: 11px; margin-top: 2px; }
 .dia-cel.vazio-cel { background: transparent; border: none; }
 .dia-cel-fechado { opacity: 0.35; }
+
+.dia-cel-agendamentos {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  margin-top: 4px;
+  width: 100%;
+}
+
+.dia-cel-ag {
+  color: #00d4ff;
+  font-size: 10px;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.dia-cel-ag-cancelado {
+  color: #6b7099;
+  text-decoration: line-through;
+}
 
 .dias-grid {
   display: grid;
@@ -272,6 +292,19 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
+}
+
+.nav-periodo-data {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.nav-periodo-dia-semana {
+  font-size: 12px;
+  color: #a1a5c4;
+  text-transform: capitalize;
 }
 
 .nav-periodo button {
