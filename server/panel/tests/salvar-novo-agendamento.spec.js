@@ -93,6 +93,29 @@ test.describe('Novo agendamento — salvar (ST09.5)', () => {
     expect(corpoEnviado.cliente_telefone).toBe('');
   });
 
+  test('horário fora do funcionamento: mostra o erro no modal sem fechar', async ({ page }) => {
+    await mockDashboardApis(page);
+    await page.route('**/api/agendamentos', (route) => {
+      if (route.request().method() === 'POST') {
+        return route.fulfill({ status: 400, json: { error: 'Horário fora do funcionamento do salão (08:00–20:00).' } });
+      }
+      return route.fulfill({ json: { view: 'dia', data: '2026-07-06', agendamentos: [] } });
+    });
+
+    await page.addInitScript(() => {
+      window.localStorage.setItem('kyvvo_token', 'fake-jwt-token');
+      window.localStorage.setItem('kyvvo_nome', 'Ana');
+    });
+    await page.goto('/painel.html');
+    await preencherFormulario(page);
+
+    await page.click('#btn-salvar-novo-ag');
+
+    await expect(page.locator('#modal-overlay')).toBeVisible();
+    await expect(page.locator('#novo-ag-erro')).toHaveText(/fora do funcionamento/);
+    await expect(page.locator('#btn-salvar-novo-ag')).toBeEnabled();
+  });
+
   test('conflito de horário: mostra o erro no modal sem fechar', async ({ page }) => {
     await mockDashboardApis(page);
     await page.route('**/api/agendamentos', (route) => {

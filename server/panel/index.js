@@ -12,6 +12,24 @@ if (!JWT_SECRET) throw new Error('JWT_SECRET não configurado');
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
+// Converte um "time" do Postgres ("08:00:00" ou "08:00") em minutos desde a
+// meia-noite, pra comparar com o horário (também em minutos) de um
+// agendamento — usado tanto na geração de slots quanto na validação de
+// horário de funcionamento em POST/PATCH de agendamentos.
+function horarioParaMinutos(horario) {
+  const [h, m] = horario.split(':').map(Number);
+  return h * 60 + m;
+}
+
+// Minutos desde a meia-noite de um timestamp de agendamento, na mesma
+// convenção (horário local do processo) usada para gerar os slots em
+// GET /agendamentos/disponibilidade — garante que um slot oferecido no
+// dropdown nunca seja rejeitado aqui por uma diferença de fuso horário.
+function minutosNoDia(dataISO) {
+  const d = new Date(dataISO);
+  return d.getHours() * 60 + d.getMinutes();
+}
+
 async function start() {
   await fastify.register(cors, { origin: true });
   await fastify.register(jwt, { secret: JWT_SECRET });
@@ -184,6 +202,22 @@ async function start() {
     }
 
     if (dataHora !== undefined) {
+      // Reagendar também precisa respeitar o horário de funcionamento do
+      // salão, igual ao POST /agendamentos.
+      const { rows: tenantRows } = await pool.query(
+        'SELECT horario_abertura, horario_fechamento FROM tenants WHERE id = $1',
+        [tenantId]
+      );
+      const horarioAberturaMinutos = horarioParaMinutos(tenantRows[0].horario_abertura);
+      const horarioFechamentoMinutos = horarioParaMinutos(tenantRows[0].horario_fechamento);
+      const inicioMinutos = minutosNoDia(dataHora);
+      const fimMinutos = inicioMinutos + atual.duracao_minutos;
+      if (inicioMinutos < horarioAberturaMinutos || fimMinutos > horarioFechamentoMinutos) {
+        return reply.code(400).send({
+          error: `Horário fora do funcionamento do salão (${tenantRows[0].horario_abertura.slice(0, 5)}–${tenantRows[0].horario_fechamento.slice(0, 5)}).`,
+        });
+      }
+
       const { rows: conflitos } = await pool.query(
         `SELECT a.id
          FROM agendamentos a
@@ -227,8 +261,6 @@ async function start() {
     return detalhado[0];
   });
 
-  const HORARIO_ABERTURA_HORA = 8;
-  const HORARIO_FECHAMENTO_HORA = 20;
   const SLOT_INTERVALO_MINUTOS = 30;
 
   fastify.get('/api/agendamentos/disponibilidade', { preHandler: [fastify.authenticate] }, async (request, reply) => {
@@ -248,6 +280,13 @@ async function start() {
       return reply.code(404).send({ error: 'Serviço não encontrado' });
     }
 
+    const { rows: tenantRows } = await pool.query(
+      'SELECT horario_abertura, horario_fechamento FROM tenants WHERE id = $1',
+      [tenantId]
+    );
+    const horarioAberturaMinutos = horarioParaMinutos(tenantRows[0].horario_abertura);
+    const horarioFechamentoMinutos = horarioParaMinutos(tenantRows[0].horario_fechamento);
+
     const { rows: ocupados } = await pool.query(
       `SELECT a.data_hora, s.duracao_minutos
        FROM agendamentos a
@@ -261,8 +300,8 @@ async function start() {
     const duracaoMinutos = servicoInfo.duracao_minutos;
     const slots = [];
     for (
-      let minutos = HORARIO_ABERTURA_HORA * 60;
-      minutos + duracaoMinutos <= HORARIO_FECHAMENTO_HORA * 60;
+      let minutos = horarioAberturaMinutos;
+      minutos + duracaoMinutos <= horarioFechamentoMinutos;
       minutos += SLOT_INTERVALO_MINUTOS
     ) {
       const inicioSlot = new Date(`${data}T00:00:00`);
@@ -353,6 +392,23 @@ async function start() {
       return reply.code(404).send({ error: 'Profissional não encontrado' });
     }
 
+    // Horário de funcionamento do salão (CA da configuração de horário) — vale
+    // pra qualquer agendamento, inclusive encaixe: a exceção do encaixe é
+    // sobrepor um horário já ocupado, não funcionar fora do expediente.
+    const { rows: tenantRows } = await pool.query(
+      'SELECT horario_abertura, horario_fechamento FROM tenants WHERE id = $1',
+      [tenantId]
+    );
+    const horarioAberturaMinutos = horarioParaMinutos(tenantRows[0].horario_abertura);
+    const horarioFechamentoMinutos = horarioParaMinutos(tenantRows[0].horario_fechamento);
+    const inicioMinutos = minutosNoDia(dataHora);
+    const fimMinutos = inicioMinutos + servicoInfo.duracao_minutos;
+    if (inicioMinutos < horarioAberturaMinutos || fimMinutos > horarioFechamentoMinutos) {
+      return reply.code(400).send({
+        error: `Horário fora do funcionamento do salão (${tenantRows[0].horario_abertura.slice(0, 5)}–${tenantRows[0].horario_fechamento.slice(0, 5)}).`,
+      });
+    }
+
     // Encaixe é uma exceção manual feita pela dona do salão: sobrepor um
     // horário já ocupado é o próprio propósito da funcionalidade (procedimentos
     // simples/rápidos encaixados ao lado de um atendimento já agendado), então
@@ -438,15 +494,17 @@ async function start() {
   fastify.get('/api/configuracao', { preHandler: [fastify.authenticate] }, async (request) => {
     const { tenantId } = request.user;
     const { rows } = await pool.query(
-      'SELECT dias_funcionamento, formato_hora FROM tenants WHERE id = $1',
+      'SELECT dias_funcionamento, formato_hora, horario_abertura, horario_fechamento FROM tenants WHERE id = $1',
       [tenantId]
     );
     return rows[0];
   });
 
+  const HORARIO_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
+
   fastify.patch('/api/configuracao', { preHandler: [fastify.authenticate] }, async (request, reply) => {
     const { tenantId } = request.user;
-    const { diasFuncionamento, formatoHora } = request.body || {};
+    const { diasFuncionamento, formatoHora, horarioAbertura, horarioFechamento } = request.body || {};
 
     if (formatoHora && !['24h', '12h'].includes(formatoHora)) {
       return reply.code(400).send({ error: 'formatoHora deve ser "24h" ou "12h"' });
@@ -454,14 +512,40 @@ async function start() {
     if (diasFuncionamento && (!Array.isArray(diasFuncionamento) || diasFuncionamento.some((d) => d < 0 || d > 6))) {
       return reply.code(400).send({ error: 'diasFuncionamento deve ser uma lista de números de 0 a 6' });
     }
+    if (horarioAbertura !== undefined && !HORARIO_REGEX.test(horarioAbertura)) {
+      return reply.code(400).send({ error: 'horarioAbertura deve estar no formato HH:MM' });
+    }
+    if (horarioFechamento !== undefined && !HORARIO_REGEX.test(horarioFechamento)) {
+      return reply.code(400).send({ error: 'horarioFechamento deve estar no formato HH:MM' });
+    }
+
+    // Precisa validar abertura < fechamento contra o valor final (existente
+    // ou novo) de cada lado — não dá pra confiar só no CHECK do banco pra dar
+    // uma mensagem de erro clara em vez de estourar uma exceção de SQL.
+    if (horarioAbertura !== undefined || horarioFechamento !== undefined) {
+      const { rows: atuais } = await pool.query(
+        'SELECT horario_abertura, horario_fechamento FROM tenants WHERE id = $1',
+        [tenantId]
+      );
+      // Normaliza pra "HH:MM" antes de comparar — o valor vindo do banco tem
+      // segundos ("08:00:00") e o do request não, e comparação de string só
+      // é confiável se os dois lados tiverem o mesmo formato.
+      const aberturaFinal = (horarioAbertura ?? atuais[0].horario_abertura).slice(0, 5);
+      const fechamentoFinal = (horarioFechamento ?? atuais[0].horario_fechamento).slice(0, 5);
+      if (aberturaFinal >= fechamentoFinal) {
+        return reply.code(400).send({ error: 'Horário de abertura precisa ser antes do horário de fechamento' });
+      }
+    }
 
     const { rows } = await pool.query(
       `UPDATE tenants SET
          dias_funcionamento = COALESCE($2, dias_funcionamento),
-         formato_hora = COALESCE($3, formato_hora)
+         formato_hora = COALESCE($3, formato_hora),
+         horario_abertura = COALESCE($4, horario_abertura),
+         horario_fechamento = COALESCE($5, horario_fechamento)
        WHERE id = $1
-       RETURNING dias_funcionamento, formato_hora`,
-      [tenantId, diasFuncionamento ? JSON.stringify(diasFuncionamento) : null, formatoHora]
+       RETURNING dias_funcionamento, formato_hora, horario_abertura, horario_fechamento`,
+      [tenantId, diasFuncionamento ? JSON.stringify(diasFuncionamento) : null, formatoHora, horarioAbertura, horarioFechamento]
     );
     return rows[0];
   });
