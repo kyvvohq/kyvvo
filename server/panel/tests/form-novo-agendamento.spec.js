@@ -62,13 +62,13 @@ test.describe('Novo agendamento — formulário de cadastro (ST09.2)', () => {
     await abrirFormulario(page);
     await page.click('#btn-salvar-novo-ag');
 
-    // Obrigatórios ficam com a classe de destaque; o opcional telefone não.
+    // Telefone é obrigatório (é o canal de comunicação com a cliente).
     await expect(page.locator('#novo-ag-nome')).toHaveClass(/campo-invalido/);
+    await expect(page.locator('#novo-ag-telefone')).toHaveClass(/campo-invalido/);
     await expect(page.locator('#novo-ag-servico')).toHaveClass(/campo-invalido/);
     await expect(page.locator('#novo-ag-profissional')).toHaveClass(/campo-invalido/);
     await expect(page.locator('#novo-ag-data')).toHaveClass(/campo-invalido/);
     await expect(page.locator('#novo-ag-horario')).toHaveClass(/campo-invalido/);
-    await expect(page.locator('#novo-ag-telefone')).not.toHaveClass(/campo-invalido/);
     await expect(page.locator('#novo-ag-erro')).toHaveText('Preencha os campos obrigatórios destacados em vermelho.');
   });
 
@@ -83,17 +83,17 @@ test.describe('Novo agendamento — formulário de cadastro (ST09.2)', () => {
     await expect(page.locator('#novo-ag-servico')).toHaveClass(/campo-invalido/);
   });
 
-  test('telefone é opcional: preenchido só o obrigatório, não bloqueia por telefone', async ({ page }) => {
+  test('telefone em branco fica destacado como obrigatório', async ({ page }) => {
     await abrirFormulario(page);
     await page.fill('#novo-ag-nome', 'Maria');
     await page.selectOption('#novo-ag-servico', 's1');
     await page.selectOption('#novo-ag-profissional', 'p1');
     await page.fill('#novo-ag-data', '2026-07-10');
-    // horário permanece vazio (dropdown é preenchido pela ST09.3), então o
-    // formulário ainda barra — mas por horário, nunca por telefone.
     await page.click('#btn-salvar-novo-ag');
-    await expect(page.locator('#novo-ag-telefone')).not.toHaveClass(/campo-invalido/);
+    await expect(page.locator('#novo-ag-telefone')).toHaveClass(/campo-invalido/);
     await expect(page.locator('#novo-ag-nome')).not.toHaveClass(/campo-invalido/);
-    await expect(page.locator('#novo-ag-horario')).toHaveClass(/campo-invalido/);
+
+    await page.fill('#novo-ag-telefone', '11999999999');
+    await expect(page.locator('#novo-ag-telefone')).not.toHaveClass(/campo-invalido/);
   });
 });

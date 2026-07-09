@@ -204,8 +204,8 @@ function abrirModalNovoAgendamento() {
         <label for="novo-ag-nome">Nome do cliente *</label>
         <input type="text" id="novo-ag-nome" data-obrigatorio autocomplete="off">
 
-        <label for="novo-ag-telefone">Telefone</label>
-        <input type="tel" id="novo-ag-telefone" placeholder="11999999999" autocomplete="off">
+        <label for="novo-ag-telefone">Telefone *</label>
+        <input type="tel" id="novo-ag-telefone" data-obrigatorio placeholder="11999999999" autocomplete="off">
 
         <label for="novo-ag-servico">Serviço *</label>
         <select id="novo-ag-servico" data-obrigatorio><option value="">Carregando serviços...</option></select>

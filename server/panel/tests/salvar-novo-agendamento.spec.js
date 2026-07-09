@@ -29,6 +29,7 @@ async function mockDashboardApis(page) {
 async function preencherFormulario(page) {
   await page.click('#btn-novo-agendamento');
   await page.fill('#novo-ag-nome', 'Maria');
+  await page.fill('#novo-ag-telefone', '11999999999');
   await page.selectOption('#novo-ag-servico', 's1');
   await page.selectOption('#novo-ag-profissional', 'p1');
   await page.fill('#novo-ag-data', '2026-07-10');
@@ -68,13 +69,13 @@ test.describe('Novo agendamento — salvar (ST09.5)', () => {
     });
   });
 
-  test('telefone em branco não bloqueia o salvamento (é opcional)', async ({ page }) => {
+  test('telefone em branco bloqueia o salvamento (é obrigatório)', async ({ page }) => {
     await mockDashboardApis(page);
-    let corpoEnviado = null;
+    let chamouPost = false;
     await page.route('**/api/agendamentos', (route) => {
       if (route.request().method() === 'POST') {
-        corpoEnviado = route.request().postDataJSON();
-        return route.fulfill({ json: { id: 'ag1', ...corpoEnviado } });
+        chamouPost = true;
+        return route.fulfill({ json: { id: 'ag1' } });
       }
       return route.fulfill({ json: { view: 'dia', data: '2026-07-06', agendamentos: [] } });
     });
@@ -84,13 +85,18 @@ test.describe('Novo agendamento — salvar (ST09.5)', () => {
       window.localStorage.setItem('kyvvo_nome', 'Ana');
     });
     await page.goto('/painel.html');
-    await preencherFormulario(page);
+    await page.click('#btn-novo-agendamento');
+    await page.fill('#novo-ag-nome', 'Maria');
+    await page.selectOption('#novo-ag-servico', 's1');
+    await page.selectOption('#novo-ag-profissional', 'p1');
+    await page.fill('#novo-ag-data', '2026-07-10');
     // Telefone deliberadamente deixado em branco.
 
     await page.click('#btn-salvar-novo-ag');
 
-    await expect(page.locator('#modal-overlay')).toHaveCount(0);
-    expect(corpoEnviado.cliente_telefone).toBe('');
+    await expect(page.locator('#novo-ag-telefone')).toHaveClass(/campo-invalido/);
+    await expect(page.locator('#modal-overlay')).toBeVisible();
+    expect(chamouPost).toBe(false);
   });
 
   test('horário fora do funcionamento: mostra o erro no modal sem fechar', async ({ page }) => {
