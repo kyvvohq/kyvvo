@@ -50,12 +50,14 @@ test.describe('Menu dinâmico por módulo (ST10.3)', () => {
   });
 
   test('clicar no item do módulo mostra aviso de "em breve"', async ({ page }) => {
+    // "financeiro" não serve mais de exemplo aqui — desde a US18 ele tem tela
+    // própria (ver financeiro.spec.js). "estoque" continua sem tela.
     await entrarNoPainel(page, [
       { key: 'agenda_inteligente', nome: 'Agendamento', preco_mensal: null },
-      { key: 'financeiro', nome: 'Financeiro', preco_mensal: 49.9 },
+      { key: 'estoque', nome: 'Estoque', preco_mensal: 49.9 },
     ]);
-    await page.click('.menu-item[data-menu="modulo:financeiro"]');
+    await page.click('.menu-item[data-menu="modulo:estoque"]');
     await expect(page.locator('#conteudo')).toContainText('Em breve');
-    await expect(page.locator('.menu-item[data-menu="modulo:financeiro"]')).toHaveClass(/active/);
+    await expect(page.locator('.menu-item[data-menu="modulo:estoque"]')).toHaveClass(/active/);
   });
 });

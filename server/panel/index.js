@@ -781,6 +781,60 @@ async function start() {
     return { modulos: rows };
   });
 
+  // ---------- Financeiro (US18) ----------
+  // Livro-caixa manual simples (entrada/saída) — primeira funcionalidade real
+  // do módulo "financeiro", só acessível a quem tem o módulo ativo.
+  fastify.get(
+    '/api/financeiro/lancamentos',
+    { preHandler: [fastify.authenticate, fastify.requireModulo('financeiro')] },
+    async (request) => {
+      const { tenantId } = request.user;
+      const mesRef = request.query.mes || mesAtualBrasilia();
+
+      const { rows } = await pool.query(
+        `SELECT id, tipo, valor, descricao, data
+         FROM lancamentos_financeiros
+         WHERE tenant_id = $1 AND to_char(data, 'YYYY-MM') = $2
+         ORDER BY data DESC, criado_em DESC`,
+        [tenantId, mesRef]
+      );
+
+      const entradas = rows.filter((r) => r.tipo === 'entrada').reduce((soma, r) => soma + Number(r.valor), 0);
+      const saidas = rows.filter((r) => r.tipo === 'saida').reduce((soma, r) => soma + Number(r.valor), 0);
+
+      return {
+        mes: mesRef,
+        lancamentos: rows,
+        resumo: { entradas, saidas, saldo: entradas - saidas },
+      };
+    }
+  );
+
+  fastify.post(
+    '/api/financeiro/lancamentos',
+    { preHandler: [fastify.authenticate, fastify.requireModulo('financeiro')] },
+    async (request, reply) => {
+      const { tenantId } = request.user;
+      const { tipo, valor, descricao, data } = request.body || {};
+
+      if (!['entrada', 'saida'].includes(tipo)) {
+        return reply.code(400).send({ error: 'Campo "tipo" deve ser "entrada" ou "saida"' });
+      }
+      if (!Number.isFinite(valor) || valor <= 0) {
+        return reply.code(400).send({ error: 'Campo "valor" deve ser um número maior que zero' });
+      }
+
+      const { rows } = await pool.query(
+        `INSERT INTO lancamentos_financeiros (tenant_id, tipo, valor, descricao, data)
+         VALUES ($1, $2, $3, $4, COALESCE($5, current_date))
+         RETURNING id, tipo, valor, descricao, data`,
+        [tenantId, tipo, valor, descricao || null, data || null]
+      );
+      reply.code(201);
+      return rows[0];
+    }
+  );
+
   await fastify.listen({ port: PORT, host: '0.0.0.0' });
   console.log(`Painel Kyvvo rodando na porta ${PORT}`);
 }
