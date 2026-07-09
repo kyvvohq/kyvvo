@@ -353,16 +353,13 @@ async function start() {
       observacoes,
     } = request.body || {};
 
-    // Telefone é opcional no cadastro manual pelo portal (US09/CA02) — nem
-    // toda cliente sem WhatsApp quer informar telefone. NULL não conflita com
-    // a constraint unique(tenant_id, telefone), então cada cliente sem
-    // telefone vira uma linha nova (sem risco de "roubar" o cadastro de outro
-    // cliente por engano).
-    const clienteTelefone = clienteTelefoneBruto ? clienteTelefoneBruto.trim() || null : null;
+    // Telefone é obrigatório: é o canal de comunicação com a cliente
+    // (decisão de 2026-07-08, revertendo a US09/CA02 original).
+    const clienteTelefone = clienteTelefoneBruto ? clienteTelefoneBruto.trim() : '';
 
-    if (!profissionalId || !servicoId || !dataHora) {
+    if (!clienteTelefone || !profissionalId || !servicoId || !dataHora) {
       return reply.code(400).send({
-        error: 'Campos "profissional_id", "servico_id" e "data_hora" são obrigatórios',
+        error: 'Campos "cliente_telefone", "profissional_id", "servico_id" e "data_hora" são obrigatórios',
       });
     }
 
