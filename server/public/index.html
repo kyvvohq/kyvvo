@@ -276,7 +276,8 @@ window.addEventListener('keydown', (e) => {
 window.addEventListener('message', (e) => {
   if (e.origin !== PANEL_ORIGIN) return;
   if (e.data && e.data.source === 'kyvvo-login' && e.data.status === 'success') {
-    window.top.location.href = PANEL_ORIGIN + '/painel.html';
+    const destino = e.data.admin ? '/admin/painel.html' : '/painel.html';
+    window.top.location.href = PANEL_ORIGIN + destino;
   }
 });
 </script>
