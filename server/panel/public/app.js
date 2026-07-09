@@ -652,6 +652,21 @@ document.addEventListener('click', (e) => {
 
 const NOMES_DIAS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
 
+// Segmento de negócio do tenant — só adapta terminologia da UI (label do
+// campo "nome" no Perfil, texto de "dias de funcionamento" na Configuração),
+// sem mudar comportamento. Mesma lista fixa validada no backend.
+const SEGMENTOS = {
+  salao_beleza: { rotulo: 'Salão de beleza', nomeCampo: 'Nome do salão', dias: 'o salão' },
+  petshop: { rotulo: 'Pet Shop', nomeCampo: 'Nome do petshop', dias: 'o petshop' },
+  psicologia: { rotulo: 'Psicólogo(a)', nomeCampo: 'Nome da clínica', dias: 'o consultório' },
+  fisioterapia: { rotulo: 'Fisioterapia', nomeCampo: 'Nome da clínica', dias: 'a clínica' },
+  pilates: { rotulo: 'Pilates', nomeCampo: 'Nome do studio', dias: 'o studio' },
+  outro: { rotulo: 'Outro', nomeCampo: 'Nome do negócio', dias: 'o negócio' },
+};
+function infoSegmento(segmento) {
+  return SEGMENTOS[segmento] || SEGMENTOS.outro;
+}
+
 async function render() {
   if (menuAtual === 'configuracao') return renderConfiguracao();
   if (menuAtual === 'perfil') return renderPerfil();
@@ -832,9 +847,16 @@ async function renderPerfil() {
   const perfil = await api('/api/perfil');
   if (!perfil) return;
 
+  const segmentoAtual = perfil.segmento || 'salao_beleza';
+  const opcoesSegmento = Object.entries(SEGMENTOS)
+    .map(([key, s]) => `<option value="${key}" ${key === segmentoAtual ? 'selected' : ''}>${s.rotulo}</option>`)
+    .join('');
+
   conteudo.innerHTML = `
     <form class="perfil-form" id="form-perfil">
-      <label for="nome">Nome do salão</label>
+      <label for="segmento">Segmento do negócio</label>
+      <select id="segmento">${opcoesSegmento}</select>
+      <label for="nome" id="nome-label">${infoSegmento(segmentoAtual).nomeCampo}</label>
       <input type="text" id="nome" value="${perfil.nome || ''}">
       <label for="telefone">Telefone</label>
       <input type="text" id="telefone" value="${perfil.telefone || ''}">
@@ -844,6 +866,12 @@ async function renderPerfil() {
       <div class="erro" id="perfil-msg"></div>
     </form>
   `;
+
+  // Troca o label do campo "nome" ao mudar o segmento no select, sem precisar
+  // salvar/recarregar pra ver o rótulo certo.
+  document.getElementById('segmento').addEventListener('change', (e) => {
+    document.getElementById('nome-label').textContent = infoSegmento(e.target.value).nomeCampo;
+  });
 
   document.getElementById('form-perfil').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -856,11 +884,15 @@ async function renderPerfil() {
         nome: document.getElementById('nome').value,
         telefone: document.getElementById('telefone').value,
         endereco: document.getElementById('endereco').value,
+        segmento: document.getElementById('segmento').value,
       }),
     });
-    if (resultado) {
+    if (resultado && !resultado.error) {
       msg.style.color = '#4ade80';
       msg.textContent = 'Salvo com sucesso!';
+    } else {
+      msg.style.color = '#ff6b6b';
+      msg.textContent = (resultado && resultado.error) || 'Erro ao salvar perfil.';
     }
   });
 }
@@ -884,7 +916,7 @@ async function renderConfiguracao() {
 
   conteudo.innerHTML = `
     <form class="perfil-form" id="form-config">
-      <label>Dias em que o salão funciona (aparecem na agenda)</label>
+      <label>Dias em que ${infoSegmento(configuracao.segmento).dias} funciona (aparecem na agenda)</label>
       <div class="dias-grid">${checkboxesDias}</div>
 
       <label>Formato de hora</label>
