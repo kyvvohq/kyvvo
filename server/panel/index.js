@@ -21,13 +21,36 @@ function horarioParaMinutos(horario) {
   return h * 60 + m;
 }
 
-// Minutos desde a meia-noite de um timestamp de agendamento, na mesma
-// convenção (horário local do processo) usada para gerar os slots em
-// GET /agendamentos/disponibilidade — garante que um slot oferecido no
-// dropdown nunca seja rejeitado aqui por uma diferença de fuso horário.
+// O servidor roda em UTC (container Docker), mas todo horário de
+// funcionamento/agenda é pensado em horário de Brasília. Brasil não observa
+// horário de verão desde 2019, então o offset fixo -3h é seguro (sem precisar
+// de lib de timezone). BUG HISTÓRICO: código anterior usava new Date(...) e
+// os métodos locais (getHours/setMinutes) assumindo que "horário local do
+// processo" era Brasília — como o processo roda em UTC, isso deslocava todo
+// slot gerado em 3h pra trás (um slot rotulado "09:00" era na verdade 06:00
+// em Brasília) e podia até cruzar a virada do dia. Toda conversão de/para
+// horário de Brasília deve passar pelas duas funções abaixo, nunca por
+// getHours/setMinutes/toISOString direto num Date.
+const OFFSET_BRASILIA_MINUTOS = 180;
+
+// Minutos desde a meia-noite (em horário de Brasília) de um timestamp de
+// agendamento — usado na validação de horário de funcionamento em
+// POST/PATCH de agendamentos.
 function minutosNoDia(dataISO) {
   const d = new Date(dataISO);
-  return d.getHours() * 60 + d.getMinutes();
+  const minutosUtc = d.getUTCHours() * 60 + d.getUTCMinutes();
+  return ((minutosUtc - OFFSET_BRASILIA_MINUTOS) % 1440 + 1440) % 1440;
+}
+
+// Data (YYYY-MM-DD) de "agora" em horário de Brasília — usada como fallback
+// quando a view de agenda é consultada sem o parâmetro "data" explícito.
+function dataAtualBrasilia() {
+  return new Date(Date.now() - OFFSET_BRASILIA_MINUTOS * 60000).toISOString().slice(0, 10);
+}
+
+// Mês (YYYY-MM) de "agora" em horário de Brasília — mesmo raciocínio acima.
+function mesAtualBrasilia() {
+  return new Date(Date.now() - OFFSET_BRASILIA_MINUTOS * 60000).toISOString().slice(0, 7);
 }
 
 async function start() {
@@ -123,7 +146,7 @@ async function start() {
     const { view, data } = request.query;
 
     if (view === 'dia') {
-      const dataRef = data || new Date().toISOString().slice(0, 10);
+      const dataRef = data || dataAtualBrasilia();
       const { rows } = await pool.query(
         `SELECT a.id, a.data_hora, a.status, a.encaixe, c.nome AS cliente, c.telefone AS cliente_telefone,
                 a.profissional_id, p.nome AS profissional, a.servico_id, s.nome AS servico, s.duracao_minutos
@@ -131,7 +154,7 @@ async function start() {
          JOIN clientes c ON c.id = a.cliente_id
          JOIN profissionais p ON p.id = a.profissional_id
          JOIN servicos s ON s.id = a.servico_id
-         WHERE a.tenant_id = $1 AND a.data_hora::date = $2::date
+         WHERE a.tenant_id = $1 AND (a.data_hora AT TIME ZONE 'America/Sao_Paulo')::date = $2::date
          ORDER BY a.data_hora`,
         [tenantId, dataRef]
       );
@@ -139,7 +162,7 @@ async function start() {
     }
 
     if (view === 'semana') {
-      const dataRef = data || new Date().toISOString().slice(0, 10);
+      const dataRef = data || dataAtualBrasilia();
       const { rows } = await pool.query(
         `SELECT a.id, a.data_hora, a.status, a.encaixe, c.nome AS cliente,
                 a.profissional_id, p.nome AS profissional, a.servico_id, s.nome AS servico, s.duracao_minutos
@@ -148,8 +171,8 @@ async function start() {
          JOIN profissionais p ON p.id = a.profissional_id
          JOIN servicos s ON s.id = a.servico_id
          WHERE a.tenant_id = $1
-           AND a.data_hora::date >= date_trunc('week', $2::date)
-           AND a.data_hora::date < date_trunc('week', $2::date) + interval '7 days'
+           AND (a.data_hora AT TIME ZONE 'America/Sao_Paulo')::date >= date_trunc('week', $2::date)
+           AND (a.data_hora AT TIME ZONE 'America/Sao_Paulo')::date < date_trunc('week', $2::date) + interval '7 days'
          ORDER BY a.data_hora`,
         [tenantId, dataRef]
       );
@@ -157,7 +180,7 @@ async function start() {
     }
 
     if (view === 'mes') {
-      const mesRef = data || new Date().toISOString().slice(0, 7); // YYYY-MM
+      const mesRef = data || mesAtualBrasilia();
       // US02.6 — a view Mês mostrava só a contagem de agendamentos por dia;
       // agora traz data_hora + duração de cada um pra listar horário-duração
       // empilhados na célula do dia (o agrupamento por dia é feito no front).
@@ -166,7 +189,7 @@ async function start() {
          FROM agendamentos a
          JOIN servicos s ON s.id = a.servico_id
          WHERE a.tenant_id = $1
-           AND to_char(a.data_hora, 'YYYY-MM') = $2
+           AND to_char(a.data_hora AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM') = $2
          ORDER BY a.data_hora`,
         [tenantId, mesRef]
       );
@@ -293,7 +316,7 @@ async function start() {
        JOIN servicos s ON s.id = a.servico_id
        WHERE a.tenant_id = $1 AND a.profissional_id = $2
          AND a.status = 'confirmado'
-         AND a.data_hora::date = $3::date`,
+         AND (a.data_hora AT TIME ZONE 'America/Sao_Paulo')::date = $3::date`,
       [tenantId, profissional, data]
     );
 
@@ -304,8 +327,12 @@ async function start() {
       minutos + duracaoMinutos <= horarioFechamentoMinutos;
       minutos += SLOT_INTERVALO_MINUTOS
     ) {
-      const inicioSlot = new Date(`${data}T00:00:00`);
-      inicioSlot.setMinutes(inicioSlot.getMinutes() + minutos);
+      // "T00:00:00-03:00" ancora explicitamente em meia-noite de Brasília,
+      // independente do fuso do processo Node (que roda em UTC no container).
+      // setUTCMinutes (não setMinutes) evita reintroduzir a mesma confusão de
+      // fuso ao somar os minutos do slot.
+      const inicioSlot = new Date(`${data}T00:00:00-03:00`);
+      inicioSlot.setUTCMinutes(inicioSlot.getUTCMinutes() + minutos);
       const fimSlot = new Date(inicioSlot.getTime() + duracaoMinutos * 60000);
 
       const conflita = ocupados.some((o) => {
