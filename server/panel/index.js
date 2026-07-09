@@ -9,6 +9,10 @@ const { Pool } = require('pg');
 const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) throw new Error('JWT_SECRET não configurado');
+// Secret separado do JWT de tenant (US16) — isolamento real entre os dois
+// sistemas de autenticação, não só uma diferença de rota.
+const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET;
+if (!ADMIN_JWT_SECRET) throw new Error('ADMIN_JWT_SECRET não configurado');
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
@@ -56,6 +60,15 @@ function mesAtualBrasilia() {
 async function start() {
   await fastify.register(cors, { origin: true });
   await fastify.register(jwt, { secret: JWT_SECRET });
+  // JWT completamente separado pra área admin da Kyvvo (US16) — secret
+  // próprio, namespace próprio (fastify.jwt.admin.*, request.adminJwtVerify,
+  // reply.adminJwtSign) e decoratorName próprio (request.admin em vez de
+  // request.user), pra nunca ter qualquer ambiguidade com o JWT de tenant.
+  await fastify.register(jwt, {
+    secret: ADMIN_JWT_SECRET,
+    namespace: 'admin',
+    decoratorName: 'admin',
+  });
   await fastify.register(staticPlugin, {
     root: path.join(__dirname, 'public'),
     prefix: '/',
@@ -75,6 +88,17 @@ async function start() {
     const usuario = rows[0];
     if (!usuario || usuario.token_version !== request.user.tokenVersion) {
       return reply.code(401).send({ error: 'Sessão expirada. Faça login novamente.' });
+    }
+  });
+
+  // Autenticação da área admin da Kyvvo (US16) — totalmente isolada da
+  // autenticação de tenant acima (secret diferente, tabela diferente,
+  // decorator diferente). Nunca compartilhar preHandler entre as duas.
+  fastify.decorate('authenticateAdmin', async (request, reply) => {
+    try {
+      await request.adminJwtVerify();
+    } catch (err) {
+      return reply.code(401).send({ error: 'Não autenticado' });
     }
   });
 
@@ -108,7 +132,9 @@ async function start() {
     }
 
     const { rows } = await pool.query(
-      'SELECT id, tenant_id, email, senha_hash, nome, token_version FROM usuarios WHERE email = $1',
+      `SELECT u.id, u.tenant_id, u.email, u.senha_hash, u.nome, u.token_version, t.ativo AS tenant_ativo
+       FROM usuarios u JOIN tenants t ON t.id = u.tenant_id
+       WHERE u.email = $1`,
       [email.toLowerCase().trim()]
     );
     const usuario = rows[0];
@@ -119,6 +145,13 @@ async function start() {
     const senhaValida = await bcrypt.compare(senha, usuario.senha_hash);
     if (!senhaValida) {
       return reply.code(401).send({ error: 'E-mail ou senha inválidos' });
+    }
+
+    // Tenant desativado pela área admin da Kyvvo (US16/CA02) — bloqueia
+    // login mesmo com senha correta, em vez de deixar o "desativar" ser só
+    // um flag decorativo sem efeito nenhum.
+    if (!usuario.tenant_ativo) {
+      return reply.code(403).send({ error: 'Acesso desativado. Fale com o suporte da Kyvvo.' });
     }
 
     const token = fastify.jwt.sign(
@@ -686,21 +719,18 @@ async function start() {
 
   fastify.patch('/api/perfil', { preHandler: [fastify.authenticate] }, async (request, reply) => {
     const { tenantId } = request.user;
-    const { nome, telefone, endereco, segmento } = request.body || {};
-
-    if (segmento !== undefined && !SEGMENTOS_VALIDOS.includes(segmento)) {
-      return reply.code(400).send({ error: `segmento deve ser um de: ${SEGMENTOS_VALIDOS.join(', ')}` });
-    }
+    // segmento não é editável pelo tenant — só a equipe Kyvvo altera, via
+    // PATCH /admin/api/tenants/:id.
+    const { nome, telefone, endereco } = request.body || {};
 
     const { rows } = await pool.query(
       `UPDATE tenants SET
          nome = COALESCE($2, nome),
          telefone = COALESCE($3, telefone),
-         endereco = COALESCE($4, endereco),
-         segmento = COALESCE($5, segmento)
+         endereco = COALESCE($4, endereco)
        WHERE id = $1
        RETURNING id, nome, telefone, endereco, segmento`,
-      [tenantId, nome, telefone, endereco, segmento]
+      [tenantId, nome, telefone, endereco]
     );
     return rows[0];
   });
@@ -834,6 +864,152 @@ async function start() {
       return rows[0];
     }
   );
+
+  // ---------- Área admin da Kyvvo (US16) ----------
+  // Todas as rotas abaixo usam fastify.authenticateAdmin (JWT/tabela
+  // separados dos tenants) — nunca fastify.authenticate. Servem a equipe da
+  // Kyvvo, não os clientes.
+  fastify.post('/admin/api/auth/login', async (request, reply) => {
+    const { email, senha } = request.body || {};
+    if (!email || !senha) {
+      return reply.code(400).send({ error: 'E-mail e senha são obrigatórios' });
+    }
+
+    const { rows } = await pool.query(
+      'SELECT id, email, senha_hash, nome FROM kyvvo_admins WHERE email = $1',
+      [email.toLowerCase().trim()]
+    );
+    const admin = rows[0];
+    if (!admin) {
+      return reply.code(401).send({ error: 'E-mail ou senha inválidos' });
+    }
+
+    const senhaValida = await bcrypt.compare(senha, admin.senha_hash);
+    if (!senhaValida) {
+      return reply.code(401).send({ error: 'E-mail ou senha inválidos' });
+    }
+
+    const token = fastify.jwt.admin.sign({ adminId: admin.id, email: admin.email }, { expiresIn: '7d' });
+    return { token, nome: admin.nome, email: admin.email };
+  });
+
+  fastify.get('/admin/api/tenants', { preHandler: [fastify.authenticateAdmin] }, async () => {
+    const { rows } = await pool.query(
+      `SELECT t.id, t.nome, t.segmento, t.ativo, t.criado_em,
+              (SELECT COUNT(*)::int FROM usuarios u WHERE u.tenant_id = t.id) AS total_usuarios
+       FROM tenants t
+       ORDER BY t.criado_em DESC`
+    );
+    return { tenants: rows };
+  });
+
+  fastify.get('/admin/api/tenants/:id', { preHandler: [fastify.authenticateAdmin] }, async (request, reply) => {
+    const { id } = request.params;
+    const { rows } = await pool.query('SELECT * FROM tenants WHERE id = $1', [id]);
+    const tenant = rows[0];
+    if (!tenant) {
+      return reply.code(404).send({ error: 'Tenant não encontrado' });
+    }
+
+    const { rows: modulosAtivos } = await pool.query(
+      `SELECT m.key, m.nome FROM tenant_modulos tm JOIN modulos m ON m.key = tm.modulo_key WHERE tm.tenant_id = $1 AND tm.ativo`,
+      [id]
+    );
+    const { rows: usuarios } = await pool.query('SELECT id, email, nome FROM usuarios WHERE tenant_id = $1 ORDER BY nome', [id]);
+    const { rows: contagemRows } = await pool.query(
+      `SELECT
+         (SELECT COUNT(*)::int FROM servicos WHERE tenant_id = $1) AS servicos,
+         (SELECT COUNT(*)::int FROM profissionais WHERE tenant_id = $1) AS profissionais`,
+      [id]
+    );
+
+    return { ...tenant, modulos_ativos: modulosAtivos, usuarios, contagens: contagemRows[0] };
+  });
+
+  fastify.post('/admin/api/tenants', { preHandler: [fastify.authenticateAdmin] }, async (request, reply) => {
+    const { nome, telefone, endereco, segmento, horario_abertura: horarioAbertura, horario_fechamento: horarioFechamento, usuario } =
+      request.body || {};
+
+    if (!nome || !nome.trim()) {
+      return reply.code(400).send({ error: 'Campo "nome" é obrigatório' });
+    }
+    if (segmento !== undefined && !SEGMENTOS_VALIDOS.includes(segmento)) {
+      return reply.code(400).send({ error: `segmento deve ser um de: ${SEGMENTOS_VALIDOS.join(', ')}` });
+    }
+    if (usuario && (!usuario.email || !usuario.senha)) {
+      return reply.code(400).send({ error: 'Para criar o usuário de login junto, informe "email" e "senha" do usuário' });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const { rows: tenantRows } = await client.query(
+        `INSERT INTO tenants (nome, telefone, endereco, segmento, horario_abertura, horario_fechamento)
+         VALUES ($1, $2, $3, COALESCE($4, 'salao_beleza'), COALESCE($5, '08:00'), COALESCE($6, '20:00'))
+         RETURNING id, nome, telefone, endereco, segmento, ativo, criado_em`,
+        [nome.trim(), telefone || null, endereco || null, segmento || null, horarioAbertura || null, horarioFechamento || null]
+      );
+      const tenant = tenantRows[0];
+
+      // Todo tenant novo já nasce com a agenda inteligente ativa — é o
+      // mínimo pra usar o portal (mesmo padrão da migration 010).
+      await client.query(
+        `INSERT INTO tenant_modulos (tenant_id, modulo_key, ativo) VALUES ($1, 'agenda_inteligente', true)`,
+        [tenant.id]
+      );
+
+      let usuarioCriado = null;
+      if (usuario) {
+        const hash = await bcrypt.hash(usuario.senha, 10);
+        const { rows: usuarioRows } = await client.query(
+          `INSERT INTO usuarios (tenant_id, email, senha_hash, nome) VALUES ($1, $2, $3, $4) RETURNING id, email, nome`,
+          [tenant.id, usuario.email.toLowerCase().trim(), hash, usuario.nome || nome.trim()]
+        );
+        usuarioCriado = usuarioRows[0];
+      }
+
+      await client.query('COMMIT');
+      reply.code(201);
+      return { ...tenant, usuario: usuarioCriado };
+    } catch (erro) {
+      await client.query('ROLLBACK');
+      if (erro.code === '23505') {
+        return reply.code(409).send({ error: 'Já existe um usuário com esse e-mail' });
+      }
+      throw erro;
+    } finally {
+      client.release();
+    }
+  });
+
+  fastify.patch('/admin/api/tenants/:id', { preHandler: [fastify.authenticateAdmin] }, async (request, reply) => {
+    const { id } = request.params;
+    const { nome, telefone, endereco, segmento, ativo, horario_abertura: horarioAbertura, horario_fechamento: horarioFechamento } =
+      request.body || {};
+
+    if (segmento !== undefined && !SEGMENTOS_VALIDOS.includes(segmento)) {
+      return reply.code(400).send({ error: `segmento deve ser um de: ${SEGMENTOS_VALIDOS.join(', ')}` });
+    }
+
+    const { rows } = await pool.query(
+      `UPDATE tenants SET
+         nome = COALESCE($2, nome),
+         telefone = COALESCE($3, telefone),
+         endereco = COALESCE($4, endereco),
+         segmento = COALESCE($5, segmento),
+         ativo = COALESCE($6, ativo),
+         horario_abertura = COALESCE($7, horario_abertura),
+         horario_fechamento = COALESCE($8, horario_fechamento)
+       WHERE id = $1
+       RETURNING id, nome, telefone, endereco, segmento, ativo, horario_abertura, horario_fechamento`,
+      [id, nome ? nome.trim() : null, telefone, endereco, segmento, ativo, horarioAbertura, horarioFechamento]
+    );
+    if (!rows[0]) {
+      return reply.code(404).send({ error: 'Tenant não encontrado' });
+    }
+    return rows[0];
+  });
 
   await fastify.listen({ port: PORT, host: '0.0.0.0' });
   console.log(`Painel Kyvvo rodando na porta ${PORT}`);

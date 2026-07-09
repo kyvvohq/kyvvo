@@ -1323,7 +1323,8 @@ async function renderPerfil() {
   conteudo.innerHTML = `
     <form class="perfil-form" id="form-perfil">
       <label for="segmento">Segmento do negócio</label>
-      <select id="segmento">${opcoesSegmento}</select>
+      <select id="segmento" disabled>${opcoesSegmento}</select>
+      <div class="modal-texto" style="margin-top:4px">Só a equipe Kyvvo pode alterar o segmento — fale com o suporte se precisar mudar.</div>
       <label for="nome" id="nome-label">${infoSegmento(segmentoAtual).nomeCampo}</label>
       <input type="text" id="nome" value="${perfil.nome || ''}">
       <label for="telefone">Telefone</label>
@@ -1334,12 +1335,6 @@ async function renderPerfil() {
       <div class="erro" id="perfil-msg"></div>
     </form>
   `;
-
-  // Troca o label do campo "nome" ao mudar o segmento no select, sem precisar
-  // salvar/recarregar pra ver o rótulo certo.
-  document.getElementById('segmento').addEventListener('change', (e) => {
-    document.getElementById('nome-label').textContent = infoSegmento(e.target.value).nomeCampo;
-  });
 
   document.getElementById('form-perfil').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -1352,7 +1347,6 @@ async function renderPerfil() {
         nome: document.getElementById('nome').value,
         telefone: document.getElementById('telefone').value,
         endereco: document.getElementById('endereco').value,
-        segmento: document.getElementById('segmento').value,
       }),
     });
     if (resultado && !resultado.error) {
