@@ -490,26 +490,34 @@ async function start() {
   });
 
   // ---------- Perfil ----------
+  const SEGMENTOS_VALIDOS = ['salao_beleza', 'petshop', 'psicologia', 'fisioterapia', 'pilates', 'outro'];
+
   fastify.get('/api/perfil', { preHandler: [fastify.authenticate] }, async (request) => {
     const { tenantId } = request.user;
     const { rows } = await pool.query(
-      'SELECT id, nome, telefone, endereco, criado_em FROM tenants WHERE id = $1',
+      'SELECT id, nome, telefone, endereco, segmento, criado_em FROM tenants WHERE id = $1',
       [tenantId]
     );
     return rows[0];
   });
 
-  fastify.patch('/api/perfil', { preHandler: [fastify.authenticate] }, async (request) => {
+  fastify.patch('/api/perfil', { preHandler: [fastify.authenticate] }, async (request, reply) => {
     const { tenantId } = request.user;
-    const { nome, telefone, endereco } = request.body || {};
+    const { nome, telefone, endereco, segmento } = request.body || {};
+
+    if (segmento !== undefined && !SEGMENTOS_VALIDOS.includes(segmento)) {
+      return reply.code(400).send({ error: `segmento deve ser um de: ${SEGMENTOS_VALIDOS.join(', ')}` });
+    }
+
     const { rows } = await pool.query(
       `UPDATE tenants SET
          nome = COALESCE($2, nome),
          telefone = COALESCE($3, telefone),
-         endereco = COALESCE($4, endereco)
+         endereco = COALESCE($4, endereco),
+         segmento = COALESCE($5, segmento)
        WHERE id = $1
-       RETURNING id, nome, telefone, endereco`,
-      [tenantId, nome, telefone, endereco]
+       RETURNING id, nome, telefone, endereco, segmento`,
+      [tenantId, nome, telefone, endereco, segmento]
     );
     return rows[0];
   });
@@ -518,7 +526,7 @@ async function start() {
   fastify.get('/api/configuracao', { preHandler: [fastify.authenticate] }, async (request) => {
     const { tenantId } = request.user;
     const { rows } = await pool.query(
-      'SELECT dias_funcionamento, formato_hora, horario_abertura, horario_fechamento FROM tenants WHERE id = $1',
+      'SELECT dias_funcionamento, formato_hora, horario_abertura, horario_fechamento, segmento FROM tenants WHERE id = $1',
       [tenantId]
     );
     return rows[0];
