@@ -110,6 +110,11 @@ test.describe('Login (/login.html)', () => {
     await page.route('**/api/auth/login', (route) =>
       route.fulfill({ status: 401, json: { error: 'E-mail ou senha inválidos' } })
     );
+    // O formulário agora tenta login de admin como fallback quando o de
+    // tenant falha (login único) — precisa rejeitar os dois pra cair no erro.
+    await page.route('**/admin/api/auth/login', (route) =>
+      route.fulfill({ status: 401, json: { error: 'E-mail ou senha inválidos' } })
+    );
 
     await page.goto('/login.html');
     await page.fill('#email', 'ana@kyvvo.com');
@@ -121,5 +126,23 @@ test.describe('Login (/login.html)', () => {
     // retornado pela API — era isso que a tela já fazia; o teste antigo
     // esperava o texto cru da API e por isso estava sempre falhando.
     await expect(page.locator('#erro')).toHaveText('E-mail ou senha incorretos. Tente novamente.');
+  });
+
+  test('login com e-mail de admin (login único) redireciona para o painel administrativo', async ({ page }) => {
+    await page.route('**/api/auth/login', (route) =>
+      route.fulfill({ status: 401, json: { error: 'E-mail ou senha inválidos' } })
+    );
+    await page.route('**/admin/api/auth/login', (route) =>
+      route.fulfill({ json: { token: 'fake-admin-jwt', nome: 'Admin Kyvvo', email: 'admin@kyvvo.com.br' } })
+    );
+    await page.route('**/admin/api/tenants', (route) => route.fulfill({ json: { tenants: [] } }));
+
+    await page.goto('/login.html');
+    await page.fill('#email', 'admin@kyvvo.com.br');
+    await page.fill('#senha', 'senha-admin');
+    await page.click('#btn-entrar');
+
+    await expect(page).toHaveURL(/\/admin\/painel\.html$/);
+    expect(await page.evaluate(() => window.localStorage.getItem('kyvvo_admin_token'))).toBe('fake-admin-jwt');
   });
 });

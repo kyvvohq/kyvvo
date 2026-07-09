@@ -52,8 +52,20 @@
     }
   }
 
+  function irParaAdminPainel() {
+    if (inIframe) {
+      try {
+        window.parent.postMessage({ source: 'kyvvo-login', status: 'success', admin: true }, '*');
+      } catch (e) {}
+    } else {
+      window.location.href = '/admin/painel.html';
+    }
+  }
+
   if (localStorage.getItem('kyvvo_token')) {
     irParaPainel();
+  } else if (localStorage.getItem('kyvvo_admin_token')) {
+    irParaAdminPainel();
   }
 
   toggleSenhaBtn.addEventListener('click', () => {
@@ -85,18 +97,37 @@
           senha: senhaInput.value,
         }),
       });
-      const data = await res.json();
 
-      if (!res.ok) {
-        erroEl.textContent = 'E-mail ou senha incorretos. Tente novamente.';
-        senhaInput.value = '';
-        senhaInput.focus();
+      if (res.ok) {
+        const data = await res.json();
+        localStorage.setItem('kyvvo_token', data.token);
+        localStorage.setItem('kyvvo_nome', data.nome || '');
+        irParaPainel();
         return;
       }
 
-      localStorage.setItem('kyvvo_token', data.token);
-      localStorage.setItem('kyvvo_nome', data.nome || '');
-      irParaPainel();
+      // Não bateu como tenant — antes de mostrar erro, tenta como admin da
+      // Kyvvo, já que o mesmo formulário atende os dois públicos agora.
+      const resAdmin = await fetch('/admin/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: emailInput.value,
+          senha: senhaInput.value,
+        }),
+      });
+
+      if (resAdmin.ok) {
+        const dataAdmin = await resAdmin.json();
+        localStorage.setItem('kyvvo_admin_token', dataAdmin.token);
+        localStorage.setItem('kyvvo_admin_nome', dataAdmin.nome || '');
+        irParaAdminPainel();
+        return;
+      }
+
+      erroEl.textContent = 'E-mail ou senha incorretos. Tente novamente.';
+      senhaInput.value = '';
+      senhaInput.focus();
     } catch (err) {
       erroEl.textContent = 'Erro de conexão. Tente novamente.';
     } finally {
