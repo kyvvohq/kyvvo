@@ -688,11 +688,155 @@ function infoSegmento(segmento) {
   return SEGMENTOS[segmento] || SEGMENTOS.outro;
 }
 
+// ---------- Financeiro (US18) ----------
+// Livro-caixa manual simples — primeira funcionalidade real do módulo
+// "financeiro" (só aparece no menu se o tenant tiver o módulo ativo, via
+// carregarModulosNoMenu). Sem edição/exclusão de lançamento nesta versão —
+// escopo combinado foi só registrar e listar.
+let mesFinanceiroRef = new Date();
+
+function renderLancamentoItem(l) {
+  const sinal = l.tipo === 'entrada' ? '+' : '−';
+  const classeTipo = l.tipo === 'entrada' ? 'financeiro-entrada' : 'financeiro-saida';
+  const dataLabel = new Date(l.data + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' });
+  return `
+    <div class="agendamento-item">
+      <div class="agendamento-linha-principal">
+        <div>
+          <div class="agendamento-hora">${l.descricao || (l.tipo === 'entrada' ? 'Entrada' : 'Saída')}</div>
+          <div class="agendamento-detalhe">${dataLabel}</div>
+        </div>
+        <div class="${classeTipo}">${sinal} ${formatarPreco(l.valor)}</div>
+      </div>
+    </div>
+  `;
+}
+
+async function renderFinanceiro() {
+  conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
+  const mesISO = formatarDataISO(mesFinanceiroRef).slice(0, 7);
+  const data = await api(`/api/financeiro/lancamentos?mes=${mesISO}`);
+  if (!data) return;
+
+  const mesLabel = mesFinanceiroRef.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'America/Sao_Paulo' });
+
+  let html = `
+    <div class="nav-periodo">
+      <button data-nav="-1">← Mês anterior</button>
+      <strong>${mesLabel}</strong>
+      <button data-nav="1">Próximo mês →</button>
+    </div>
+    <div class="financeiro-resumo">
+      <div class="financeiro-resumo-card">
+        <div class="financeiro-resumo-label">Entradas</div>
+        <div class="financeiro-entrada">${formatarPreco(data.resumo.entradas)}</div>
+      </div>
+      <div class="financeiro-resumo-card">
+        <div class="financeiro-resumo-label">Saídas</div>
+        <div class="financeiro-saida">${formatarPreco(data.resumo.saidas)}</div>
+      </div>
+      <div class="financeiro-resumo-card">
+        <div class="financeiro-resumo-label">Saldo</div>
+        <div class="${data.resumo.saldo >= 0 ? 'financeiro-entrada' : 'financeiro-saida'}">${formatarPreco(data.resumo.saldo)}</div>
+      </div>
+    </div>
+    <button class="btn-novo-agendamento" id="btn-novo-lancamento" style="margin-bottom:16px">+ Novo lançamento</button>
+  `;
+
+  html += data.lancamentos.length
+    ? data.lancamentos.map(renderLancamentoItem).join('')
+    : '<div class="vazio">Nenhum lançamento neste mês.</div>';
+
+  conteudo.innerHTML = html;
+  conteudo.querySelector('[data-nav="-1"]').addEventListener('click', () => {
+    mesFinanceiroRef.setMonth(mesFinanceiroRef.getMonth() - 1);
+    renderFinanceiro();
+  });
+  conteudo.querySelector('[data-nav="1"]').addEventListener('click', () => {
+    mesFinanceiroRef.setMonth(mesFinanceiroRef.getMonth() + 1);
+    renderFinanceiro();
+  });
+  document.getElementById('btn-novo-lancamento').addEventListener('click', abrirModalLancamento);
+}
+
+function abrirModalLancamento() {
+  const hoje = formatarDataISO(new Date());
+  abrirModal(
+    '<h3>Novo lançamento</h3>',
+    `
+      <form id="form-lancamento">
+        <div class="modal-erro" id="lancamento-erro"></div>
+        <label for="lancamento-tipo">Tipo *</label>
+        <select id="lancamento-tipo" data-obrigatorio>
+          <option value="entrada">Entrada</option>
+          <option value="saida">Saída</option>
+        </select>
+        <label for="lancamento-valor">Valor em R$ *</label>
+        <input type="number" id="lancamento-valor" data-obrigatorio min="0.01" step="0.01">
+        <label for="lancamento-data">Data *</label>
+        <input type="date" id="lancamento-data" data-obrigatorio value="${hoje}">
+        <label for="lancamento-descricao">Descrição (opcional)</label>
+        <input type="text" id="lancamento-descricao" placeholder="Ex: venda do dia, compra de material...">
+        <div class="modal-acoes">
+          <button type="button" class="btn-secundario" id="btn-cancelar-lancamento">Cancelar</button>
+          <button type="submit" class="btn-primario" id="btn-salvar-lancamento">Salvar</button>
+        </div>
+      </form>
+    `
+  );
+
+  document.getElementById('btn-cancelar-lancamento').addEventListener('click', fecharModal);
+
+  const form = document.getElementById('form-lancamento');
+  form.querySelectorAll('[data-obrigatorio]').forEach((campo) => {
+    campo.addEventListener('input', () => campo.classList.remove('campo-invalido'));
+  });
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const erroEl = document.getElementById('lancamento-erro');
+    erroEl.textContent = '';
+    const invalido = validarObrigatorios(form);
+    if (invalido) {
+      erroEl.textContent = 'Preencha os campos obrigatórios destacados em vermelho.';
+      invalido.focus();
+      return;
+    }
+
+    const btn = document.getElementById('btn-salvar-lancamento');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    const payload = {
+      tipo: document.getElementById('lancamento-tipo').value,
+      valor: parseFloat(document.getElementById('lancamento-valor').value),
+      data: document.getElementById('lancamento-data').value,
+      descricao: document.getElementById('lancamento-descricao').value.trim() || null,
+    };
+
+    const resultado = await api('/api/financeiro/lancamentos', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+
+    if (resultado && !resultado.error) {
+      fecharModal();
+      mostrarToast('Lançamento registrado com sucesso.', 'sucesso');
+      renderFinanceiro();
+    } else {
+      erroEl.textContent = (resultado && resultado.error) || 'Erro ao salvar lançamento.';
+      btn.disabled = false;
+      btn.textContent = 'Salvar';
+    }
+  });
+}
+
 async function render() {
   if (menuAtual === 'configuracao') return renderConfiguracao();
   if (menuAtual === 'perfil') return renderPerfil();
   if (menuAtual === 'servicos') return renderServicos();
   if (menuAtual === 'profissionais') return renderProfissionais();
+  if (menuAtual === 'modulo:financeiro') return renderFinanceiro();
   if (menuAtual.startsWith('modulo:')) return renderModuloEmBreve();
 
   if (abaAtual === 'dia') return renderDia();

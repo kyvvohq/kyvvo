@@ -241,6 +241,37 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   gap: 6px;
 }
 
+/* Financeiro (US18) */
+.financeiro-resumo {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.financeiro-resumo-card {
+  background: #12162a;
+  border: 1px solid #232847;
+  border-radius: 10px;
+  padding: 14px 16px;
+  text-align: center;
+}
+
+.financeiro-resumo-label {
+  color: #a1a5c4;
+  font-size: 12px;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.financeiro-resumo-card > div:last-child {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.financeiro-entrada { color: #4ade80; }
+.financeiro-saida { color: #ff6b6b; }
+
 .dia-cel {
   min-height: 64px;
   border-radius: 8px;
