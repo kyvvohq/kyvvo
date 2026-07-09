@@ -642,6 +642,27 @@ conteudo.addEventListener('click', (e) => {
     if (acaoBtn.dataset.acao === 'reagendar') abrirModalReagendar(ag);
     if (acaoBtn.dataset.acao === 'encaixar') abrirModalEncaixe(ag);
   }
+
+  // US17 — ações de editar/excluir nas listas de Serviços e Profissionais.
+  // Usam atributos próprios (data-acao-servico/data-acao-profissional), não
+  // "data-acao", pra não colidir com a busca em agendamentosAtuais acima.
+  const acaoServicoBtn = e.target.closest('[data-acao-servico]');
+  if (acaoServicoBtn) {
+    document.querySelectorAll('.menu-acoes.aberto').forEach((m) => m.classList.remove('aberto'));
+    const servico = servicosAtuais.find((s) => s.id === acaoServicoBtn.dataset.id);
+    if (!servico) return;
+    if (acaoServicoBtn.dataset.acaoServico === 'editar') abrirModalServico(servico);
+    if (acaoServicoBtn.dataset.acaoServico === 'excluir') abrirModalExcluirServico(servico);
+  }
+
+  const acaoProfissionalBtn = e.target.closest('[data-acao-profissional]');
+  if (acaoProfissionalBtn) {
+    document.querySelectorAll('.menu-acoes.aberto').forEach((m) => m.classList.remove('aberto'));
+    const profissional = profissionaisAtuais.find((p) => p.id === acaoProfissionalBtn.dataset.id);
+    if (!profissional) return;
+    if (acaoProfissionalBtn.dataset.acaoProfissional === 'editar') abrirModalProfissional(profissional);
+    if (acaoProfissionalBtn.dataset.acaoProfissional === 'excluir') abrirModalExcluirProfissional(profissional);
+  }
 });
 
 document.addEventListener('click', (e) => {
@@ -670,11 +691,314 @@ function infoSegmento(segmento) {
 async function render() {
   if (menuAtual === 'configuracao') return renderConfiguracao();
   if (menuAtual === 'perfil') return renderPerfil();
+  if (menuAtual === 'servicos') return renderServicos();
+  if (menuAtual === 'profissionais') return renderProfissionais();
   if (menuAtual.startsWith('modulo:')) return renderModuloEmBreve();
 
   if (abaAtual === 'dia') return renderDia();
   if (abaAtual === 'semana') return renderSemana();
   if (abaAtual === 'mes') return renderMes();
+}
+
+// ---------- Serviços (US17/ST17.3) ----------
+let servicosAtuais = [];
+
+function formatarPreco(preco) {
+  return preco != null ? `R$ ${Number(preco).toFixed(2).replace('.', ',')}` : 'sem preço definido';
+}
+
+function renderServicoItem(s) {
+  return `
+    <div class="agendamento-item" data-id="${s.id}">
+      <div class="agendamento-linha-principal" data-acoes-toggle="${s.id}">
+        <div>
+          <div class="agendamento-hora">${s.nome}</div>
+          <div class="agendamento-detalhe">${s.duracao_minutos}min · ${formatarPreco(s.preco)}</div>
+        </div>
+        <button class="btn-acoes" aria-label="Ações">⋮</button>
+      </div>
+      <div class="menu-acoes" id="menu-acoes-${s.id}">
+        <button data-acao-servico="editar" data-id="${s.id}">Editar</button>
+        <button data-acao-servico="excluir" data-id="${s.id}" class="acao-perigo">Excluir</button>
+      </div>
+    </div>
+  `;
+}
+
+async function renderServicos() {
+  conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
+  const data = await api('/api/servicos');
+  if (!data) return;
+  servicosAtuais = data.servicos;
+
+  let html = `
+    <div class="nav-periodo">
+      <strong>Serviços</strong>
+      <button class="btn-novo-agendamento" id="btn-novo-servico">+ Novo serviço</button>
+    </div>
+  `;
+  html += servicosAtuais.length
+    ? servicosAtuais.map(renderServicoItem).join('')
+    : '<div class="vazio">Nenhum serviço cadastrado ainda.</div>';
+
+  conteudo.innerHTML = html;
+  document.getElementById('btn-novo-servico').addEventListener('click', () => abrirModalServico(null));
+}
+
+function abrirModalServico(servico) {
+  const editando = !!servico;
+  abrirModal(
+    `<h3>${editando ? 'Editar serviço' : 'Novo serviço'}</h3>`,
+    `
+      <form id="form-servico">
+        <div class="modal-erro" id="servico-erro"></div>
+        <label for="servico-nome">Nome *</label>
+        <input type="text" id="servico-nome" data-obrigatorio value="${editando ? servico.nome : ''}">
+        <label for="servico-duracao">Duração (minutos) *</label>
+        <input type="number" id="servico-duracao" data-obrigatorio min="1" value="${editando ? servico.duracao_minutos : ''}">
+        <label for="servico-preco">Preço em R$ (opcional)</label>
+        <input type="number" id="servico-preco" min="0" step="0.01" value="${editando && servico.preco != null ? servico.preco : ''}">
+        <div class="modal-acoes">
+          <button type="button" class="btn-secundario" id="btn-cancelar-servico">Cancelar</button>
+          <button type="submit" class="btn-primario" id="btn-salvar-servico">${editando ? 'Salvar' : 'Criar'}</button>
+        </div>
+      </form>
+    `
+  );
+
+  document.getElementById('btn-cancelar-servico').addEventListener('click', fecharModal);
+
+  const form = document.getElementById('form-servico');
+  form.querySelectorAll('[data-obrigatorio]').forEach((campo) => {
+    campo.addEventListener('input', () => campo.classList.remove('campo-invalido'));
+  });
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const erroEl = document.getElementById('servico-erro');
+    erroEl.textContent = '';
+    const invalido = validarObrigatorios(form);
+    if (invalido) {
+      erroEl.textContent = 'Preencha os campos obrigatórios destacados em vermelho.';
+      invalido.focus();
+      return;
+    }
+
+    const btn = document.getElementById('btn-salvar-servico');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    const precoValor = document.getElementById('servico-preco').value;
+    const payload = {
+      nome: document.getElementById('servico-nome').value.trim(),
+      duracao_minutos: parseInt(document.getElementById('servico-duracao').value, 10),
+      preco: precoValor ? parseFloat(precoValor) : null,
+    };
+
+    const resultado = await api(editando ? `/api/servicos/${servico.id}` : '/api/servicos', {
+      method: editando ? 'PATCH' : 'POST',
+      body: JSON.stringify(payload),
+    });
+
+    if (resultado && !resultado.error) {
+      fecharModal();
+      mostrarToast(editando ? 'Serviço atualizado com sucesso.' : 'Serviço criado com sucesso.', 'sucesso');
+      renderServicos();
+    } else {
+      erroEl.textContent = (resultado && resultado.error) || 'Erro ao salvar serviço.';
+      btn.disabled = false;
+      btn.textContent = editando ? 'Salvar' : 'Criar';
+    }
+  });
+}
+
+function abrirModalExcluirServico(servico) {
+  abrirModal(
+    '<h3>Excluir serviço</h3>',
+    `
+      <p class="modal-texto">Tem certeza que deseja excluir o serviço <strong>${servico.nome}</strong>? Essa ação não pode ser desfeita.</p>
+      <div class="modal-erro" id="excluir-servico-erro"></div>
+      <div class="modal-acoes">
+        <button class="btn-secundario" id="btn-voltar-excluir-servico">Voltar</button>
+        <button class="btn-perigo" id="btn-confirmar-excluir-servico">Excluir</button>
+      </div>
+    `
+  );
+
+  document.getElementById('btn-voltar-excluir-servico').addEventListener('click', fecharModal);
+  document.getElementById('btn-confirmar-excluir-servico').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-confirmar-excluir-servico');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    const resultado = await api(`/api/servicos/${servico.id}`, { method: 'DELETE' });
+
+    if (resultado && !resultado.error) {
+      fecharModal();
+      mostrarToast('Serviço excluído com sucesso.', 'sucesso');
+      renderServicos();
+    } else {
+      document.getElementById('excluir-servico-erro').textContent = (resultado && resultado.error) || 'Erro ao excluir serviço.';
+      btn.disabled = false;
+      btn.textContent = 'Excluir';
+    }
+  });
+}
+
+// ---------- Profissionais (US17/ST17.4) ----------
+let profissionaisAtuais = [];
+
+function renderProfissionalItem(p) {
+  const qtd = (p.servicos || []).length;
+  return `
+    <div class="agendamento-item" data-id="${p.id}">
+      <div class="agendamento-linha-principal" data-acoes-toggle="${p.id}">
+        <div>
+          <div class="agendamento-hora">${p.nome}</div>
+          <div class="agendamento-detalhe">${qtd} serviço${qtd === 1 ? '' : 's'} atendido${qtd === 1 ? '' : 's'}</div>
+        </div>
+        <button class="btn-acoes" aria-label="Ações">⋮</button>
+      </div>
+      <div class="menu-acoes" id="menu-acoes-${p.id}">
+        <button data-acao-profissional="editar" data-id="${p.id}">Editar</button>
+        <button data-acao-profissional="excluir" data-id="${p.id}" class="acao-perigo">Excluir</button>
+      </div>
+    </div>
+  `;
+}
+
+async function renderProfissionais() {
+  conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
+  const data = await api('/api/profissionais');
+  if (!data) return;
+  profissionaisAtuais = data.profissionais;
+
+  let html = `
+    <div class="nav-periodo">
+      <strong>Profissionais</strong>
+      <button class="btn-novo-agendamento" id="btn-novo-profissional">+ Novo profissional</button>
+    </div>
+  `;
+  html += profissionaisAtuais.length
+    ? profissionaisAtuais.map(renderProfissionalItem).join('')
+    : '<div class="vazio">Nenhum profissional cadastrado ainda.</div>';
+
+  conteudo.innerHTML = html;
+  document.getElementById('btn-novo-profissional').addEventListener('click', () => abrirModalProfissional(null));
+}
+
+async function abrirModalProfissional(profissional) {
+  const editando = !!profissional;
+  const listaServicosResultado = await api('/api/servicos');
+  const listaServicos = (listaServicosResultado && listaServicosResultado.servicos) || [];
+  const servicosVinculados = editando ? profissional.servicos || [] : [];
+
+  const checkboxesServicos = listaServicos.length
+    ? listaServicos
+        .map(
+          (s) => `
+        <label class="dia-checkbox">
+          <input type="checkbox" value="${s.id}" ${servicosVinculados.includes(s.id) ? 'checked' : ''}>
+          ${s.nome}
+        </label>
+      `
+        )
+        .join('')
+    : '<div class="modal-texto">Nenhum serviço cadastrado ainda — cadastre um serviço primeiro.</div>';
+
+  abrirModal(
+    `<h3>${editando ? 'Editar profissional' : 'Novo profissional'}</h3>`,
+    `
+      <form id="form-profissional">
+        <div class="modal-erro" id="profissional-erro"></div>
+        <label for="profissional-nome">Nome *</label>
+        <input type="text" id="profissional-nome" data-obrigatorio value="${editando ? profissional.nome : ''}">
+        <label>Serviços atendidos</label>
+        <div class="dias-grid" id="profissional-servicos">${checkboxesServicos}</div>
+        <div class="modal-acoes">
+          <button type="button" class="btn-secundario" id="btn-cancelar-profissional">Cancelar</button>
+          <button type="submit" class="btn-primario" id="btn-salvar-profissional">${editando ? 'Salvar' : 'Criar'}</button>
+        </div>
+      </form>
+    `
+  );
+
+  document.getElementById('btn-cancelar-profissional').addEventListener('click', fecharModal);
+
+  const form = document.getElementById('form-profissional');
+  form.querySelectorAll('[data-obrigatorio]').forEach((campo) => {
+    campo.addEventListener('input', () => campo.classList.remove('campo-invalido'));
+  });
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const erroEl = document.getElementById('profissional-erro');
+    erroEl.textContent = '';
+    const invalido = validarObrigatorios(form);
+    if (invalido) {
+      erroEl.textContent = 'Preencha os campos obrigatórios destacados em vermelho.';
+      invalido.focus();
+      return;
+    }
+
+    const btn = document.getElementById('btn-salvar-profissional');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    const servicosSelecionados = Array.from(document.querySelectorAll('#profissional-servicos input:checked')).map((el) => el.value);
+    const payload = {
+      nome: document.getElementById('profissional-nome').value.trim(),
+      servicos: servicosSelecionados,
+    };
+
+    const resultado = await api(editando ? `/api/profissionais/${profissional.id}` : '/api/profissionais', {
+      method: editando ? 'PATCH' : 'POST',
+      body: JSON.stringify(payload),
+    });
+
+    if (resultado && !resultado.error) {
+      fecharModal();
+      mostrarToast(editando ? 'Profissional atualizado com sucesso.' : 'Profissional criado com sucesso.', 'sucesso');
+      renderProfissionais();
+    } else {
+      erroEl.textContent = (resultado && resultado.error) || 'Erro ao salvar profissional.';
+      btn.disabled = false;
+      btn.textContent = editando ? 'Salvar' : 'Criar';
+    }
+  });
+}
+
+function abrirModalExcluirProfissional(profissional) {
+  abrirModal(
+    '<h3>Excluir profissional</h3>',
+    `
+      <p class="modal-texto">Tem certeza que deseja excluir <strong>${profissional.nome}</strong>? Essa ação não pode ser desfeita.</p>
+      <div class="modal-erro" id="excluir-profissional-erro"></div>
+      <div class="modal-acoes">
+        <button class="btn-secundario" id="btn-voltar-excluir-profissional">Voltar</button>
+        <button class="btn-perigo" id="btn-confirmar-excluir-profissional">Excluir</button>
+      </div>
+    `
+  );
+
+  document.getElementById('btn-voltar-excluir-profissional').addEventListener('click', fecharModal);
+  document.getElementById('btn-confirmar-excluir-profissional').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-confirmar-excluir-profissional');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    const resultado = await api(`/api/profissionais/${profissional.id}`, { method: 'DELETE' });
+
+    if (resultado && !resultado.error) {
+      fecharModal();
+      mostrarToast('Profissional excluído com sucesso.', 'sucesso');
+      renderProfissionais();
+    } else {
+      document.getElementById('excluir-profissional-erro').textContent = (resultado && resultado.error) || 'Erro ao excluir profissional.';
+      btn.disabled = false;
+      btn.textContent = 'Excluir';
+    }
+  });
 }
 
 function renderModuloEmBreve() {
