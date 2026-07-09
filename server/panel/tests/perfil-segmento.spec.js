@@ -39,15 +39,12 @@ test.describe('Segmento do negócio — Perfil e Configuração', () => {
     await expect(page.locator('label[for="nome"]')).toHaveText('Nome do salão');
   });
 
-  test('trocar o segmento no select atualiza o label na hora, sem salvar', async ({ page }) => {
+  test('segmento aparece desabilitado no Perfil — só a Kyvvo pode alterar', async ({ page }) => {
     await entrarNoPainel(page, { segmento: 'salao_beleza' });
-    await expect(page.locator('label[for="nome"]')).toHaveText('Nome do salão');
-
-    await page.selectOption('#segmento', 'petshop');
-    await expect(page.locator('label[for="nome"]')).toHaveText('Nome do petshop');
+    await expect(page.locator('#segmento')).toBeDisabled();
   });
 
-  test('salvar perfil envia o segmento escolhido', async ({ page }) => {
+  test('salvar perfil não envia segmento (não editável pelo tenant)', async ({ page }) => {
     await entrarNoPainel(page, { segmento: 'salao_beleza' });
     let corpoEnviado = null;
     await page.route('**/api/perfil', (route) => {
@@ -56,11 +53,10 @@ test.describe('Segmento do negócio — Perfil e Configuração', () => {
       return route.fulfill({ json: { ...corpoEnviado } });
     });
 
-    await page.selectOption('#segmento', 'pilates');
     await page.click('#form-perfil button[type="submit"]');
 
     await expect(page.locator('#perfil-msg')).toHaveText('Salvo com sucesso!');
-    expect(corpoEnviado.segmento).toBe('pilates');
+    expect(corpoEnviado.segmento).toBeUndefined();
   });
 
   test('view Configuração usa o segmento no texto de dias de funcionamento (petshop)', async ({ page }) => {
