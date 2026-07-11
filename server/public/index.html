@@ -7,40 +7,8 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%237c5cfc'/%3E%3Ctext x='16' y='22' font-family='Arial,sans-serif' font-size='15' font-weight='800' fill='white' text-anchor='middle'%3Evv%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/shared.css">
 <style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html{scroll-behavior:smooth}
-:root{
-  --bg:#080b14;--bg2:#0d1120;--surface:#111827;--border:#1e2d4a;
-  --accent:#7c5cfc;--accent-light:#a688ff;--cyan:#00d4ff;
-  --text:#f0eeff;--muted:#6b7a99;
-  --font-d:'Syne',sans-serif;--font-b:'DM Sans',sans-serif;
-}
-body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-height:1.6;overflow-x:hidden}
-
-nav{
-  position:fixed;top:0;left:0;right:0;z-index:100;
-  padding:18px 6%;display:flex;align-items:center;justify-content:space-between;
-  background:rgba(8,11,20,0.85);backdrop-filter:blur(20px);
-  border-bottom:1px solid rgba(255,255,255,0.04);
-}
-.logo{font-family:var(--font-d);font-size:1.5rem;font-weight:800;letter-spacing:-.03em;text-decoration:none;color:var(--text);display:flex;align-items:center}
-.logo-vv{color:var(--accent-light);position:relative}
-.logo-vv::after{content:'';position:absolute;bottom:-2px;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--accent),var(--cyan));border-radius:2px}
-.nav-right{display:flex;align-items:center;gap:14px}
-.lang-toggle{display:flex;align-items:center;gap:4px;background:var(--surface);border:1px solid var(--border);border-radius:100px;padding:4px;cursor:pointer}
-.lang-btn{padding:5px 12px;border-radius:100px;font-size:.78rem;font-weight:500;font-family:var(--font-b);border:none;cursor:pointer;transition:all .2s;color:var(--muted);background:transparent}
-.lang-btn.active{background:var(--accent);color:#fff}
-.btn-login{padding:9px 20px;border-radius:100px;font-size:.82rem;font-weight:600;font-family:var(--font-b);color:#fff;background:linear-gradient(135deg,var(--accent),#5b3fd4);border:none;cursor:pointer;transition:all .2s;white-space:nowrap}
-.btn-login:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(124,92,252,.35)}
-
-.login-modal-overlay{display:none;position:fixed;inset:0;z-index:1000;background:rgba(5,7,14,.72);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:20px}
-.login-modal-overlay.open{display:flex}
-.login-modal{position:relative;width:100%;max-width:420px;height:min(560px,90vh);background:var(--bg2);border:1px solid var(--border);border-radius:16px;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,.5)}
-.login-modal iframe{width:100%;height:100%;border:none;background:var(--bg2)}
-.login-modal-close{position:absolute;top:10px;right:12px;z-index:1;width:32px;height:32px;border-radius:50%;border:none;background:rgba(255,255,255,.08);color:var(--text);font-size:1.1rem;line-height:1;cursor:pointer;transition:background .2s}
-.login-modal-close:hover{background:rgba(255,255,255,.16)}
-
 .hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:100px 6% 60px;text-align:center;position:relative;overflow:hidden}
 .glow-1{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(124,92,252,.15) 0%,transparent 65%);top:-200px;left:50%;transform:translateX(-50%);pointer-events:none}
 .glow-2{position:absolute;width:400px;height:400px;border-radius:50%;background:radial-gradient(circle,rgba(0,212,255,.08) 0%,transparent 65%);bottom:0;right:10%;pointer-events:none}
@@ -89,8 +57,9 @@ nav{
 .roadmap-row{display:flex;gap:12px;flex-wrap:wrap;margin-top:40px}
 .roadmap-pill{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px dashed var(--border);border-radius:100px;padding:10px 18px;font-size:.85rem;color:var(--muted)}
 
-footer{padding:48px 6%;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:20px}
-.footer-copy{font-size:.78rem;color:var(--muted)}
+.diagnostico-cta{font-size:.8rem;color:var(--muted);margin-top:4px}
+.diagnostico-cta a{color:var(--accent-light);font-weight:600;text-decoration:none}
+.diagnostico-cta a:hover{text-decoration:underline}
 
 @keyframes fadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
 @media(max-width:700px){.beneficios-grid{grid-template-columns:1fr}.steps{grid-template-columns:1fr}}
@@ -98,23 +67,7 @@ footer{padding:48px 6%;border-top:1px solid var(--border);display:flex;align-ite
 </head>
 <body>
 
-<nav>
-  <a class="logo" href="#">ky<span class="logo-vv">vv</span>o</a>
-  <div class="nav-right">
-    <div class="lang-toggle">
-      <button class="lang-btn active" onclick="setLang('pt')">PT</button>
-      <button class="lang-btn" onclick="setLang('en')">EN</button>
-    </div>
-    <button class="btn-login" id="btnLogin" onclick="openLoginModal()" data-pt="Entrar" data-en="Log in">Entrar</button>
-  </div>
-</nav>
-
-<div class="login-modal-overlay" id="loginModalOverlay" onclick="if(event.target===this)closeLoginModal()">
-  <div class="login-modal">
-    <button class="login-modal-close" id="btnCloseLogin" onclick="closeLoginModal()" aria-label="Fechar">✕</button>
-    <iframe id="loginIframe" title="Login Kyvvo" src="about:blank"></iframe>
-  </div>
-</div>
+<div id="site-header"></div>
 
 <section class="hero">
   <div class="glow-1"></div>
@@ -140,6 +93,10 @@ footer{padding:48px 6%;border-top:1px solid var(--border);display:flex;align-ite
     </a>
     <p class="hero-cta-sub" data-pt="Conte pra gente sobre o seu negócio e a gente ajuda a configurar." data-en="Tell us about your business and we'll help you get set up.">
       Conte pra gente sobre o seu negócio e a gente ajuda a configurar.
+    </p>
+    <p class="diagnostico-cta">
+      <span data-pt="Não sabe por onde começar?" data-en="Not sure where to start?">Não sabe por onde começar?</span>
+      <a href="/diagnostico.html" data-pt="Faça o diagnóstico gratuito →" data-en="Take the free diagnosis →">Faça o diagnóstico gratuito →</a>
     </p>
   </div>
 </section>
@@ -231,11 +188,9 @@ footer{padding:48px 6%;border-top:1px solid var(--border);display:flex;align-ite
   </div>
 </section>
 
-<footer>
-  <a class="logo" href="#">ky<span class="logo-vv">vv</span>o</a>
-  <p class="footer-copy" data-pt="© 2026 Kyvvo. Todos os direitos reservados." data-en="© 2026 Kyvvo. All rights reserved.">© 2026 Kyvvo. Todos os direitos reservados.</p>
-</footer>
+<div id="site-footer"></div>
 
+<script src="/shared.js"></script>
 <script>
 let currentLang = 'pt';
 
@@ -249,37 +204,21 @@ function setLang(lang) {
   });
 }
 
-const PANEL_ORIGIN = 'https://app.kyvvo.com.br';
-
-function openLoginModal() {
-  const overlay = document.getElementById('loginModalOverlay');
-  const iframe = document.getElementById('loginIframe');
-  iframe.src = PANEL_ORIGIN + '/login.html';
-  overlay.classList.add('open');
-  document.body.style.overflow = 'hidden';
-}
-
-function closeLoginModal() {
-  const overlay = document.getElementById('loginModalOverlay');
-  const iframe = document.getElementById('loginIframe');
-  overlay.classList.remove('open');
-  document.body.style.overflow = '';
-  iframe.src = 'about:blank';
-}
-
-window.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && document.getElementById('loginModalOverlay').classList.contains('open')) {
-    closeLoginModal();
+// Chamado pelo shared.js depois que o header (com o botão Entrar) foi
+// injetado — o toggle de idioma é específico da landing (a página de
+// diagnóstico não tem conteúdo em inglês), por isso não faz parte do
+// header compartilhado.
+function onSharedReady() {
+  const navRight = document.getElementById('navRight');
+  if (navRight) {
+    navRight.insertAdjacentHTML('afterbegin', `
+      <div class="lang-toggle">
+        <button class="lang-btn active" onclick="setLang('pt')">PT</button>
+        <button class="lang-btn" onclick="setLang('en')">EN</button>
+      </div>
+    `);
   }
-});
-
-window.addEventListener('message', (e) => {
-  if (e.origin !== PANEL_ORIGIN) return;
-  if (e.data && e.data.source === 'kyvvo-login' && e.data.status === 'success') {
-    const destino = e.data.admin ? '/admin/painel.html' : '/painel.html';
-    window.top.location.href = PANEL_ORIGIN + destino;
-  }
-});
+}
 </script>
 </body>
 </html>
