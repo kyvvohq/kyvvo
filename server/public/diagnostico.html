@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Diagnóstico do seu salão — Kyvvo</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%237c5cfc'/%3E%3Ctext x='16' y='22' font-family='Arial,sans-serif' font-size='15' font-weight='800' fill='white' text-anchor='middle'%3Evv%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#080b14;
+  --surface:#111827;
+  --border:#1e2d4a;
+  --accent:#7c5cfc;
+  --accent-light:#a688ff;
+  --cyan:#00d4ff;
+  --green:#00d4a0;
+  --text:#f0eeff;
+  --muted:#6b7a99;
+  --font-d:'Syne',sans-serif;
+  --font-b:'DM Sans',sans-serif;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font-b);overflow-x:hidden}
+
+/* LAYOUT */
+.shell{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:100px 20px 60px;position:relative}
+
+/* GLOW */
+.glow{position:fixed;width:600px;height:600px;border-radius:50%;background:radial-gradient(circle,rgba(124,92,252,.12) 0%,transparent 65%);top:-150px;left:50%;transform:translateX(-50%);pointer-events:none;z-index:0}
+
+/* LOGO — mesmo padrão visual usado em todas as páginas da Kyvvo */
+.logo{position:fixed;top:20px;left:50%;transform:translateX(-50%);font-family:var(--font-d);font-size:1.3rem;font-weight:800;letter-spacing:-.03em;color:#f2f2f7;text-decoration:none;z-index:10}
+.logo-vv{color:var(--accent-light);position:relative}
+.logo-vv::after{content:'';position:absolute;bottom:-2px;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--accent),var(--cyan));border-radius:2px}
+
+/* PROGRESS */
+.progress-wrap{position:fixed;top:60px;left:50%;transform:translateX(-50%);width:min(480px,calc(100vw - 40px));z-index:10}
+.progress-bar{height:3px;background:var(--border);border-radius:100px;overflow:hidden}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--cyan));border-radius:100px;transition:width .5s cubic-bezier(.4,0,.2,1)}
+.progress-label{font-size:.72rem;color:var(--muted);margin-top:6px;text-align:right;letter-spacing:.04em}
+
+/* CARD */
+.card{position:relative;z-index:1;width:100%;max-width:480px;animation:slideUp .5s cubic-bezier(.4,0,.2,1) both}
+@keyframes slideUp{from{opacity:0;transform:translateY(28px)}to{opacity:1;transform:translateY(0)}}
+
+.step-label{font-size:.72rem;color:var(--accent-light);font-weight:600;letter-spacing:.1em;text-transform:uppercase;margin-bottom:14px}
+
+.question{font-family:var(--font-d);font-size:clamp(1.35rem,5vw,1.75rem);font-weight:700;line-height:1.25;letter-spacing:-.025em;margin-bottom:8px}
+
+.sub{font-size:.88rem;color:var(--muted);margin-bottom:28px;line-height:1.6}
+
+/* OPTIONS */
+.options{display:flex;flex-direction:column;gap:10px;margin-bottom:24px}
+
+.opt{
+  display:flex;align-items:center;gap:14px;
+  background:var(--surface);border:1.5px solid var(--border);
+  border-radius:12px;padding:14px 18px;
+  cursor:pointer;transition:all .18s;user-select:none;text-align:left;
+  font-family:var(--font-b);font-size:.95rem;color:var(--text);
+  width:100%;
+}
+.opt:hover{border-color:rgba(124,92,252,.5);background:rgba(124,92,252,.06);transform:translateX(3px)}
+.opt.selected{border-color:var(--accent);background:rgba(124,92,252,.12)}
+.opt-icon{font-size:1.3rem;flex-shrink:0;width:28px;text-align:center}
+.opt-text{flex:1;line-height:1.4}
+.opt-check{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all .18s}
+.opt.selected .opt-check{background:var(--accent);border-color:var(--accent)}
+.opt.selected .opt-check::after{content:'✓';font-size:.7rem;color:#fff;font-weight:700}
+
+/* INPUT */
+.input-wrap{margin-bottom:24px}
+.input-wrap input,.input-wrap textarea{
+  width:100%;background:var(--surface);border:1.5px solid var(--border);
+  border-radius:12px;padding:14px 18px;
+  color:var(--text);font-family:var(--font-b);font-size:.95rem;
+  outline:none;transition:border-color .18s;resize:none;
+}
+.input-wrap input:focus,.input-wrap textarea:focus{border-color:var(--accent)}
+.input-wrap input::placeholder,.input-wrap textarea::placeholder{color:var(--muted)}
+
+/* BTN */
+.btn{
+  width:100%;padding:15px;
+  background:linear-gradient(135deg,var(--accent),#5b3fd4);
+  color:#fff;border:none;border-radius:12px;
+  font-family:var(--font-b);font-size:1rem;font-weight:600;
+  cursor:pointer;transition:all .2s;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  box-shadow:0 4px 20px rgba(124,92,252,.3);
+  text-decoration:none;
+}
+.btn:hover{transform:translateY(-2px);box-shadow:0 10px 30px rgba(124,92,252,.45)}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.btn-ghost{background:transparent;border:1.5px solid var(--border);color:var(--muted);box-shadow:none;margin-bottom:12px}
+.btn-ghost:hover{border-color:var(--muted);color:var(--text);transform:none;box-shadow:none}
+
+/* RESULTADO */
+.result{width:100%;max-width:480px;animation:slideUp .6s cubic-bezier(.4,0,.2,1) both}
+
+.result-header{text-align:center;margin-bottom:32px}
+.result-emoji{font-size:3rem;display:block;margin-bottom:12px}
+.result-title{font-family:var(--font-d);font-size:1.6rem;font-weight:800;letter-spacing:-.03em;margin-bottom:8px}
+.result-sub{font-size:.9rem;color:var(--muted);line-height:1.6}
+
+.score-bar{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:16px}
+.score-label{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}
+.score-track{height:8px;background:var(--border);border-radius:100px;overflow:hidden;margin-bottom:6px}
+.score-fill{height:100%;border-radius:100px;background:linear-gradient(90deg,var(--accent),var(--cyan));transition:width 1s 0.3s ease}
+.score-value{font-family:var(--font-d);font-size:1.1rem;font-weight:700}
+
+.dores{margin-bottom:24px}
+.dores-title{font-size:.8rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;font-weight:600}
+.dor-item{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:8px;font-size:.88rem;line-height:1.5}
+.dor-icon{flex-shrink:0;margin-top:1px}
+
+.cta-box{background:linear-gradient(135deg,rgba(124,92,252,.15),rgba(0,212,255,.08));border:1px solid rgba(124,92,252,.3);border-radius:14px;padding:24px;text-align:center;margin-bottom:20px}
+.cta-box h3{font-family:var(--font-d);font-size:1.1rem;font-weight:700;margin-bottom:8px}
+.cta-box p{font-size:.85rem;color:var(--muted);line-height:1.6;margin-bottom:16px}
+
+.btn-whatsapp{background:linear-gradient(135deg,#25D366,#128C7E);box-shadow:0 4px 20px rgba(37,211,102,.3)}
+.btn-whatsapp:hover{box-shadow:0 10px 30px rgba(37,211,102,.45)}
+
+.name-display{color:var(--accent-light);font-weight:600}
+
+/* INTRO */
+.intro{width:100%;max-width:480px;text-align:center;animation:slideUp .5s ease both}
+.intro-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(124,92,252,.12);border:1px solid rgba(124,92,252,.28);border-radius:100px;padding:6px 16px;font-size:.75rem;font-weight:600;color:var(--accent-light);letter-spacing:.06em;text-transform:uppercase;margin-bottom:24px}
+.intro h1{font-family:var(--font-d);font-size:clamp(1.8rem,7vw,2.4rem);font-weight:800;letter-spacing:-.035em;line-height:1.15;margin-bottom:14px}
+.intro p{font-size:.95rem;color:var(--muted);line-height:1.7;margin-bottom:32px;max-width:380px;margin-left:auto;margin-right:auto}
+.intro-meta{display:flex;gap:24px;justify-content:center;margin-bottom:32px;flex-wrap:wrap}
+.meta-item{font-size:.78rem;color:var(--muted);display:flex;align-items:center;gap:5px}
+.intro-alt{font-size:.82rem;color:var(--muted);margin-top:16px}
+.intro-alt a{color:var(--accent-light);font-weight:600;text-decoration:none}
+.intro-alt a:hover{text-decoration:underline}
+
+/* FOOTER — mesmo padrão usado nas outras páginas do site */
+footer.rodape{position:relative;z-index:1;width:100%;max-width:680px;padding:32px 20px 8px;margin-top:24px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px}
+footer.rodape .logo{position:static;transform:none;margin:0}
+.footer-copy{font-size:.78rem;color:var(--muted)}
+
+@media(max-width:400px){.question{font-size:1.2rem}.opt{padding:12px 14px}}
+</style>
+</head>
+<body>
+
+<div class="glow"></div>
+
+<a class="logo" href="/">ky<span class="logo-vv">vv</span>o</a>
+
+<div class="progress-wrap" id="progressWrap" style="display:none">
+  <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+  <div class="progress-label" id="progressLabel">1 de 7</div>
+</div>
+
+<div class="shell" id="app"></div>
+
+<footer class="rodape">
+  <a class="logo" href="/">ky<span class="logo-vv">vv</span>o</a>
+  <p class="footer-copy">© 2026 Kyvvo. Todos os direitos reservados.</p>
+</footer>
+
+<script>
+const WHATSAPP_NUMERO = '553484285182';
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+const steps = [
+  {
+    type: 'input',
+    id: 'nome',
+    label: 'Sobre você',
+    question: 'Qual é o seu nome?',
+    sub: 'Vamos personalizar seu diagnóstico.',
+    placeholder: 'Ex: Juliana',
+    dor: null
+  },
+  {
+    type: 'single',
+    id: 'agendamentos_dia',
+    label: 'Sua agenda',
+    question: 'Quantos atendimentos você faz por dia em média?',
+    sub: 'Isso nos ajuda a entender o volume da sua operação.',
+    options: [
+      { icon: '😌', text: 'Menos de 5', value: 1 },
+      { icon: '💪', text: 'Entre 5 e 10', value: 2 },
+      { icon: '🔥', text: 'Mais de 10', value: 3 }
+    ],
+    dor: { 2: 'volume_medio', 3: 'volume_alto' }
+  },
+  {
+    type: 'single',
+    id: 'gestao_atual',
+    label: 'Como você gerencia hoje',
+    question: 'Como você controla sua agenda atualmente?',
+    sub: 'Sem julgamento — queremos entender sua realidade.',
+    options: [
+      { icon: '📓', text: 'Caderno ou agenda de papel', value: 'papel' },
+      { icon: '💬', text: 'Pelo WhatsApp mesmo (memória + conversas)', value: 'whatsapp' },
+      { icon: '📊', text: 'Planilha ou aplicativo', value: 'app' },
+      { icon: '🤖', text: 'Já uso um sistema de agendamento', value: 'sistema' }
+    ],
+    dor: { papel: 'gestao_manual', whatsapp: 'gestao_whatsapp', app: 'gestao_planilha' }
+  },
+  {
+    type: 'single',
+    id: 'maior_problema',
+    label: 'Sua maior dor',
+    question: 'Qual é o problema que mais te incomoda hoje?',
+    sub: 'Escolha o que pesa mais no seu dia a dia.',
+    options: [
+      { icon: '😤', text: 'Clientes que faltam sem avisar', value: 'falta' },
+      { icon: '😰', text: 'Perco muito tempo respondendo mensagens de agendamento', value: 'tempo' },
+      { icon: '😵', text: 'Fico perdida com tantos agendamentos e conflitos de horário', value: 'confusao' },
+      { icon: '💸', text: 'Não consigo fidelizar clientes — eles somem', value: 'fidelizacao' }
+    ],
+    dor: { falta: 'falta', tempo: 'tempo', confusao: 'confusao', fidelizacao: 'fidelizacao' }
+  },
+  {
+    type: 'single',
+    id: 'whatsapp_tempo',
+    label: 'Seu tempo no WhatsApp',
+    question: 'Quanto tempo por dia você gasta respondendo mensagens de agendamento?',
+    sub: 'Contando todas as idas e vindas para confirmar horários.',
+    options: [
+      { icon: '⚡', text: 'Menos de 30 minutos', value: 1 },
+      { icon: '⏰', text: 'Entre 30 min e 1 hora', value: 2 },
+      { icon: '😩', text: 'Mais de 1 hora por dia', value: 3 }
+    ],
+    dor: { 2: 'tempo_medio', 3: 'tempo_alto' }
+  },
+  {
+    type: 'single',
+    id: 'profissionais',
+    label: 'Sua equipe',
+    question: 'Quantas profissionais trabalham no seu salão?',
+    sub: 'Incluindo você.',
+    options: [
+      { icon: '🙋', text: 'Só eu', value: 1 },
+      { icon: '👯', text: '2 a 3 pessoas', value: 2 },
+      { icon: '👥', text: '4 ou mais', value: 3 }
+    ],
+    dor: null
+  },
+  {
+    type: 'single',
+    id: 'investimento',
+    label: 'Seu perfil',
+    question: 'Se uma ferramenta resolvesse tudo isso, quanto você pagaria por mês?',
+    sub: 'Sem compromisso — só para entendermos melhor.',
+    options: [
+      { icon: '🤔', text: 'Até R$ 100', value: 1 },
+      { icon: '✅', text: 'Entre R$ 100 e R$ 200', value: 2 },
+      { icon: '💎', text: 'Acima de R$ 200 se resolver de verdade', value: 3 }
+    ],
+    dor: null
+  }
+];
+
+let current = -1; // -1 = intro
+let answers = {};
+let dores = new Set();
+
+const app = document.getElementById('app');
+const progressWrap = document.getElementById('progressWrap');
+const progressFill = document.getElementById('progressFill');
+const progressLabel = document.getElementById('progressLabel');
+
+function render() {
+  app.innerHTML = '';
+
+  if (current === -1) {
+    renderIntro();
+    return;
+  }
+
+  if (current >= steps.length) {
+    renderResult();
+    return;
+  }
+
+  progressWrap.style.display = 'block';
+  const pct = Math.round((current / steps.length) * 100);
+  progressFill.style.width = pct + '%';
+  progressLabel.textContent = (current + 1) + ' de ' + steps.length;
+
+  const step = steps[current];
+  const card = document.createElement('div');
+  card.className = 'card';
+
+  let html = `<div class="step-label">${step.label}</div>
+    <div class="question">${step.question}</div>
+    <div class="sub">${step.sub}</div>`;
+
+  if (step.type === 'input') {
+    html += `<div class="input-wrap"><input type="text" id="stepInput" placeholder="${step.placeholder}" autocomplete="off"></div>`;
+    html += `<button class="btn" id="nextBtn" onclick="nextFromInput()">Continuar →</button>`;
+  } else {
+    html += `<div class="options" id="opts">`;
+    step.options.forEach((opt, i) => {
+      html += `<button class="opt" onclick="selectOpt(${i})" data-value="${opt.value}">
+        <span class="opt-icon">${opt.icon}</span>
+        <span class="opt-text">${opt.text}</span>
+        <span class="opt-check"></span>
+      </button>`;
+    });
+    html += `</div>`;
+    html += `<button class="btn" id="nextBtn" onclick="nextFromOpt()" disabled>Continuar →</button>`;
+  }
+
+  if (current > 0) {
+    html += `<br><button class="btn btn-ghost" onclick="goBack()">← Voltar</button>`;
+  }
+
+  card.innerHTML = html;
+  app.appendChild(card);
+
+  if (step.type === 'input') {
+    const inp = document.getElementById('stepInput');
+    if (answers[step.id]) inp.value = answers[step.id];
+    inp.focus();
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') nextFromInput(); });
+  }
+}
+
+function renderIntro() {
+  progressWrap.style.display = 'none';
+  const div = document.createElement('div');
+  div.className = 'intro';
+  div.innerHTML = `
+    <div class="intro-badge">✨ Diagnóstico gratuito</div>
+    <h1>Descubra o que está travando o crescimento do seu salão</h1>
+    <p>Responda 7 perguntas rápidas e receba um diagnóstico personalizado com as principais oportunidades do seu negócio.</p>
+    <div class="intro-meta">
+      <span class="meta-item">⏱️ 2 minutos</span>
+      <span class="meta-item">📱 7 perguntas</span>
+      <span class="meta-item">🎯 100% gratuito</span>
+    </div>
+    <button class="btn" onclick="start()">Fazer meu diagnóstico →</button>
+    <p class="intro-alt">Prefere falar direto? <a href="https://wa.me/${WHATSAPP_NUMERO}?text=${encodeURIComponent('Olá! Quero saber mais sobre o Kyvvo.')}" target="_blank" rel="noopener">Chamar no WhatsApp</a></p>
+  `;
+  app.appendChild(div);
+}
+
+function start() {
+  current = 0;
+  render();
+}
+
+function selectOpt(i) {
+  document.querySelectorAll('.opt').forEach(o => o.classList.remove('selected'));
+  const opts = document.querySelectorAll('.opt');
+  opts[i].classList.add('selected');
+  document.getElementById('nextBtn').disabled = false;
+}
+
+function nextFromInput() {
+  const val = document.getElementById('stepInput').value.trim();
+  if (!val) { document.getElementById('stepInput').style.borderColor = 'var(--accent)'; return; }
+  answers[steps[current].id] = val;
+  current++;
+  render();
+}
+
+function nextFromOpt() {
+  const selected = document.querySelector('.opt.selected');
+  if (!selected) return;
+  const step = steps[current];
+  const value = selected.dataset.value;
+  answers[step.id] = value;
+
+  if (step.dor && step.dor[value]) {
+    dores.add(step.dor[value]);
+  }
+
+  current++;
+  render();
+}
+
+function goBack() {
+  current--;
+  render();
+}
+
+function renderResult() {
+  progressWrap.style.display = 'none';
+
+  const nome = answers['nome'] || 'você';
+  const primeiroNome = nome.split(' ')[0];
+
+  // Calcular score de dor (0-100)
+  let score = 40;
+  if (dores.has('gestao_manual') || dores.has('gestao_whatsapp')) score += 20;
+  if (dores.has('tempo_alto')) score += 15;
+  if (dores.has('volume_alto')) score += 10;
+  if (dores.has('falta')) score += 10;
+  if (dores.has('confusao')) score += 5;
+  score = Math.min(score, 95);
+
+  // Mensagens de dor personalizadas
+  const mensagensDor = [];
+
+  if (dores.has('gestao_whatsapp') || dores.has('gestao_manual')) {
+    mensagensDor.push({ icon: '💬', text: 'Você gerencia tudo pelo WhatsApp ou papel — isso significa horas perdidas toda semana e risco de esquecer horários.' });
+  }
+  if (dores.has('tempo_alto') || dores.has('tempo_medio')) {
+    mensagensDor.push({ icon: '⏰', text: 'Você gasta um tempo valioso todo dia só respondendo mensagens de agendamento — tempo que poderia estar atendendo clientes.' });
+  }
+  if (dores.has('falta')) {
+    mensagensDor.push({ icon: '😤', text: 'Clientes que faltam sem avisar causam prejuízo direto — horário vazio é dinheiro que não volta.' });
+  }
+  if (dores.has('confusao')) {
+    mensagensDor.push({ icon: '😵', text: 'Conflitos de horário e agendamentos perdidos geram estresse e comprometem a experiência do cliente.' });
+  }
+  if (dores.has('volume_alto') || dores.has('volume_medio')) {
+    mensagensDor.push({ icon: '🔥', text: 'Com esse volume de atendimentos, qualquer minuto desperdiçado em gestão manual é um custo invisível enorme.' });
+  }
+  if (dores.has('fidelizacao')) {
+    mensagensDor.push({ icon: '💸', text: 'Sem comunicação ativa, clientes somem. Um lembrete no momento certo pode trazer de volta quem você já conquistou.' });
+  }
+
+  if (mensagensDor.length === 0) {
+    mensagensDor.push({ icon: '✨', text: 'Seu salão já tem uma boa base. O Kyvvo pode elevar ainda mais sua organização e experiência do cliente.' });
+  }
+
+  // Plano sugerido
+  const investimento = parseInt(answers['investimento']) || 1;
+  let plano = 'Starter (R$ 147/mês)';
+  let planoDesc = 'Acesso ao portal web + bot de agendamento via WhatsApp.';
+  if (investimento >= 2) {
+    plano = 'Profissional (R$ 247/mês)';
+    planoDesc = 'Portal web + bot WhatsApp + 500 disparos ativos/mês para campanhas e lembretes.';
+  }
+
+  const div = document.createElement('div');
+  div.className = 'result';
+  div.innerHTML = `
+    <div class="result-header">
+      <span class="result-emoji">🎯</span>
+      <div class="result-title">Diagnóstico de <span class="name-display">${escapeHtml(primeiroNome)}</span></div>
+      <div class="result-sub">Identificamos o nível de impacto da gestão manual no seu salão.</div>
+    </div>
+
+    <div class="score-bar">
+      <div class="score-label">Impacto da gestão manual no seu negócio</div>
+      <div class="score-track"><div class="score-fill" id="scoreFill" style="width:0%"></div></div>
+      <div class="score-value">${score}% — ${score >= 70 ? 'Alto impacto' : score >= 50 ? 'Impacto moderado' : 'Impacto baixo'}</div>
+    </div>
+
+    <div class="dores">
+      <div class="dores-title">Oportunidades identificadas</div>
+      ${mensagensDor.map(d => `<div class="dor-item"><span class="dor-icon">${d.icon}</span><span>${d.text}</span></div>`).join('')}
+    </div>
+
+    <div class="cta-box">
+      <h3>O Kyvvo resolve tudo isso</h3>
+      <p>Com base no seu diagnóstico, o plano <strong>${plano}</strong> se encaixa perfeitamente.<br>${planoDesc}</p>
+      <p style="font-size:.8rem;color:var(--accent-light);margin-bottom:16px">✨ 14 dias grátis, sem cartão de crédito</p>
+      <button class="btn btn-whatsapp" id="btnWhatsapp">💬 Falar com a equipe Kyvvo</button>
+    </div>
+
+    <button class="btn" style="background:transparent;border:1.5px solid var(--border);color:var(--muted);box-shadow:none" onclick="reiniciar()">
+      Refazer diagnóstico
+    </button>
+  `;
+
+  app.appendChild(div);
+
+  // Handler anexado via JS (não via atributo onclick interpolado) pra não
+  // quebrar/injetar nada se o nome digitado tiver aspas, apóstrofo etc.
+  document.getElementById('btnWhatsapp').addEventListener('click', () => abrirWhatsApp(nome, plano, score));
+
+  setTimeout(() => {
+    const fill = document.getElementById('scoreFill');
+    if (fill) fill.style.width = score + '%';
+  }, 300);
+}
+
+function abrirWhatsApp(nome, plano, score) {
+  const msg = encodeURIComponent(
+    `Olá! Acabei de fazer o diagnóstico do Kyvvo e meu resultado foi ${score}% de impacto da gestão manual.\n\nMeu nome é ${nome} e tenho interesse no plano ${plano}.\n\nPode me contar mais?`
+  );
+  window.open('https://wa.me/' + WHATSAPP_NUMERO + '?text=' + msg, '_blank');
+}
+
+function reiniciar() {
+  current = -1;
+  answers = {};
+  dores = new Set();
+  render();
+}
+
+render();
+</script>
+</body>
+</html>
