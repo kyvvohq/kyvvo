@@ -1,0 +1,13 @@
+<nav>
+  <a class="logo" href="/">ky<span class="logo-vv">vv</span>o</a>
+  <div class="nav-right" id="navRight">
+    <button class="btn-login" id="btnLogin" onclick="openLoginModal()" data-pt="Entrar" data-en="Log in">Entrar</button>
+  </div>
+</nav>
+
+<div class="login-modal-overlay" id="loginModalOverlay" onclick="if(event.target===this)closeLoginModal()">
+  <div class="login-modal">
+    <button class="login-modal-close" id="btnCloseLogin" onclick="closeLoginModal()" aria-label="Fechar">✕</button>
+    <iframe id="loginIframe" title="Login Kyvvo" src="about:blank"></iframe>
+  </div>
+</div>

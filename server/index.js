@@ -32,6 +32,18 @@ async function initDB() {
       );
     `);
     console.log('✅ Tabela lista_espera pronta');
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS diagnosticos (
+        id SERIAL PRIMARY KEY,
+        nome TEXT NOT NULL,
+        respostas JSONB NOT NULL,
+        score INTEGER NOT NULL,
+        plano_sugerido TEXT,
+        criado_em TIMESTAMPTZ DEFAULT NOW()
+      );
+    `);
+    console.log('✅ Tabela diagnosticos pronta');
   } catch (err) {
     console.error('❌ Erro ao criar tabela:', err.message);
   }
@@ -90,6 +102,33 @@ app.post('/waitlist', async (req, res) => {
 
   } catch (err) {
     console.error('❌ Erro ao salvar lead:', err.message);
+    return res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// POST /diagnostico — salva as respostas do quiz de diagnóstico (lead gen)
+app.post('/diagnostico', async (req, res) => {
+  const { nome, respostas, score, plano } = req.body;
+
+  if (!nome || !nome.trim()) {
+    return res.status(400).json({ error: 'Nome é obrigatório' });
+  }
+  if (typeof score !== 'number') {
+    return res.status(400).json({ error: 'Score inválido' });
+  }
+
+  try {
+    await pool.query(
+      `INSERT INTO diagnosticos (nome, respostas, score, plano_sugerido)
+       VALUES ($1, $2, $3, $4)`,
+      [nome.trim(), JSON.stringify(respostas || {}), score, plano || null]
+    );
+
+    console.log(`✅ Novo diagnóstico: ${nome} — score: ${score}%`);
+
+    return res.status(201).json({ success: true });
+  } catch (err) {
+    console.error('❌ Erro ao salvar diagnóstico:', err.message);
     return res.status(500).json({ error: 'Erro interno' });
   }
 });

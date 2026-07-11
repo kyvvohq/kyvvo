@@ -1,0 +1,39 @@
+/* Design system + header/rodapé compartilhados entre todas as páginas da
+   landing (index.html, diagnostico.html, ...). Editar aqui reflete em todas
+   elas — evita duplicar essas regras em cada <style> de página. */
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+:root{
+  --bg:#080b14;--bg2:#0d1120;--surface:#111827;--border:#1e2d4a;
+  --accent:#7c5cfc;--accent-light:#a688ff;--cyan:#00d4ff;
+  --text:#f0eeff;--muted:#6b7a99;
+  --font-d:'Syne',sans-serif;--font-b:'DM Sans',sans-serif;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-height:1.6;overflow-x:hidden}
+
+nav{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  padding:18px 6%;display:flex;align-items:center;justify-content:space-between;
+  background:rgba(8,11,20,0.85);backdrop-filter:blur(20px);
+  border-bottom:1px solid rgba(255,255,255,0.04);
+}
+.logo{font-family:var(--font-d);font-size:1.5rem;font-weight:800;letter-spacing:-.03em;text-decoration:none;color:var(--text);display:flex;align-items:center}
+.logo-vv{color:var(--accent-light);position:relative}
+.logo-vv::after{content:'';position:absolute;bottom:-2px;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--accent),var(--cyan));border-radius:2px}
+.nav-right{display:flex;align-items:center;gap:14px}
+.lang-toggle{display:flex;align-items:center;gap:4px;background:var(--surface);border:1px solid var(--border);border-radius:100px;padding:4px;cursor:pointer}
+.lang-btn{padding:5px 12px;border-radius:100px;font-size:.78rem;font-weight:500;font-family:var(--font-b);border:none;cursor:pointer;transition:all .2s;color:var(--muted);background:transparent}
+.lang-btn.active{background:var(--accent);color:#fff}
+.btn-login{padding:9px 20px;border-radius:100px;font-size:.82rem;font-weight:600;font-family:var(--font-b);color:#fff;background:linear-gradient(135deg,var(--accent),#5b3fd4);border:none;cursor:pointer;transition:all .2s;white-space:nowrap}
+.btn-login:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(124,92,252,.35)}
+
+.login-modal-overlay{display:none;position:fixed;inset:0;z-index:1000;background:rgba(5,7,14,.72);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:20px}
+.login-modal-overlay.open{display:flex}
+.login-modal{position:relative;width:100%;max-width:420px;height:min(560px,90vh);background:var(--bg2);border:1px solid var(--border);border-radius:16px;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,.5)}
+.login-modal iframe{width:100%;height:100%;border:none;background:var(--bg2)}
+.login-modal-close{position:absolute;top:10px;right:12px;z-index:1;width:32px;height:32px;border-radius:50%;border:none;background:rgba(255,255,255,.08);color:var(--text);font-size:1.1rem;line-height:1;cursor:pointer;transition:background .2s}
+.login-modal-close:hover{background:rgba(255,255,255,.16)}
+
+footer{padding:48px 6%;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:20px}
+.footer-copy{font-size:.78rem;color:var(--muted)}
