@@ -62,8 +62,26 @@
     }
   }
 
+  // Login sem e-mail validado (US20/CA10): manda pra tela de validação do
+  // token em vez de entrar no portal.
+  function irParaVerificar() {
+    if (inIframe) {
+      try {
+        window.parent.postMessage({ source: 'kyvvo-login', status: 'success', verificar: true }, '*');
+      } catch (e) {}
+    } else {
+      window.location.href = '/verificar.html';
+    }
+  }
+
   if (localStorage.getItem('kyvvo_token')) {
-    irParaPainel();
+    // CA10: mesma checagem do handler de submit — não deixar cair direto no
+    // painel se o cadastro ainda não foi validado.
+    if (localStorage.getItem('kyvvo_email_verified') === 'false') {
+      irParaVerificar();
+    } else {
+      irParaPainel();
+    }
   } else if (localStorage.getItem('kyvvo_admin_token')) {
     irParaAdminPainel();
   }
@@ -102,7 +120,13 @@
         const data = await res.json();
         localStorage.setItem('kyvvo_token', data.token);
         localStorage.setItem('kyvvo_nome', data.nome || '');
-        irParaPainel();
+        if (data.email) localStorage.setItem('kyvvo_email', data.email);
+        localStorage.setItem('kyvvo_email_verified', String(data.email_verified !== false));
+        if (data.email_verified === false) {
+          irParaVerificar();
+        } else {
+          irParaPainel();
+        }
         return;
       }
 

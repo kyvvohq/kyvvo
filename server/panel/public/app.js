@@ -11,8 +11,47 @@ document.getElementById('btn-sair').addEventListener('click', async () => {
   }
   localStorage.removeItem('kyvvo_token');
   localStorage.removeItem('kyvvo_nome');
+  localStorage.removeItem('kyvvo_email');
   window.location.href = '/login.html';
 });
+
+// US20 — guarda de e-mail não validado (CA10) + banner de trial (CA09) + toast
+// de sucesso pós-validação (CA08). Falha na chamada de status não bloqueia o
+// portal (fail-open): usuários antigos já são email_verified=true na migration.
+// mostrarToast() é definido mais abaixo (seção Toasts).
+async function verificarStatusConta() {
+  let status;
+  try {
+    const res = await fetch('/api/tenant/status', { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return;
+    status = await res.json();
+  } catch (e) {
+    return;
+  }
+
+  // CA10 — conta não validada: acesso ao portal bloqueado até validar.
+  if (status.email_verified === false) {
+    window.location.href = '/verificar.html';
+    return;
+  }
+
+  // CA08 — toast verde ao voltar da validação do token.
+  if (new URLSearchParams(location.search).get('verificado') === '1') {
+    mostrarToast('E-mail verificado! Seu trial de 14 dias está ativo.', 'sucesso');
+    history.replaceState(null, '', location.pathname);
+  }
+
+  // CA09 — banner de trial com contador de dias restantes.
+  const banner = document.getElementById('trial-banner');
+  if (banner && status.status === 'trial' && status.dias_restantes != null) {
+    const dias = status.dias_restantes;
+    const texto = dias === 1 ? '1 dia restante' : `${dias} dias restantes`;
+    banner.textContent = `🎉 Trial ativo — ${texto}. Escolha seu plano antes que expire.`;
+    banner.hidden = false;
+    document.body.classList.add('com-trial-banner');
+  }
+}
+verificarStatusConta();
 
 function saudacaoPorHorario() {
   const hora = new Date().toLocaleString('pt-BR', { hour: 'numeric', hour12: false, timeZone: 'America/Sao_Paulo' });
