@@ -63,8 +63,68 @@
 .diagnostico-cta a{color:var(--accent-light);font-weight:600;text-decoration:none}
 .diagnostico-cta a:hover{text-decoration:underline}
 
+.nav-link{
+  font-family:var(--font-b);font-size:.85rem;font-weight:500;
+  color:var(--muted);text-decoration:none;transition:color .2s;
+}
+.nav-link:hover{color:var(--text)}
+
+/* FAQ */
+.faq-section{
+  padding:80px 6% 90px;background:var(--bg2);
+  border-top:1px solid var(--border);
+}
+.faq-wrap{max-width:760px;margin:44px auto 0}
+.faq-item{
+  border:1px solid var(--border);border-radius:12px;
+  background:var(--surface);margin-bottom:12px;overflow:hidden;
+  transition:border-color .2s;
+}
+.faq-item.open{border-color:rgba(124,92,252,.5)}
+.faq-question{
+  width:100%;display:flex;align-items:center;justify-content:space-between;gap:16px;
+  padding:20px 22px;background:none;border:none;cursor:pointer;
+  font-family:var(--font-d);font-size:1rem;font-weight:600;
+  color:var(--text);text-align:left;line-height:1.4;
+}
+.faq-icon{
+  flex-shrink:0;width:22px;height:22px;position:relative;
+  transition:transform .3s ease;color:var(--accent-light);
+}
+.faq-icon::before,.faq-icon::after{
+  content:'';position:absolute;top:50%;left:50%;
+  width:12px;height:2px;background:currentColor;border-radius:2px;
+  transform:translate(-50%,-50%);
+}
+.faq-icon::after{transform:translate(-50%,-50%) rotate(90deg)}
+.faq-item.open .faq-icon{transform:rotate(135deg)}
+.faq-answer{
+  max-height:0;overflow:hidden;
+  transition:max-height .35s ease;
+}
+.faq-answer-inner{
+  padding:0 22px 20px;color:var(--muted);
+  font-size:.92rem;line-height:1.7;font-weight:300;
+}
+.faq-answer-inner strong{color:var(--text);font-weight:500}
+.faq-contact{
+  text-align:center;margin-top:36px;
+  font-size:.95rem;color:var(--muted);
+}
+.faq-contact a{
+  color:var(--accent-light);font-weight:600;text-decoration:none;
+  transition:color .2s;
+}
+.faq-contact a:hover{color:var(--cyan)}
+
 @keyframes fadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
 @media(max-width:700px){.beneficios-grid{grid-template-columns:1fr}.steps{grid-template-columns:1fr}}
+@media(max-width:480px){
+  .nav-link{font-size:.78rem}
+  .faq-wrap{margin-top:32px}
+  .faq-question{font-size:.94rem;padding:16px 18px}
+  .faq-answer-inner{padding:0 18px 18px;font-size:.9rem}
+}
 </style>
 </head>
 <body>
@@ -194,6 +254,91 @@
   </div>
 </section>
 
+<!-- FAQ -->
+<section class="faq-section" id="faq">
+  <div class="section-eyebrow" data-pt="FAQ" data-en="FAQ">FAQ</div>
+  <h2 class="section-title" data-pt="Perguntas frequentes" data-en="Frequently asked questions">Perguntas frequentes</h2>
+  <p class="section-sub" data-pt="Tudo o que você precisa saber antes de começar." data-en="Everything you need to know before getting started.">Tudo o que você precisa saber antes de começar.</p>
+
+  <div class="faq-wrap">
+    <div class="faq-item">
+      <button class="faq-question" onclick="toggleFaq(this)" aria-expanded="false">
+        <span data-pt="O Kyvvo funciona com qualquer tipo de salão?" data-en="Does Kyvvo work with any type of salon?">O Kyvvo funciona com qualquer tipo de salão?</span>
+        <span class="faq-icon" aria-hidden="true"></span>
+      </button>
+      <div class="faq-answer">
+        <div class="faq-answer-inner" data-pt="Sim, funciona para qualquer salão de beleza. Em breve expandiremos para outros nichos como pet shops, clínicas e academias." data-en="Yes, it works for any beauty salon. Soon we'll expand to other niches such as pet shops, clinics and gyms.">Sim, funciona para qualquer salão de beleza. Em breve expandiremos para outros nichos como pet shops, clínicas e academias.</div>
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <button class="faq-question" onclick="toggleFaq(this)" aria-expanded="false">
+        <span data-pt="Preciso instalar algum aplicativo?" data-en="Do I need to install any app?">Preciso instalar algum aplicativo?</span>
+        <span class="faq-icon" aria-hidden="true"></span>
+      </button>
+      <div class="faq-answer">
+        <div class="faq-answer-inner" data-pt="Não. O Kyvvo funciona direto pelo navegador do celular ou computador. O app mobile estará disponível em breve." data-en="No. Kyvvo runs straight from your phone or computer browser. The mobile app will be available soon.">Não. O Kyvvo funciona direto pelo navegador do celular ou computador. O app mobile estará disponível em breve.</div>
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <button class="faq-question" onclick="toggleFaq(this)" aria-expanded="false">
+        <span data-pt="Como funciona o agendamento pelo WhatsApp?" data-en="How does WhatsApp booking work?">Como funciona o agendamento pelo WhatsApp?</span>
+        <span class="faq-icon" aria-hidden="true"></span>
+      </button>
+      <div class="faq-answer">
+        <div class="faq-answer-inner" data-pt="Seu cliente manda uma mensagem para o número do salão. O bot do Kyvvo responde automaticamente, pergunta o serviço e o horário, e confirma o agendamento — tudo sem você precisar responder." data-en="Your client sends a message to the salon's number. Kyvvo's bot replies automatically, asks for the service and time, and confirms the booking — all without you lifting a finger.">Seu cliente manda uma mensagem para o número do salão. O bot do Kyvvo responde automaticamente, pergunta o serviço e o horário, e confirma o agendamento — tudo sem você precisar responder.</div>
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <button class="faq-question" onclick="toggleFaq(this)" aria-expanded="false">
+        <span data-pt="O que acontece quando o trial de 14 dias terminar?" data-en="What happens when the 14-day trial ends?">O que acontece quando o trial de 14 dias terminar?</span>
+        <span class="faq-icon" aria-hidden="true"></span>
+      </button>
+      <div class="faq-answer">
+        <div class="faq-answer-inner" data-pt="Você escolhe um dos nossos planos para continuar. Se não quiser assinar, seu acesso é pausado e seus dados ficam guardados por 30 dias." data-en="You pick one of our plans to keep going. If you'd rather not subscribe, your access is paused and your data is kept for 30 days.">Você escolhe um dos nossos planos para continuar. Se não quiser assinar, seu acesso é pausado e seus dados ficam guardados por 30 dias.</div>
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <button class="faq-question" onclick="toggleFaq(this)" aria-expanded="false">
+        <span data-pt="Meu número de WhatsApp pode ser bloqueado?" data-en="Can my WhatsApp number get blocked?">Meu número de WhatsApp pode ser bloqueado?</span>
+        <span class="faq-icon" aria-hidden="true"></span>
+      </button>
+      <div class="faq-answer">
+        <div class="faq-answer-inner" data-pt="Usamos a API oficial do WhatsApp (Meta), que garante segurança e conformidade. Números conectados via API oficial não são bloqueados." data-en="We use the official WhatsApp API (Meta), which ensures security and compliance. Numbers connected through the official API are not blocked.">Usamos a API oficial do WhatsApp (Meta), que garante segurança e conformidade. Números conectados via API oficial não são bloqueados.</div>
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <button class="faq-question" onclick="toggleFaq(this)" aria-expanded="false">
+        <span data-pt="Quanto custa após o trial?" data-en="How much does it cost after the trial?">Quanto custa após o trial?</span>
+        <span class="faq-icon" aria-hidden="true"></span>
+      </button>
+      <div class="faq-answer">
+        <div class="faq-answer-inner" data-pt="A partir de R$ 147/mês no plano Starter. Veja todos os planos na seção de preços." data-en="From R$ 147/month on the Starter plan. See all plans in the pricing section.">A partir de R$ 147/mês no plano Starter. Veja todos os planos na seção de preços.</div>
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <button class="faq-question" onclick="toggleFaq(this)" aria-expanded="false">
+        <span data-pt="Posso cancelar a qualquer momento?" data-en="Can I cancel anytime?">Posso cancelar a qualquer momento?</span>
+        <span class="faq-icon" aria-hidden="true"></span>
+      </button>
+      <div class="faq-answer">
+        <div class="faq-answer-inner" data-pt="Sim. Sem fidelidade, sem multa. Cancele quando quiser direto pelo portal." data-en="Yes. No lock-in, no penalty. Cancel whenever you want, straight from the portal.">Sim. Sem fidelidade, sem multa. Cancele quando quiser direto pelo portal.</div>
+      </div>
+    </div>
+  </div>
+
+  <p class="faq-contact">
+    <span data-pt="Ainda tem dúvidas? " data-en="Still have questions? ">Ainda tem dúvidas? </span>
+    <a href="https://wa.me/553484285182?text=Ol%C3%A1!%20Quero%20saber%20mais%20sobre%20o%20Kyvvo." target="_blank" rel="noopener"
+       data-pt="Fale com a gente pelo WhatsApp →" data-en="Talk to us on WhatsApp →">Fale com a gente pelo WhatsApp →</a>
+  </p>
+</section>
+
 <div id="site-footer"></div>
 
 <script src="/shared.js"></script>
@@ -208,16 +353,42 @@ function setLang(lang) {
     const val = el.getAttribute('data-' + lang);
     if (val) el.innerHTML = val;
   });
+
+  // recalcula altura de itens do FAQ abertos, pois o texto pode mudar de tamanho
+  document.querySelectorAll('.faq-item.open .faq-answer').forEach(a => {
+    a.style.maxHeight = a.scrollHeight + 'px';
+  });
+}
+
+// FAQ ACCORDION
+function toggleFaq(btn) {
+  const item = btn.closest('.faq-item');
+  const answer = item.querySelector('.faq-answer');
+  const isOpen = item.classList.contains('open');
+
+  // fecha todos (apenas um item aberto por vez)
+  document.querySelectorAll('.faq-item.open').forEach(openItem => {
+    openItem.classList.remove('open');
+    openItem.querySelector('.faq-answer').style.maxHeight = null;
+    openItem.querySelector('.faq-question').setAttribute('aria-expanded', 'false');
+  });
+
+  if (!isOpen) {
+    item.classList.add('open');
+    answer.style.maxHeight = answer.scrollHeight + 'px';
+    btn.setAttribute('aria-expanded', 'true');
+  }
 }
 
 // Chamado pelo shared.js depois que o header (com o botão Entrar) foi
-// injetado — o toggle de idioma é específico da landing (a página de
-// diagnóstico não tem conteúdo em inglês), por isso não faz parte do
-// header compartilhado.
+// injetado — o toggle de idioma e o link do FAQ são específicos da landing
+// (a página de diagnóstico não tem conteúdo em inglês nem seção de FAQ),
+// por isso não fazem parte do header compartilhado.
 function onSharedReady() {
   const navRight = document.getElementById('navRight');
   if (navRight) {
     navRight.insertAdjacentHTML('afterbegin', `
+      <a class="nav-link" href="#faq" data-pt="Perguntas frequentes" data-en="FAQ">Perguntas frequentes</a>
       <div class="lang-toggle">
         <button class="lang-btn active" onclick="setLang('pt')">PT</button>
         <button class="lang-btn" onclick="setLang('en')">EN</button>
