@@ -1255,7 +1255,7 @@ async function start() {
 
       const { rows: tenantRows } = await client.query(
         `INSERT INTO tenants (nome, telefone, endereco, segmento, horario_abertura, horario_fechamento)
-         VALUES ($1, $2, $3, COALESCE($4, 'salao_beleza'), COALESCE($5, '08:00'), COALESCE($6, '20:00'))
+         VALUES ($1, $2, $3, COALESCE($4, 'salao_beleza'), COALESCE($5::time, '08:00'::time), COALESCE($6::time, '20:00'::time))
          RETURNING id, nome, telefone, endereco, segmento, ativo, criado_em`,
         [nome.trim(), telefone || null, endereco || null, segmento || null, horarioAbertura || null, horarioFechamento || null]
       );
