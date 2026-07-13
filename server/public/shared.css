@@ -27,6 +27,9 @@ nav{
 .lang-btn.active{background:var(--accent);color:#fff}
 .btn-login{padding:9px 20px;border-radius:100px;font-size:.82rem;font-weight:600;font-family:var(--font-b);color:#fff;background:linear-gradient(135deg,var(--accent),#5b3fd4);border:none;cursor:pointer;transition:all .2s;white-space:nowrap}
 .btn-login:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(124,92,252,.35)}
+/* "Criar conta" (US20): CTA secundário no header, contorno em vez de preenchido. */
+.btn-cadastro{padding:9px 18px;border-radius:100px;font-size:.82rem;font-weight:600;font-family:var(--font-b);color:var(--text);background:transparent;border:1px solid var(--border);cursor:pointer;transition:all .2s;white-space:nowrap;text-decoration:none}
+.btn-cadastro:hover{border-color:rgba(124,92,252,.5);transform:translateY(-1px)}
 
 .login-modal-overlay{display:none;position:fixed;inset:0;z-index:1000;background:rgba(5,7,14,.72);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:20px}
 .login-modal-overlay.open{display:flex}

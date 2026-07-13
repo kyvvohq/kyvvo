@@ -39,14 +39,29 @@ window.addEventListener('keydown', (e) => {
 window.addEventListener('message', (e) => {
   if (e.origin !== PANEL_ORIGIN) return;
   if (e.data && e.data.source === 'kyvvo-login' && e.data.status === 'success') {
-    const destino = e.data.admin ? '/admin/painel.html' : '/painel.html';
+    // Login sem e-mail validado (US20/CA10) vai pra tela de validação do token.
+    const destino = e.data.admin
+      ? '/admin/painel.html'
+      : e.data.verificar
+        ? '/verificar.html'
+        : '/painel.html';
     window.top.location.href = PANEL_ORIGIN + destino;
   }
 });
+
+// Resolve links que apontam pro portal (ex: "Criar conta" → cadastro), já que
+// o portal roda em outra origem (PANEL_ORIGIN). Qualquer elemento com
+// data-panel-path recebe o href absoluto após a injeção do header.
+function resolverLinksDoPortal() {
+  document.querySelectorAll('[data-panel-path]').forEach((el) => {
+    el.setAttribute('href', PANEL_ORIGIN + el.getAttribute('data-panel-path'));
+  });
+}
 
 Promise.all([
   injectPartial('/partials/header.html', 'site-header'),
   injectPartial('/partials/footer.html', 'site-footer'),
 ]).then(() => {
+  resolverLinksDoPortal();
   if (typeof onSharedReady === 'function') onSharedReady();
 });

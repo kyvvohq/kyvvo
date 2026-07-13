@@ -26,6 +26,8 @@
 .hero-cta{display:flex;flex-direction:column;align-items:center;gap:14px;animation:fadeUp .9s .3s ease both}
 .btn-whatsapp{display:inline-flex;align-items:center;gap:10px;padding:16px 32px;background:linear-gradient(135deg,var(--accent),#5b3fd4);color:#fff;border:none;border-radius:100px;font-family:var(--font-b);font-size:1rem;font-weight:600;cursor:pointer;transition:all .2s;box-shadow:0 4px 20px rgba(124,92,252,.35);text-decoration:none}
 .btn-whatsapp:hover{transform:translateY(-2px);box-shadow:0 10px 32px rgba(124,92,252,.45)}
+.btn-secundario{background:transparent;color:var(--text);border:1px solid var(--border);box-shadow:none}
+.btn-secundario:hover{border-color:rgba(124,92,252,.5);box-shadow:none}
 .hero-cta-sub{font-size:.8rem;color:var(--muted)}
 
 .beneficios-section{padding:80px 6%;border-top:1px solid var(--border)}
@@ -87,13 +89,17 @@
   </p>
 
   <div class="hero-cta">
-    <a class="btn-whatsapp" id="ctaWhatsapp" href="https://wa.me/553484285182?text=Ol%C3%A1!%20Quero%20saber%20mais%20sobre%20o%20Kyvvo." target="_blank" rel="noopener">
+    <a class="btn-whatsapp" id="ctaComecar" data-panel-path="/cadastro.html" href="#">
+      <span>🚀</span>
+      <span data-pt="Começar grátis" data-en="Start free">Começar grátis</span>
+    </a>
+    <p class="hero-cta-sub" data-pt="Trial de 14 dias. Sem cartão de crédito." data-en="14-day trial. No credit card.">
+      Trial de 14 dias. Sem cartão de crédito.
+    </p>
+    <a class="btn-whatsapp btn-secundario" id="ctaWhatsapp" href="https://wa.me/553484285182?text=Ol%C3%A1!%20Quero%20saber%20mais%20sobre%20o%20Kyvvo." target="_blank" rel="noopener">
       <span>💬</span>
       <span data-pt="Falar no WhatsApp" data-en="Chat on WhatsApp">Falar no WhatsApp</span>
     </a>
-    <p class="hero-cta-sub" data-pt="Conte pra gente sobre o seu negócio e a gente ajuda a configurar." data-en="Tell us about your business and we'll help you get set up.">
-      Conte pra gente sobre o seu negócio e a gente ajuda a configurar.
-    </p>
     <p class="diagnostico-cta">
       <span data-pt="Não sabe por onde começar?" data-en="Not sure where to start?">Não sabe por onde começar?</span>
       <a href="/diagnostico.html" data-pt="Faça o diagnóstico gratuito →" data-en="Take the free diagnosis →">Faça o diagnóstico gratuito →</a>
