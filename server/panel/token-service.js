@@ -50,6 +50,7 @@ async function enviarTokenEmail(email, token) {
         subject: 'Confirme seu e-mail — Kyvvo',
         html: emailHtml(token),
       }),
+      signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) {
       console.error(`[token-service] Resend respondeu ${res.status} ao enviar para ${email}`);
@@ -65,6 +66,12 @@ async function enviarTokenEmail(email, token) {
 // Envia o token por WhatsApp via Evolution API, se configurada. Espera o
 // número nacional em dígitos (ex: "34984285182") e prefixa o DDI 55.
 async function enviarTokenWhatsapp(whatsappNacional, token) {
+  // Tenant sem WhatsApp cadastrado (ex: criado pela área admin, US16) — não
+  // há número nenhum pra tentar enviar.
+  if (!whatsappNacional) {
+    return false;
+  }
+
   const url = process.env.EVOLUTION_API_URL;
   const apiKey = process.env.EVOLUTION_API_KEY;
   const instancia = process.env.EVOLUTION_INSTANCE;
@@ -83,6 +90,7 @@ async function enviarTokenWhatsapp(whatsappNacional, token) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ number: `55${whatsappNacional}`, text: texto }),
+      signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) {
       console.error(`[token-service] Evolution API respondeu ${res.status} ao enviar para 55${whatsappNacional}`);

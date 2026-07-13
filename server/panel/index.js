@@ -104,6 +104,18 @@ async function start() {
     prefix: '/',
   });
 
+  // Rotas que uma conta ainda não verificada (US20/CA10) precisa continuar
+  // acessando pra completar a verificação, pedir reenvio ou sair — checado
+  // direto em `authenticate` (em vez de um preHandler à parte que cada rota
+  // nova precisaria lembrar de encadear) pra que o bloqueio nunca dependa de
+  // alguém adicionar a checagem rota por rota.
+  const ROTAS_LIVRES_SEM_VERIFICACAO = new Set([
+    'POST /api/auth/logout',
+    'POST /api/auth/verify-token',
+    'POST /api/auth/resend-token',
+    'GET /api/tenant/status',
+  ]);
+
   fastify.decorate('authenticate', async (request, reply) => {
     try {
       await request.jwtVerify();
@@ -112,12 +124,17 @@ async function start() {
     }
 
     const { rows } = await pool.query(
-      'SELECT token_version FROM usuarios WHERE id = $1',
+      'SELECT token_version, email_verified FROM usuarios WHERE id = $1',
       [request.user.userId]
     );
     const usuario = rows[0];
     if (!usuario || usuario.token_version !== request.user.tokenVersion) {
       return reply.code(401).send({ error: 'Sessão expirada. Faça login novamente.' });
+    }
+
+    const rotaAtual = `${request.method} ${request.routeOptions.url}`;
+    if (!usuario.email_verified && !ROTAS_LIVRES_SEM_VERIFICACAO.has(rotaAtual)) {
+      return reply.code(403).send({ error: 'Confirme seu cadastro para continuar. Verifique seu e-mail ou WhatsApp.' });
     }
   });
 
@@ -206,22 +223,25 @@ async function start() {
   });
 
   // ---------- Cadastro self-service (US20) ----------
-  // Cria usuário + tenant com trial de 14 dias e dispara o token de validação
-  // por e-mail e WhatsApp. E-mail e WhatsApp são unique keys (CA03): a
-  // verificação acontece aqui, no backend, antes de criar qualquer registro.
-  async function gerarEEnviarToken(client, usuario) {
+  // Gera e persiste o token de validação — só isso fica dentro da transação
+  // de banco. O envio por e-mail/WhatsApp (chamada de rede pra provedor
+  // externo) é SEMPRE disparado depois do COMMIT e sem await bloqueando a
+  // resposta: uma chamada de rede lenta ou travada não pode segurar uma
+  // conexão do pool nem atrasar o cadastro. `enviarToken` nunca lança (usa
+  // Promise.allSettled internamente), mas o .catch aqui é defensivo.
+  async function gerarTokenPendente(client, usuarioId) {
     const codigo = tokenService.gerarToken();
     const expiraEm = new Date(Date.now() + tokenService.TOKEN_EXPIRACAO_MINUTOS * 60000);
     await client.query(
       `INSERT INTO tokens_validacao (user_id, token, expires_at) VALUES ($1, $2, $3)`,
-      [usuario.id, codigo, expiraEm.toISOString()]
+      [usuarioId, codigo, expiraEm.toISOString()]
     );
-    // Envio é fora da transação de banco e nunca derruba o fluxo (o serviço
-    // engole as falhas); o token já está persistido.
-    await tokenService.enviarToken({
-      email: usuario.email,
-      whatsappNacional: usuario.whatsapp,
-      token: codigo,
+    return codigo;
+  }
+
+  function dispararEnvioToken(usuario) {
+    tokenService.enviarToken(usuario).catch((err) => {
+      fastify.log.error({ err }, 'Falha ao disparar envio do token de verificação');
     });
   }
 
@@ -298,9 +318,11 @@ async function start() {
       );
       const usuarioId = usuarioRows[0].id;
 
-      await gerarEEnviarToken(client, { id: usuarioId, email: emailLimpo, whatsapp });
+      const codigo = await gerarTokenPendente(client, usuarioId);
 
       await client.query('COMMIT');
+
+      dispararEnvioToken({ email: emailLimpo, whatsappNacional: whatsapp, token: codigo });
 
       // Loga o usuário já autenticado (mas com email_verified=false) pra ele
       // seguir direto pra tela de validação do token (CA07).
@@ -410,11 +432,12 @@ async function start() {
     const whatsapp = tenantRows[0] ? tenantRows[0].whatsapp : null;
 
     const client = await pool.connect();
+    let codigo;
     try {
       await client.query('BEGIN');
       // Invalida qualquer token pendente antes de gerar o novo.
       await client.query('UPDATE tokens_validacao SET usado = true WHERE user_id = $1 AND NOT usado', [userId]);
-      await gerarEEnviarToken(client, { id: userId, email, whatsapp });
+      codigo = await gerarTokenPendente(client, userId);
       await client.query('COMMIT');
     } catch (erro) {
       await client.query('ROLLBACK');
@@ -422,6 +445,11 @@ async function start() {
     } finally {
       client.release();
     }
+
+    // Tenant criado pela área admin (US16) pode não ter WhatsApp cadastrado —
+    // nesse caso reenvia só por e-mail em vez de disparar pro provedor com um
+    // número inexistente.
+    dispararEnvioToken({ email, whatsappNacional: whatsapp || undefined, token: codigo });
 
     return { ok: true };
   });
@@ -1243,8 +1271,13 @@ async function start() {
       let usuarioCriado = null;
       if (usuario) {
         const hash = await bcrypt.hash(usuario.senha, 10);
+        // email_verified=true: onboarding feito pela própria equipe Kyvvo,
+        // já é confiável (mesmo raciocínio do backfill da migration 021) —
+        // sem isso o usuário nasceria bloqueado em /verificar.html sem nunca
+        // ter recebido nenhum token (US20 só gera/envia token no cadastro
+        // self-service e no reenvio).
         const { rows: usuarioRows } = await client.query(
-          `INSERT INTO usuarios (tenant_id, email, senha_hash, nome) VALUES ($1, $2, $3, $4) RETURNING id, email, nome`,
+          `INSERT INTO usuarios (tenant_id, email, senha_hash, nome, email_verified) VALUES ($1, $2, $3, $4, true) RETURNING id, email, nome`,
           [tenant.id, usuario.email.toLowerCase().trim(), hash, usuario.nome || nome.trim()]
         );
         usuarioCriado = usuarioRows[0];

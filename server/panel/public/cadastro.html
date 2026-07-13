@@ -155,6 +155,7 @@
         localStorage.setItem('kyvvo_token', data.token);
         localStorage.setItem('kyvvo_nome', data.nome || '');
         localStorage.setItem('kyvvo_email', data.email || '');
+        localStorage.setItem('kyvvo_email_verified', 'false');
         window.location.href = '/verificar.html';
         return;
       }

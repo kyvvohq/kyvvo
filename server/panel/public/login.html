@@ -75,7 +75,13 @@
   }
 
   if (localStorage.getItem('kyvvo_token')) {
-    irParaPainel();
+    // CA10: mesma checagem do handler de submit — não deixar cair direto no
+    // painel se o cadastro ainda não foi validado.
+    if (localStorage.getItem('kyvvo_email_verified') === 'false') {
+      irParaVerificar();
+    } else {
+      irParaPainel();
+    }
   } else if (localStorage.getItem('kyvvo_admin_token')) {
     irParaAdminPainel();
   }
@@ -115,6 +121,7 @@
         localStorage.setItem('kyvvo_token', data.token);
         localStorage.setItem('kyvvo_nome', data.nome || '');
         if (data.email) localStorage.setItem('kyvvo_email', data.email);
+        localStorage.setItem('kyvvo_email_verified', String(data.email_verified !== false));
         if (data.email_verified === false) {
           irParaVerificar();
         } else {

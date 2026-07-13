@@ -132,6 +132,7 @@
 
       if (res.ok) {
         // CA08 — toast é exibido pelo painel após o redirect.
+        localStorage.setItem('kyvvo_email_verified', 'true');
         window.location.href = '/painel.html?verificado=1';
         return;
       }
