@@ -62,6 +62,18 @@
     }
   }
 
+  // Login sem e-mail validado (US20/CA10): manda pra tela de validação do
+  // token em vez de entrar no portal.
+  function irParaVerificar() {
+    if (inIframe) {
+      try {
+        window.parent.postMessage({ source: 'kyvvo-login', status: 'success', verificar: true }, '*');
+      } catch (e) {}
+    } else {
+      window.location.href = '/verificar.html';
+    }
+  }
+
   if (localStorage.getItem('kyvvo_token')) {
     irParaPainel();
   } else if (localStorage.getItem('kyvvo_admin_token')) {
@@ -102,7 +114,12 @@
         const data = await res.json();
         localStorage.setItem('kyvvo_token', data.token);
         localStorage.setItem('kyvvo_nome', data.nome || '');
-        irParaPainel();
+        if (data.email) localStorage.setItem('kyvvo_email', data.email);
+        if (data.email_verified === false) {
+          irParaVerificar();
+        } else {
+          irParaPainel();
+        }
         return;
       }
 

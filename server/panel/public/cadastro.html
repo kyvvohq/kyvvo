@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Criar conta — Kyvvo</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%237c5cfc'/%3E%3Ctext x='16' y='22' font-family='Arial,sans-serif' font-size='15' font-weight='800' fill='white' text-anchor='middle'%3Evv%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Syne:wght@400;600;700;800&display=swap">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="center-screen">
+  <div class="card card-cadastro">
+    <div class="logo">ky<span class="logo-vv">vv</span>o</div>
+    <h1 class="cadastro-titulo">Crie sua conta grátis</h1>
+    <p class="cadastro-sub">Comece agora seu trial de 14 dias. Sem cartão de crédito.</p>
+
+    <form id="form-cadastro" novalidate>
+      <label for="nome">Seu nome</label>
+      <input type="text" id="nome" autocomplete="name">
+      <div class="field-error" id="erro-nome"></div>
+
+      <label for="nome_empresa">Nome da empresa</label>
+      <input type="text" id="nome_empresa" autocomplete="organization">
+      <div class="field-error" id="erro-nome_empresa"></div>
+
+      <label for="email">E-mail</label>
+      <input type="email" id="email" autocomplete="email">
+      <div class="field-error" id="erro-email"></div>
+
+      <label for="whatsapp">WhatsApp</label>
+      <input type="tel" id="whatsapp" autocomplete="tel" placeholder="(34) 99999-9999">
+      <div class="field-error" id="erro-whatsapp"></div>
+
+      <label for="senha">Senha</label>
+      <div class="senha-wrapper">
+        <input type="password" id="senha" autocomplete="new-password">
+        <button type="button" id="btn-toggle-senha" class="toggle-senha" aria-label="Mostrar senha" tabindex="-1">👁</button>
+      </div>
+      <div class="field-error" id="erro-senha"></div>
+
+      <button type="submit" id="btn-criar">Começar grátis</button>
+      <div class="erro" id="erro-geral" role="alert"></div>
+    </form>
+
+    <p class="cadastro-rodape">Já tem conta? <a href="/login.html">Entrar</a></p>
+  </div>
+</div>
+<footer class="rodape-app">
+  <div class="logo">ky<span class="logo-vv">vv</span>o</div>
+  <p class="rodape-app-copy">© 2026 Kyvvo. Todos os direitos reservados.</p>
+</footer>
+<script>
+  // Se já está logado, não faz sentido cadastrar de novo.
+  if (localStorage.getItem('kyvvo_token')) {
+    window.location.href = '/painel.html';
+  }
+
+  const form = document.getElementById('form-cadastro');
+  const btn = document.getElementById('btn-criar');
+  const erroGeral = document.getElementById('erro-geral');
+  const senhaInput = document.getElementById('senha');
+  const toggleSenhaBtn = document.getElementById('btn-toggle-senha');
+
+  const campos = {
+    nome: document.getElementById('nome'),
+    nome_empresa: document.getElementById('nome_empresa'),
+    email: document.getElementById('email'),
+    whatsapp: document.getElementById('whatsapp'),
+    senha: senhaInput,
+  };
+
+  // Mesmas regras validadas no backend (index.js) — mantidas em sincronia.
+  const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const SENHA_REGEX = /^(?=.*[A-Z])(?=.*\d).{8,}$/;
+
+  function validarWhatsapp(valor) {
+    let d = (valor || '').replace(/\D/g, '');
+    if (d.startsWith('55') && d.length >= 12) d = d.slice(2);
+    if (d.length < 10 || d.length > 11) return false;
+    const ddd = parseInt(d.slice(0, 2), 10);
+    return ddd >= 11 && ddd <= 99;
+  }
+
+  const validadores = {
+    nome: (v) => (v.trim().length >= 2 ? '' : 'Informe seu nome (mínimo 2 caracteres).'),
+    nome_empresa: (v) => (v.trim().length >= 2 ? '' : 'Informe o nome da empresa (mínimo 2 caracteres).'),
+    email: (v) => (EMAIL_REGEX.test(v.trim()) ? '' : 'Digite um e-mail válido.'),
+    whatsapp: (v) => (validarWhatsapp(v) ? '' : 'Digite um número de WhatsApp válido com DDD.'),
+    senha: (v) => (SENHA_REGEX.test(v) ? '' : 'A senha deve ter no mínimo 8 caracteres, 1 número e 1 letra maiúscula.'),
+  };
+
+  function mostrarErroCampo(nome, mensagem) {
+    const input = campos[nome];
+    const alvo = document.getElementById('erro-' + nome);
+    alvo.textContent = mensagem;
+    input.classList.toggle('invalid', !!mensagem);
+    return !mensagem;
+  }
+
+  // CA02 — validação ao perder o foco (onBlur).
+  Object.keys(campos).forEach((nome) => {
+    campos[nome].addEventListener('blur', () => mostrarErroCampo(nome, validadores[nome](campos[nome].value)));
+    campos[nome].addEventListener('input', () => {
+      if (campos[nome].classList.contains('invalid')) {
+        mostrarErroCampo(nome, validadores[nome](campos[nome].value));
+      }
+    });
+  });
+
+  toggleSenhaBtn.addEventListener('click', () => {
+    const oculta = senhaInput.type === 'password';
+    senhaInput.type = oculta ? 'text' : 'password';
+    toggleSenhaBtn.textContent = oculta ? '🙈' : '👁';
+    toggleSenhaBtn.setAttribute('aria-label', oculta ? 'Ocultar senha' : 'Mostrar senha');
+  });
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    erroGeral.textContent = '';
+
+    let valido = true;
+    let primeiroInvalido = null;
+    Object.keys(campos).forEach((nome) => {
+      const ok = mostrarErroCampo(nome, validadores[nome](campos[nome].value));
+      if (!ok && !primeiroInvalido) primeiroInvalido = campos[nome];
+      valido = valido && ok;
+    });
+    if (!valido) {
+      if (primeiroInvalido) primeiroInvalido.focus();
+      return;
+    }
+
+    btn.disabled = true;
+    btn.classList.add('loading');
+    btn.textContent = 'Criando conta...';
+
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nome: campos.nome.value,
+          nome_empresa: campos.nome_empresa.value,
+          email: campos.email.value,
+          whatsapp: campos.whatsapp.value,
+          senha: campos.senha.value,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok) {
+        localStorage.setItem('kyvvo_token', data.token);
+        localStorage.setItem('kyvvo_nome', data.nome || '');
+        localStorage.setItem('kyvvo_email', data.email || '');
+        window.location.href = '/verificar.html';
+        return;
+      }
+
+      // Erro de unicidade (CA03) volta em português direto da API.
+      erroGeral.textContent = data.error || 'Erro ao criar conta. Tente novamente.';
+    } catch (err) {
+      erroGeral.textContent = 'Erro ao processar. Tente novamente.';
+    } finally {
+      btn.disabled = false;
+      btn.classList.remove('loading');
+      btn.textContent = 'Começar grátis';
+    }
+  });
+</script>
+</body>
+</html>

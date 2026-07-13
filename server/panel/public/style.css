@@ -655,3 +655,107 @@ textarea:focus { outline: none; border-color: var(--accent); }
   from { opacity: 1; transform: translateY(0); }
   to { opacity: 0; transform: translateY(12px); }
 }
+
+/* ---------- US20 — Cadastro self-service e validação de token ---------- */
+
+/* O card de cadastro tem 5 campos: um pouco mais largo que o de login. */
+.card-cadastro { max-width: 420px; }
+
+.cadastro-titulo {
+  font-size: 20px;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 6px;
+}
+
+.cadastro-sub {
+  font-size: 13px;
+  color: #a1a5c4;
+  text-align: center;
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+
+/* Erro inline por campo (CA02). O input inválido ganha borda vermelha. */
+.field-error {
+  color: #ff6b6b;
+  font-size: 12px;
+  margin-top: 6px;
+  min-height: 14px;
+}
+
+input.invalid {
+  border-color: #ff6b6b;
+}
+
+.cadastro-rodape {
+  font-size: 13px;
+  color: #a1a5c4;
+  text-align: center;
+  margin-top: 20px;
+}
+
+.cadastro-rodape a {
+  color: var(--accent-light);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.cadastro-rodape a:hover { text-decoration: underline; }
+
+/* Campo único de token de 6 dígitos (CA07). */
+.otp-input {
+  text-align: center;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 12px;
+  font-family: var(--font-d);
+}
+
+.otp-input::placeholder {
+  letter-spacing: 12px;
+  color: #3a3f5f;
+}
+
+/* Link "Reenviar código" desabilitado durante o cooldown de 60s. */
+.link-desabilitado {
+  color: #5a5f7f !important;
+  pointer-events: none;
+  cursor: default;
+}
+
+.contador-reenvio {
+  color: #a1a5c4;
+  font-size: 12px;
+}
+
+/* Banner de trial no topo do portal (CA09). */
+.trial-banner {
+  background: linear-gradient(90deg, rgba(124, 92, 252, 0.22), rgba(0, 212, 255, 0.14));
+  border-bottom: 1px solid #2a2f52;
+  color: #f2f2f7;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: center;
+  padding: 12px 24px;
+}
+
+/* Botão com spinner durante o envio (CA12). */
+button.loading {
+  position: relative;
+  color: transparent;
+}
+
+button.loading::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: girar 0.6s linear infinite;
+}

@@ -5,6 +5,36 @@ const staticPlugin = require('@fastify/static');
 const path = require('path');
 const bcrypt = require('bcryptjs');
 const { Pool } = require('pg');
+const tokenService = require('./token-service');
+
+// ---------- Cadastro self-service (US20) ----------
+const TRIAL_DIAS = 14;
+const MAX_TENTATIVAS_TOKEN = 5;
+const MAX_REENVIOS_HORA = 5;
+const REENVIO_COOLDOWN_SEGUNDOS = 60;
+// Módulos liberados durante o trial ("plano Profissional" — CA09). Todo
+// tenant novo precisa ao menos da agenda; os demais dão a experiência
+// completa enquanto o trial está ativo.
+const MODULOS_TRIAL = ['agenda_inteligente', 'financeiro', 'dashboards'];
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Senha: mínimo 8 caracteres, ao menos 1 número e 1 letra maiúscula (CA02).
+const SENHA_REGEX = /^(?=.*[A-Z])(?=.*\d).{8,}$/;
+
+// Normaliza um WhatsApp brasileiro para os dígitos nacionais (DDD + número,
+// sem o DDI 55), que é o formato guardado como unique key. Retorna null se
+// não for um número brasileiro plausível.
+function normalizarWhatsapp(bruto) {
+  if (!bruto) return null;
+  let digitos = String(bruto).replace(/\D/g, '');
+  if (digitos.startsWith('55') && digitos.length >= 12) {
+    digitos = digitos.slice(2);
+  }
+  if (digitos.length < 10 || digitos.length > 11) return null;
+  const ddd = parseInt(digitos.slice(0, 2), 10);
+  if (ddd < 11 || ddd > 99) return null;
+  return digitos;
+}
 
 const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -132,7 +162,7 @@ async function start() {
     }
 
     const { rows } = await pool.query(
-      `SELECT u.id, u.tenant_id, u.email, u.senha_hash, u.nome, u.token_version, t.ativo AS tenant_ativo
+      `SELECT u.id, u.tenant_id, u.email, u.senha_hash, u.nome, u.token_version, u.email_verified, t.ativo AS tenant_ativo
        FROM usuarios u JOIN tenants t ON t.id = u.tenant_id
        WHERE u.email = $1`,
       [email.toLowerCase().trim()]
@@ -159,7 +189,9 @@ async function start() {
       { expiresIn: '7d' }
     );
 
-    return { token, nome: usuario.nome, email: usuario.email };
+    // email_verified informa ao front se deve redirecionar pra tela de
+    // validação (CA10) em vez de entrar direto no portal.
+    return { token, nome: usuario.nome, email: usuario.email, email_verified: usuario.email_verified };
   });
 
   // Invalida o token atual (e qualquer outro emitido antes dele) incrementando
@@ -171,6 +203,255 @@ async function start() {
       [request.user.userId]
     );
     return { ok: true };
+  });
+
+  // ---------- Cadastro self-service (US20) ----------
+  // Cria usuário + tenant com trial de 14 dias e dispara o token de validação
+  // por e-mail e WhatsApp. E-mail e WhatsApp são unique keys (CA03): a
+  // verificação acontece aqui, no backend, antes de criar qualquer registro.
+  async function gerarEEnviarToken(client, usuario) {
+    const codigo = tokenService.gerarToken();
+    const expiraEm = new Date(Date.now() + tokenService.TOKEN_EXPIRACAO_MINUTOS * 60000);
+    await client.query(
+      `INSERT INTO tokens_validacao (user_id, token, expires_at) VALUES ($1, $2, $3)`,
+      [usuario.id, codigo, expiraEm.toISOString()]
+    );
+    // Envio é fora da transação de banco e nunca derruba o fluxo (o serviço
+    // engole as falhas); o token já está persistido.
+    await tokenService.enviarToken({
+      email: usuario.email,
+      whatsappNacional: usuario.whatsapp,
+      token: codigo,
+    });
+  }
+
+  fastify.post('/api/auth/register', async (request, reply) => {
+    const {
+      nome,
+      email,
+      senha,
+      nome_empresa: nomeEmpresa,
+      whatsapp: whatsappBruto,
+    } = request.body || {};
+
+    const nomeLimpo = (nome || '').trim();
+    const emailLimpo = (email || '').toLowerCase().trim();
+    const nomeEmpresaLimpo = (nomeEmpresa || '').trim();
+
+    if (nomeLimpo.length < 2) {
+      return reply.code(400).send({ error: 'Informe seu nome (mínimo 2 caracteres).' });
+    }
+    if (!EMAIL_REGEX.test(emailLimpo)) {
+      return reply.code(400).send({ error: 'Digite um e-mail válido.' });
+    }
+    if (!SENHA_REGEX.test(senha || '')) {
+      return reply.code(400).send({
+        error: 'A senha deve ter no mínimo 8 caracteres, 1 número e 1 letra maiúscula.',
+      });
+    }
+    if (nomeEmpresaLimpo.length < 2) {
+      return reply.code(400).send({ error: 'Informe o nome da empresa (mínimo 2 caracteres).' });
+    }
+    const whatsapp = normalizarWhatsapp(whatsappBruto);
+    if (!whatsapp) {
+      return reply.code(400).send({ error: 'Digite um número de WhatsApp válido com DDD.' });
+    }
+
+    // Verificação de unicidade antes de criar qualquer registro (CA03).
+    const { rows: emailRows } = await pool.query('SELECT 1 FROM usuarios WHERE email = $1', [emailLimpo]);
+    if (emailRows.length > 0) {
+      return reply.code(409).send({ error: 'Este e-mail já está cadastrado. Faça login ou use outro e-mail.' });
+    }
+    const { rows: whatsappRows } = await pool.query('SELECT 1 FROM tenants WHERE whatsapp = $1', [whatsapp]);
+    if (whatsappRows.length > 0) {
+      return reply.code(409).send({ error: 'Este número de WhatsApp já está associado a uma conta.' });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Trial começa imediatamente, antes mesmo da validação do token (CA04).
+      const trialExpira = new Date(Date.now() + TRIAL_DIAS * 24 * 60 * 60 * 1000);
+      const { rows: tenantRows } = await client.query(
+        `INSERT INTO tenants (nome, telefone, whatsapp, plano, status, trial_expires_at)
+         VALUES ($1, $2, $3, 'trial', 'trial', $4)
+         RETURNING id`,
+        [nomeEmpresaLimpo, whatsapp, whatsapp, trialExpira.toISOString()]
+      );
+      const tenantId = tenantRows[0].id;
+
+      // Libera os módulos do trial (CA09).
+      await client.query(
+        `INSERT INTO tenant_modulos (tenant_id, modulo_key, ativo)
+         SELECT $1, key, true FROM modulos WHERE key = ANY($2::text[])
+         ON CONFLICT (tenant_id, modulo_key) DO NOTHING`,
+        [tenantId, MODULOS_TRIAL]
+      );
+
+      const hash = await bcrypt.hash(senha, 10);
+      const { rows: usuarioRows } = await client.query(
+        `INSERT INTO usuarios (tenant_id, email, senha_hash, nome, email_verified)
+         VALUES ($1, $2, $3, $4, false)
+         RETURNING id, token_version`,
+        [tenantId, emailLimpo, hash, nomeLimpo]
+      );
+      const usuarioId = usuarioRows[0].id;
+
+      await gerarEEnviarToken(client, { id: usuarioId, email: emailLimpo, whatsapp });
+
+      await client.query('COMMIT');
+
+      // Loga o usuário já autenticado (mas com email_verified=false) pra ele
+      // seguir direto pra tela de validação do token (CA07).
+      const token = fastify.jwt.sign(
+        { userId: usuarioId, tenantId, email: emailLimpo, tokenVersion: usuarioRows[0].token_version },
+        { expiresIn: '7d' }
+      );
+
+      reply.code(201);
+      return {
+        token,
+        nome: nomeLimpo,
+        email: emailLimpo,
+        email_verified: false,
+        email_mascarado: tokenService.mascararEmail(emailLimpo),
+      };
+    } catch (erro) {
+      await client.query('ROLLBACK');
+      // Corrida entre a verificação acima e o INSERT (unique keys do banco).
+      if (erro.code === '23505') {
+        const msg = /whatsapp/i.test(erro.constraint || '')
+          ? 'Este número de WhatsApp já está associado a uma conta.'
+          : 'Este e-mail já está cadastrado. Faça login ou use outro e-mail.';
+        return reply.code(409).send({ error: msg });
+      }
+      throw erro;
+    } finally {
+      client.release();
+    }
+  });
+
+  // Valida o token de 6 dígitos e ativa o e-mail (CA08). Autenticado: o
+  // usuário já está logado desde o cadastro (ou desde o login sem validação —
+  // CA10).
+  fastify.post('/api/auth/verify-token', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const { userId } = request.user;
+    const codigo = String((request.body || {}).token || '').trim();
+
+    if (!/^\d{6}$/.test(codigo)) {
+      return reply.code(400).send({ error: 'Código incorreto. Tente novamente.' });
+    }
+
+    const { rows } = await pool.query(
+      `SELECT id, token, expires_at, tentativas
+       FROM tokens_validacao
+       WHERE user_id = $1 AND NOT usado
+       ORDER BY criado_em DESC
+       LIMIT 1`,
+      [userId]
+    );
+    const pendente = rows[0];
+    if (!pendente) {
+      return reply.code(400).send({ error: 'Nenhum código pendente. Solicite um novo.' });
+    }
+    if (new Date(pendente.expires_at).getTime() < Date.now()) {
+      return reply.code(400).send({ error: 'Código expirado. Solicite um novo.' });
+    }
+    if (pendente.tentativas >= MAX_TENTATIVAS_TOKEN) {
+      return reply.code(400).send({ error: 'Número máximo de tentativas atingido. Solicite um novo código.' });
+    }
+
+    if (pendente.token !== codigo) {
+      const { rows: attRows } = await pool.query(
+        'UPDATE tokens_validacao SET tentativas = tentativas + 1 WHERE id = $1 RETURNING tentativas',
+        [pendente.id]
+      );
+      if (attRows[0].tentativas >= MAX_TENTATIVAS_TOKEN) {
+        // Esgotou as tentativas: invalida o token pra forçar um reenvio.
+        await pool.query('UPDATE tokens_validacao SET usado = true WHERE id = $1', [pendente.id]);
+        return reply.code(400).send({ error: 'Número máximo de tentativas atingido. Solicite um novo código.' });
+      }
+      return reply.code(400).send({ error: 'Código incorreto. Tente novamente.' });
+    }
+
+    // Token correto: marca como usado (uso único — CA05) e verifica o e-mail.
+    await pool.query('UPDATE tokens_validacao SET usado = true WHERE id = $1', [pendente.id]);
+    await pool.query('UPDATE usuarios SET email_verified = true WHERE id = $1', [userId]);
+
+    return { ok: true, message: 'E-mail verificado! Seu trial de 14 dias está ativo.' };
+  });
+
+  // Reenvio de token (CA11): novo token, invalida o anterior, cooldown de 60s
+  // e limite de 5 por hora.
+  fastify.post('/api/auth/resend-token', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const { userId, email } = request.user;
+
+    const { rows: contagem } = await pool.query(
+      `SELECT
+         COUNT(*)::int AS na_hora,
+         MAX(criado_em) AS ultimo
+       FROM tokens_validacao
+       WHERE user_id = $1 AND criado_em > now() - interval '1 hour'`,
+      [userId]
+    );
+    if (contagem[0].na_hora >= MAX_REENVIOS_HORA) {
+      return reply.code(429).send({ error: 'Limite de reenvios atingido. Tente novamente mais tarde.' });
+    }
+    if (contagem[0].ultimo && Date.now() - new Date(contagem[0].ultimo).getTime() < REENVIO_COOLDOWN_SEGUNDOS * 1000) {
+      return reply.code(429).send({ error: 'Aguarde alguns segundos antes de solicitar um novo código.' });
+    }
+
+    // Precisa do WhatsApp do tenant pra reenviar pelo mesmo canal do cadastro.
+    const { rows: tenantRows } = await pool.query(
+      `SELECT t.whatsapp FROM usuarios u JOIN tenants t ON t.id = u.tenant_id WHERE u.id = $1`,
+      [userId]
+    );
+    const whatsapp = tenantRows[0] ? tenantRows[0].whatsapp : null;
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      // Invalida qualquer token pendente antes de gerar o novo.
+      await client.query('UPDATE tokens_validacao SET usado = true WHERE user_id = $1 AND NOT usado', [userId]);
+      await gerarEEnviarToken(client, { id: userId, email, whatsapp });
+      await client.query('COMMIT');
+    } catch (erro) {
+      await client.query('ROLLBACK');
+      throw erro;
+    } finally {
+      client.release();
+    }
+
+    return { ok: true };
+  });
+
+  // Status do tenant logado: usado pela tela de validação e pelo banner de
+  // trial no portal (CA09). Devolve dias restantes do trial.
+  fastify.get('/api/tenant/status', { preHandler: [fastify.authenticate] }, async (request) => {
+    const { userId, tenantId } = request.user;
+    const { rows } = await pool.query(
+      `SELECT u.email, u.email_verified, t.status, t.plano, t.trial_expires_at
+       FROM usuarios u JOIN tenants t ON t.id = u.tenant_id
+       WHERE u.id = $1`,
+      [userId]
+    );
+    const info = rows[0] || {};
+    let diasRestantes = null;
+    if (info.trial_expires_at) {
+      const ms = new Date(info.trial_expires_at).getTime() - Date.now();
+      diasRestantes = Math.max(0, Math.ceil(ms / (24 * 60 * 60 * 1000)));
+    }
+    return {
+      tenant_id: tenantId,
+      email: info.email,
+      email_mascarado: info.email ? tokenService.mascararEmail(info.email) : null,
+      email_verified: !!info.email_verified,
+      status: info.status,
+      plano: info.plano,
+      trial_expires_at: info.trial_expires_at,
+      dias_restantes: diasRestantes,
+    };
   });
 
   // ---------- Agenda ----------
