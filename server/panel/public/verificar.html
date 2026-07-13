@@ -156,7 +156,7 @@
     try {
       const res = await fetch('/api/auth/resend-token', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
