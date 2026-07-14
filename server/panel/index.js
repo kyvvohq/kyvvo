@@ -358,7 +358,7 @@ async function start() {
   // usuário já está logado desde o cadastro (ou desde o login sem validação —
   // CA10).
   fastify.post('/api/auth/verify-token', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const { userId } = request.user;
+    const { userId, tenantId } = request.user;
     const codigo = String((request.body || {}).token || '').trim();
 
     if (!/^\d{6}$/.test(codigo)) {
@@ -400,6 +400,10 @@ async function start() {
     // Token correto: marca como usado (uso único — CA05) e verifica o e-mail.
     await pool.query('UPDATE tokens_validacao SET usado = true WHERE id = $1', [pendente.id]);
     await pool.query('UPDATE usuarios SET email_verified = true WHERE id = $1', [userId]);
+    // ativado_em (US30) marca o momento exato da ativação — usado depois pra
+    // calcular o trial (ativado_em + 14 dias). COALESCE garante que revalidar
+    // um token (ou reprocessar) nunca sobrescreva a data já registrada.
+    await pool.query('UPDATE tenants SET ativado_em = COALESCE(ativado_em, now()) WHERE id = $1', [tenantId]);
 
     return { ok: true, message: 'E-mail verificado! Seu trial de 14 dias está ativo.' };
   });
@@ -1204,7 +1208,7 @@ async function start() {
 
   fastify.get('/admin/api/tenants', { preHandler: [fastify.authenticateAdmin] }, async () => {
     const { rows } = await pool.query(
-      `SELECT t.id, t.nome, t.segmento, t.ativo, t.criado_em,
+      `SELECT t.id, t.nome, t.segmento, t.ativo, t.criado_em, t.ativado_em,
               (SELECT COUNT(*)::int FROM usuarios u WHERE u.tenant_id = t.id) AS total_usuarios
        FROM tenants t
        ORDER BY t.criado_em DESC`
