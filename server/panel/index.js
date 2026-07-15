@@ -1155,16 +1155,33 @@ async function start() {
   // separados dos tenants) — nunca fastify.authenticate. Servem a equipe da
   // Kyvvo, não os clientes.
 
-  // Status de conta exibido na listagem de tenants (US26/CA02). Usa os campos
-  // já existentes desde o cadastro self-service (US20) — `status` e
-  // `trial_expires_at` — sem calcular nada novo a partir de `ativado_em`
-  // (esse cálculo mais preciso de trial é escopo da US31, que também
-  // atualiza esta mesma coluna).
+  // Indicador de trial somente leitura (US31/CA02) — calculado a partir de
+  // `ativado_em` (data real de ativação da conta), não de `trial_expires_at`
+  // (que reflete a data de cadastro/US20 e pode divergir da ativação).
+  // trial_ativo = ativado_em não nulo E ativado_em + TRIAL_DIAS dias >= hoje.
+  function calcularTrialTenant(tenant) {
+    if (!tenant.ativado_em) {
+      return { trialAtivo: false, trialInicio: null, trialFim: null, trialDiasRestantes: null };
+    }
+    const inicio = new Date(tenant.ativado_em);
+    const fim = new Date(inicio.getTime() + TRIAL_DIAS * 24 * 60 * 60 * 1000);
+    const diasRestantes = Math.ceil((fim.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
+    return {
+      trialAtivo: fim.getTime() >= Date.now(),
+      trialInicio: inicio.toISOString(),
+      trialFim: fim.toISOString(),
+      trialDiasRestantes: diasRestantes,
+    };
+  }
+
+  // Status de conta exibido na listagem de tenants e no detalhe (US26/US28/
+  // CA02) — o estado de trial usa `calcularTrialTenant` (US31), baseada em
+  // `ativado_em`, no lugar do cálculo antigo por `trial_expires_at`.
   function statusContaTenant(tenant) {
     if (!tenant.ativo) return 'Inativo';
     if (tenant.status === 'trial') {
-      const aindaNoPrazo = tenant.trial_expires_at && new Date(tenant.trial_expires_at) >= new Date();
-      return aindaNoPrazo ? 'Trial ativo' : 'Trial expirado';
+      if (!tenant.ativado_em) return 'Não ativado';
+      return calcularTrialTenant(tenant).trialAtivo ? 'Trial ativo' : 'Trial expirado';
     }
     if (tenant.status === 'ativo') return 'Ativo';
     if (tenant.status === 'suspenso') return 'Suspenso';
@@ -1267,7 +1284,10 @@ async function start() {
     );
 
     return {
-      tenants: rows.map((t) => ({ ...t, status_conta: statusContaTenant(t) })),
+      tenants: rows.map((t) => {
+        const trial = calcularTrialTenant(t);
+        return { ...t, status_conta: statusContaTenant(t), trial_ativo: trial.trialAtivo, trial_dias_restantes: trial.trialDiasRestantes };
+      }),
       page: pageNum,
       limit: limitNum,
       total,
@@ -1310,19 +1330,18 @@ async function start() {
       [id]
     );
 
-    // Dias restantes de trial (US28/CA04) — mesmo cálculo do banner de trial
-    // do portal (GET /api/tenant/status).
-    let diasRestantesTrial = null;
-    if (tenant.trial_expires_at) {
-      const ms = new Date(tenant.trial_expires_at).getTime() - Date.now();
-      diasRestantesTrial = Math.max(0, Math.ceil(ms / (24 * 60 * 60 * 1000)));
-    }
+    // Indicador de trial somente leitura (US31/CA05) — todo o cálculo de
+    // datas acontece aqui; o frontend só formata e exibe.
+    const trial = calcularTrialTenant(tenant);
 
     return {
       ...tenant,
       status_conta: statusContaTenant(tenant),
       plano_atual: planoAtualTenant(tenant),
-      dias_restantes_trial: diasRestantesTrial,
+      trial_ativo: trial.trialAtivo,
+      trial_inicio: trial.trialInicio,
+      trial_fim: trial.trialFim,
+      trial_dias_restantes: trial.trialDiasRestantes,
       responsavel,
       modulos_ativos: modulosAtivos,
       usuarios,

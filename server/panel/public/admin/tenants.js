@@ -41,8 +41,10 @@ const COLUNAS_ORDENAVEIS = [
 const STATUS_CLASSES = {
   'Trial ativo': 'badge-trial-ativo',
   'Trial expirado': 'badge-trial-expirado',
+  'Não ativado': 'badge-status-nao-ativado',
   Ativo: 'badge-status-ativo',
   Inativo: 'badge-status-inativo',
+  Suspenso: 'badge-status-suspenso',
 };
 
 const estado = {
@@ -93,6 +95,16 @@ function escapeHtml(valor) {
   }[c]));
 }
 
+// Status "Trial ativo" ganha a contagem de dias restantes ao lado (US31/
+// CA06) — só quando o backend manda `trial_dias_restantes` (ausente em
+// tenants que nunca chegaram a esse estado).
+function renderStatusLabel(t) {
+  if (t.status_conta === 'Trial ativo' && t.trial_dias_restantes !== undefined && t.trial_dias_restantes !== null) {
+    return `Trial ativo (${t.trial_dias_restantes} dias)`;
+  }
+  return t.status_conta;
+}
+
 function renderLinha(t) {
   const statusClasse = STATUS_CLASSES[t.status_conta] || 'badge-status-inativo';
   const email = escapeHtml(t.email);
@@ -104,7 +116,7 @@ function renderLinha(t) {
       <td>${formatarWhatsapp(t.whatsapp)}</td>
       <td>${formatarData(t.cadastrado_em)}</td>
       <td>${formatarData(t.ativado_em)}</td>
-      <td><span class="badge badge-status ${statusClasse}">${escapeHtml(t.status_conta)}</span></td>
+      <td><span class="badge badge-status ${statusClasse}">${escapeHtml(renderStatusLabel(t))}</span></td>
       <td><a class="btn-ver-detalhes" href="/admin/tenants/${encodeURIComponent(t.id)}">Ver detalhes</a></td>
     </tr>
   `;
