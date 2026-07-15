@@ -498,6 +498,36 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .badge-status-ativo { background: rgba(0, 212, 255, 0.15); color: var(--cyan); }
 .badge-status-inativo { background: rgba(161, 165, 196, 0.15); color: #a1a5c4; }
 .badge-status-suspenso { background: rgba(240, 179, 84, 0.15); color: #f0b354; }
+.badge-status-nao-ativado { background: rgba(250, 204, 21, 0.15); color: #facc15; }
+
+/* Indicador de trial somente leitura (US31) */
+.badge-trial-indicador { margin-left: 0; }
+
+.toggle-readonly {
+  display: inline-block;
+  position: relative;
+  width: 34px;
+  height: 18px;
+  border-radius: 100px;
+  vertical-align: middle;
+  margin: 0 8px 0 4px;
+  pointer-events: none;
+}
+
+.toggle-readonly::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.toggle-readonly.toggle-on { background: #4ade80; }
+.toggle-readonly.toggle-on::after { left: 18px; }
+.toggle-readonly.toggle-off { background: #3a3f5c; }
 
 .tabela-tenants tbody tr { cursor: pointer; }
 

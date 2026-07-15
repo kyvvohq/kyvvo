@@ -44,6 +44,7 @@ const SEGMENTOS_ADMIN = {
 const STATUS_CLASSES = {
   'Trial ativo': 'badge-trial-ativo',
   'Trial expirado': 'badge-trial-expirado',
+  'Não ativado': 'badge-status-nao-ativado',
   Ativo: 'badge-status-ativo',
   Inativo: 'badge-status-inativo',
   Suspenso: 'badge-status-suspenso',
@@ -111,17 +112,38 @@ function renderSecaoResponsavel(t) {
   `;
 }
 
+// Indicador de trial somente leitura (US31/CA01-CA04) — toggle + badge, sem
+// nenhum handler de clique/edição. Todo o cálculo (trial_ativo/trial_inicio/
+// trial_fim/trial_dias_restantes) vem pronto do backend (CA05).
+function renderIndicadorTrial(t) {
+  const ativado = Boolean(t.trial_inicio);
+  const classeToggle = t.trial_ativo ? 'toggle-on' : 'toggle-off';
+  const rotulo = !ativado ? 'Não ativado' : t.trial_ativo ? 'Trial ativo' : 'Trial expirado';
+  const classeBadge = !ativado ? 'badge-status-nao-ativado' : t.trial_ativo ? 'badge-trial-ativo' : 'badge-trial-expirado';
+  const diasHtml = ativado
+    ? `<p><strong>Dias restantes:</strong> ${
+        t.trial_ativo ? t.trial_dias_restantes : `Expirado há ${Math.abs(t.trial_dias_restantes)} dias`
+      }</p>`
+    : '';
+  return `
+    <p>
+      <strong>Trial:</strong>
+      <span class="toggle-readonly ${classeToggle}" aria-hidden="true"></span>
+      <span class="badge badge-trial-indicador ${classeBadge}">${escapeHtml(rotulo)}</span>
+    </p>
+    ${ativado ? `<p><strong>Início do trial:</strong> ${formatarDataHora(t.trial_inicio)}</p>` : ''}
+    ${ativado ? `<p><strong>Término do trial:</strong> ${formatarDataHora(t.trial_fim)}</p>` : ''}
+    ${diasHtml}
+  `;
+}
+
 function renderSecaoStatus(t) {
   const statusClasse = STATUS_CLASSES[t.status_conta] || 'badge-status-inativo';
-  const diasRestantesHtml =
-    t.status_conta === 'Trial ativo' && t.dias_restantes_trial !== null
-      ? `<p><strong>Dias restantes de trial:</strong> ${t.dias_restantes_trial}</p>`
-      : '';
   return `
     <section class="secao-detalhe">
       <h3>Status da conta</h3>
       <p><strong>Status atual:</strong> <span class="badge badge-status ${statusClasse}">${escapeHtml(t.status_conta)}</span></p>
-      ${diasRestantesHtml}
+      ${renderIndicadorTrial(t)}
       <p><strong>Plano atual:</strong> ${escapeHtml(t.plano_atual)}</p>
     </section>
   `;

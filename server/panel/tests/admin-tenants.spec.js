@@ -55,6 +55,30 @@ test.describe('Admin — listagem de tenants (US26)', () => {
     await expect(linha.locator('.btn-ver-detalhes')).toHaveAttribute('href', '/admin/tenants/t1');
   });
 
+  test('Status "Trial ativo" mostra a contagem de dias restantes (US31/CA06)', async ({ page }) => {
+    await entrarNaListaDeTenants(page, [tenantMock({ status_conta: 'Trial ativo', trial_ativo: true, trial_dias_restantes: 7 })]);
+    const linha = page.locator('.tabela-tenants tbody tr').first();
+    await expect(linha.locator('.badge-status')).toHaveText('Trial ativo (7 dias)');
+  });
+
+  test('Status "Não ativado" usa o badge amarelo dedicado (US31/CA06)', async ({ page }) => {
+    await entrarNaListaDeTenants(page, [
+      tenantMock({ ativado_em: null, status_conta: 'Não ativado', trial_ativo: false, trial_dias_restantes: null }),
+    ]);
+    const linha = page.locator('.tabela-tenants tbody tr').first();
+    await expect(linha.locator('.badge-status')).toHaveText('Não ativado');
+    await expect(linha.locator('.badge-status-nao-ativado')).toBeVisible();
+  });
+
+  test('Status "Trial expirado" não mostra contagem de dias (US31/CA06)', async ({ page }) => {
+    await entrarNaListaDeTenants(page, [
+      tenantMock({ status_conta: 'Trial expirado', trial_ativo: false, trial_dias_restantes: -3 }),
+    ]);
+    const linha = page.locator('.tabela-tenants tbody tr').first();
+    await expect(linha.locator('.badge-status')).toHaveText('Trial expirado');
+    await expect(linha.locator('.badge-trial-expirado')).toBeVisible();
+  });
+
   test('escapa nome/responsavel/email antes de inserir na tabela (proteção contra XSS)', async ({ page }) => {
     let dialogDisparado = false;
     page.on('dialog', async (dialog) => {

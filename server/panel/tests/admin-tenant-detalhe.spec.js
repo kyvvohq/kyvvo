@@ -18,7 +18,10 @@ function tenantDetalheMock(overrides = {}) {
     plano: null,
     status_conta: 'Ativo',
     plano_atual: 'Não definido',
-    dias_restantes_trial: null,
+    trial_ativo: false,
+    trial_inicio: null,
+    trial_fim: null,
+    trial_dias_restantes: null,
     responsavel: { nome: 'Ana Paula', email: 'ana@salaokyvvo.com' },
     modulos_ativos: [{ key: 'agenda_inteligente', nome: 'Agenda Inteligente' }],
     usuarios: [{ id: 'u1', email: 'ana@salaokyvvo.com', nome: 'Ana Paula' }],
@@ -69,21 +72,22 @@ test.describe('Admin — detalhe do tenant (US28)', () => {
     await expect(page.locator('.secao-detalhe', { hasText: 'Dados do responsável' })).toContainText('Não ativado');
   });
 
-  test('seção Status da conta com dias restantes de trial (CA04)', async ({ page }) => {
+  test('seção Status da conta com plano atual (CA04)', async ({ page }) => {
     await entrarNoDetalheDoTenant(
       page,
       tenantDetalheMock({
         status: 'trial',
-        trial_expires_at: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
         status_conta: 'Trial ativo',
         plano_atual: 'Trial',
-        dias_restantes_trial: 5,
+        trial_ativo: true,
+        trial_inicio: '2026-07-10T11:30:00Z',
+        trial_fim: '2026-07-24T11:30:00Z',
+        trial_dias_restantes: 5,
       })
     );
 
     const secao = page.locator('.secao-detalhe', { hasText: 'Status da conta' });
     await expect(page.locator('.badge-status')).toHaveText('Trial ativo');
-    await expect(secao).toContainText('Dias restantes de trial: 5');
     await expect(secao).toContainText('Plano atual: Trial');
   });
 
@@ -91,6 +95,76 @@ test.describe('Admin — detalhe do tenant (US28)', () => {
     await entrarNoDetalheDoTenant(page, tenantDetalheMock({ status: 'suspenso', status_conta: 'Suspenso' }));
     await expect(page.locator('.badge-status')).toHaveText('Suspenso');
     await expect(page.locator('.badge-status-suspenso')).toBeVisible();
+  });
+
+  test('indicador de trial somente leitura — ativo (US31/CA01-CA04)', async ({ page }) => {
+    await entrarNoDetalheDoTenant(
+      page,
+      tenantDetalheMock({
+        trial_ativo: true,
+        trial_inicio: '2026-07-10T11:30:00Z',
+        trial_fim: '2026-07-24T11:30:00Z',
+        trial_dias_restantes: 5,
+      })
+    );
+
+    const secao = page.locator('.secao-detalhe', { hasText: 'Status da conta' });
+    await expect(secao.locator('.badge-trial-indicador')).toHaveText('Trial ativo');
+    await expect(secao.locator('.toggle-readonly')).toHaveClass(/toggle-on/);
+    await expect(secao).toContainText('Início do trial: 10/07/2026');
+    await expect(secao).toContainText('Término do trial: 24/07/2026');
+    await expect(secao).toContainText('Dias restantes: 5');
+  });
+
+  test('indicador de trial somente leitura — expirado (US31/CA03)', async ({ page }) => {
+    await entrarNoDetalheDoTenant(
+      page,
+      tenantDetalheMock({
+        trial_ativo: false,
+        trial_inicio: '2026-06-01T11:30:00Z',
+        trial_fim: '2026-06-15T11:30:00Z',
+        trial_dias_restantes: -30,
+      })
+    );
+
+    const secao = page.locator('.secao-detalhe', { hasText: 'Status da conta' });
+    await expect(secao.locator('.badge-trial-indicador')).toHaveText('Trial expirado');
+    await expect(secao.locator('.toggle-readonly')).toHaveClass(/toggle-off/);
+    await expect(secao).toContainText('Dias restantes: Expirado há 30 dias');
+  });
+
+  test('indicador de trial somente leitura — não ativado (US31/CA03)', async ({ page }) => {
+    await entrarNoDetalheDoTenant(
+      page,
+      tenantDetalheMock({
+        trial_ativo: false,
+        trial_inicio: null,
+        trial_fim: null,
+        trial_dias_restantes: null,
+      })
+    );
+
+    const secao = page.locator('.secao-detalhe', { hasText: 'Status da conta' });
+    await expect(secao.locator('.badge-trial-indicador')).toHaveText('Não ativado');
+    await expect(secao.locator('.toggle-readonly')).toHaveClass(/toggle-off/);
+    await expect(secao).not.toContainText('Início do trial');
+    await expect(secao).not.toContainText('Término do trial');
+  });
+
+  test('indicador de trial não tem controle interativo/clicável (US31/CA01)', async ({ page }) => {
+    await entrarNoDetalheDoTenant(
+      page,
+      tenantDetalheMock({
+        trial_ativo: true,
+        trial_inicio: '2026-07-10T11:30:00Z',
+        trial_fim: '2026-07-24T11:30:00Z',
+        trial_dias_restantes: 5,
+      })
+    );
+
+    const toggle = page.locator('.toggle-readonly');
+    await expect(toggle).toBeVisible();
+    expect(await toggle.evaluate((el) => el.tagName)).toBe('SPAN');
   });
 
   test('seção Módulos ativos como chips (CA05)', async ({ page }) => {
