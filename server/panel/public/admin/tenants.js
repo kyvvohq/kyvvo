@@ -50,6 +50,7 @@ const estado = {
   limit: 20,
   orderBy: 'cadastrado_em',
   orderDir: 'desc',
+  search: '',
 };
 
 let tenantsAtuais = [];
@@ -130,21 +131,31 @@ async function renderTenants() {
     order_by: estado.orderBy,
     order_dir: estado.orderDir,
   });
+  if (estado.search) {
+    params.set('search', estado.search);
+  }
   const data = await api(`/admin/api/tenants?${params.toString()}`);
   if (!data) return;
 
   tenantsAtuais = data.tenants || [];
 
   if (tenantsAtuais.length === 0) {
+    const mensagemVazia = estado.search
+      ? `Nenhum tenant encontrado para '${escapeHtml(estado.search)}'.`
+      : 'Nenhum tenant cadastrado ainda.';
     conteudo.innerHTML = `
-      <div class="nav-periodo"><strong>Tenants</strong></div>
-      <div class="vazio">Nenhum tenant cadastrado ainda.</div>
+      <div class="nav-periodo"><strong>${estado.search ? '0 tenants encontrados' : 'Tenants'}</strong></div>
+      <div class="vazio">${mensagemVazia}</div>
     `;
     return;
   }
 
+  const totalLabel = estado.search
+    ? `${data.total ?? tenantsAtuais.length} tenants encontrados`
+    : `Tenants (${data.total ?? tenantsAtuais.length})`;
+
   conteudo.innerHTML = `
-    <div class="nav-periodo"><strong>Tenants (${data.total ?? tenantsAtuais.length})</strong></div>
+    <div class="nav-periodo"><strong>${totalLabel}</strong></div>
     <div class="tabela-wrapper">
       <table class="tabela-tenants">
         <thead><tr>${renderCabecalho()}<th>Ações</th></tr></thead>
@@ -197,5 +208,30 @@ async function renderTenants() {
     });
   }
 }
+
+// Campo de busca (US27) — fica fora do #conteudo pra não perder o foco a
+// cada re-render/refetch disparado pelo debounce.
+const inputBusca = document.getElementById('busca-tenants');
+const btnLimparBusca = document.getElementById('btn-limpar-busca');
+let debounceBusca = null;
+
+inputBusca.addEventListener('input', () => {
+  btnLimparBusca.hidden = inputBusca.value.length === 0;
+  clearTimeout(debounceBusca);
+  debounceBusca = setTimeout(() => {
+    estado.search = inputBusca.value.trim();
+    estado.page = 1;
+    renderTenants();
+  }, 400);
+});
+
+btnLimparBusca.addEventListener('click', () => {
+  inputBusca.value = '';
+  btnLimparBusca.hidden = true;
+  clearTimeout(debounceBusca);
+  estado.search = '';
+  estado.page = 1;
+  renderTenants();
+});
 
 renderTenants();

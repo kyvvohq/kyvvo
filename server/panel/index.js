@@ -1236,7 +1236,19 @@ async function start() {
     const orderColumn = TENANTS_ORDER_COLUMNS[orderByParam] || TENANTS_ORDER_COLUMNS.cadastrado_em;
     const orderDir = String(orderDirParam).toLowerCase() === 'asc' ? 'ASC' : 'DESC';
 
-    const { rows: totalRows } = await pool.query('SELECT COUNT(*)::int AS total FROM tenants');
+    // Busca por e-mail (de qualquer usuário do tenant) ou WhatsApp — parâmetro
+    // sempre bindado via $n, nunca interpolado na query (US27/CA05).
+    const search = typeof request.query.search === 'string' ? request.query.search.trim() : '';
+    const whereClause = search
+      ? `WHERE t.whatsapp ILIKE $1
+           OR EXISTS (SELECT 1 FROM usuarios u WHERE u.tenant_id = t.id AND u.email ILIKE $1)`
+      : '';
+    const searchParams = search ? [`%${search}%`] : [];
+
+    const { rows: totalRows } = await pool.query(
+      `SELECT COUNT(*)::int AS total FROM tenants t ${whereClause}`,
+      searchParams
+    );
     const total = totalRows[0].total;
 
     const { rows } = await pool.query(
@@ -1248,9 +1260,10 @@ async function start() {
        LEFT JOIN LATERAL (
          SELECT nome, email FROM usuarios WHERE tenant_id = t.id ORDER BY criado_em ASC LIMIT 1
        ) resp ON true
+       ${whereClause}
        ORDER BY ${orderColumn} ${orderDir} NULLS LAST
-       LIMIT $1 OFFSET $2`,
-      [limitNum, offset]
+       LIMIT $${searchParams.length + 1} OFFSET $${searchParams.length + 2}`,
+      [...searchParams, limitNum, offset]
     );
 
     return {

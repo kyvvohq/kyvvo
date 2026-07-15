@@ -417,6 +417,54 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   background: #232847;
 }
 
+/* Busca da listagem de tenants (US27) — full width no mobile, até 400px
+   alinhado à esquerda no desktop (CA06). */
+.busca-tenants-wrapper {
+  position: relative;
+  width: 100%;
+  margin-bottom: 16px;
+}
+
+@media (min-width: 640px) {
+  .busca-tenants-wrapper {
+    max-width: 400px;
+  }
+}
+
+.busca-tenants-input {
+  width: 100%;
+  padding: 12px 40px;
+  margin: 0;
+}
+
+.busca-tenants-icone {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 14px;
+  pointer-events: none;
+}
+
+.btn-limpar-busca {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: auto;
+  margin: 0;
+  padding: 4px 8px;
+  background: transparent;
+  border: none;
+  color: #a1a5c4;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.btn-limpar-busca:hover {
+  color: #f2f2f7;
+}
+
 .perfil-form label { margin-top: 20px; }
 
 /* Ações de agendamento (US08) */

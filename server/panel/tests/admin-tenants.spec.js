@@ -143,3 +143,91 @@ test.describe('Admin — listagem de tenants (US26)', () => {
     expect(requisicoes.at(-1)).toContain('page=2');
   });
 });
+
+test.describe('Admin — busca na listagem de tenants (US27)', () => {
+  test('campo de busca com placeholder e ícone de lupa (CA01)', async ({ page }) => {
+    await entrarNaListaDeTenants(page, [tenantMock()]);
+    const campo = page.locator('#busca-tenants');
+    await expect(campo).toHaveAttribute('placeholder', 'Buscar por e-mail ou WhatsApp...');
+    await expect(page.locator('.busca-tenants-icone')).toBeVisible();
+  });
+
+  test('digitar aciona a busca com debounce e reseta pra página 1 (CA02, CA05)', async ({ page }) => {
+    const requisicoes = [];
+    await page.route('**/admin/api/tenants*', (route) => {
+      requisicoes.push(route.request().url());
+      return route.fulfill({ json: { tenants: [tenantMock()], page: 1, limit: 20, total: 1, total_paginas: 1 } });
+    });
+    await page.addInitScript(() => {
+      window.localStorage.setItem('kyvvo_admin_token', 'admin-token-fake');
+    });
+    await page.goto('/admin/tenants.html');
+
+    await page.fill('#busca-tenants', '@gmail');
+
+    await expect.poll(() => requisicoes.at(-1)).toContain('search=%40gmail');
+    expect(requisicoes.at(-1)).toContain('page=1');
+  });
+
+  test('busca por trecho do WhatsApp envia o termo ao backend (CA03)', async ({ page }) => {
+    const requisicoes = [];
+    await page.route('**/admin/api/tenants*', (route) => {
+      requisicoes.push(route.request().url());
+      return route.fulfill({ json: { tenants: [tenantMock()], page: 1, limit: 20, total: 1, total_paginas: 1 } });
+    });
+    await page.addInitScript(() => {
+      window.localStorage.setItem('kyvvo_admin_token', 'admin-token-fake');
+    });
+    await page.goto('/admin/tenants.html');
+
+    await page.fill('#busca-tenants', '3499');
+    await expect.poll(() => requisicoes.at(-1)).toContain('search=3499');
+  });
+
+  test('contador e estado vazio de busca sem resultados (CA04)', async ({ page }) => {
+    await page.route('**/admin/api/tenants*', (route) => {
+      const url = new URL(route.request().url());
+      const search = url.searchParams.get('search');
+      if (search) {
+        return route.fulfill({ json: { tenants: [], page: 1, limit: 20, total: 0, total_paginas: 1 } });
+      }
+      return route.fulfill({ json: { tenants: [tenantMock()], page: 1, limit: 20, total: 1, total_paginas: 1 } });
+    });
+    await page.addInitScript(() => {
+      window.localStorage.setItem('kyvvo_admin_token', 'admin-token-fake');
+    });
+    await page.goto('/admin/tenants.html');
+
+    await page.fill('#busca-tenants', 'inexistente');
+    await expect(page.getByText("Nenhum tenant encontrado para 'inexistente'.")).toBeVisible();
+  });
+
+  test('botão limpar busca aparece ao digitar e restaura a listagem completa (CA04)', async ({ page }) => {
+    const requisicoes = [];
+    await page.route('**/admin/api/tenants*', (route) => {
+      const url = new URL(route.request().url());
+      requisicoes.push(url.toString());
+      const search = url.searchParams.get('search');
+      if (search) {
+        return route.fulfill({ json: { tenants: [], page: 1, limit: 20, total: 0, total_paginas: 1 } });
+      }
+      return route.fulfill({ json: { tenants: [tenantMock()], page: 1, limit: 20, total: 1, total_paginas: 1 } });
+    });
+    await page.addInitScript(() => {
+      window.localStorage.setItem('kyvvo_admin_token', 'admin-token-fake');
+    });
+    await page.goto('/admin/tenants.html');
+
+    const btnLimpar = page.locator('#btn-limpar-busca');
+    await expect(btnLimpar).toBeHidden();
+
+    await page.fill('#busca-tenants', 'termo');
+    await expect(btnLimpar).toBeVisible();
+    await expect.poll(() => requisicoes.at(-1)).toContain('search=termo');
+
+    await btnLimpar.click();
+    await expect(btnLimpar).toBeHidden();
+    await expect(page.locator('#busca-tenants')).toHaveValue('');
+    await expect.poll(() => requisicoes.at(-1)).not.toContain('search=');
+  });
+});
