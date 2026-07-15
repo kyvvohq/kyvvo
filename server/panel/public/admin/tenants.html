@@ -26,7 +26,14 @@
     <button class="sair" id="btn-sair">Sair</button>
   </div>
 </div>
-<div class="conteudo" id="conteudo" style="max-width: 1100px;"></div>
+<div class="conteudo" style="max-width: 1100px;">
+  <div class="busca-tenants-wrapper">
+    <span class="busca-tenants-icone" aria-hidden="true">🔍</span>
+    <input type="search" id="busca-tenants" class="busca-tenants-input" placeholder="Buscar por e-mail ou WhatsApp..." aria-label="Buscar por e-mail ou WhatsApp">
+    <button type="button" id="btn-limpar-busca" class="btn-limpar-busca" hidden aria-label="Limpar busca">✕</button>
+  </div>
+  <div id="conteudo"></div>
+</div>
 <footer class="rodape-app">
   <div class="logo">ky<span class="logo-vv">vv</span>o</div>
   <p class="rodape-app-copy">© 2026 Kyvvo. Todos os direitos reservados.</p>
