@@ -9,7 +9,6 @@ const tokenService = require('./token-service');
 
 // ---------- Cadastro self-service (US20) ----------
 const TRIAL_DIAS = 14;
-const MAX_TENTATIVAS_TOKEN = 5;
 const MAX_REENVIOS_HORA = 5;
 const REENVIO_COOLDOWN_SEGUNDOS = 60;
 // Módulos liberados durante o trial ("plano Profissional" — CA09). Todo
@@ -45,6 +44,7 @@ const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET;
 if (!ADMIN_JWT_SECRET) throw new Error('ADMIN_JWT_SECRET não configurado');
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+tokenService.init(pool);
 
 // Converte um "time" do Postgres ("08:00:00" ou "08:00") em minutos desde a
 // meia-noite, pra comparar com o horário (também em minutos) de um
@@ -223,28 +223,6 @@ async function start() {
   });
 
   // ---------- Cadastro self-service (US20) ----------
-  // Gera e persiste o token de validação — só isso fica dentro da transação
-  // de banco. O envio por e-mail/WhatsApp (chamada de rede pra provedor
-  // externo) é SEMPRE disparado depois do COMMIT e sem await bloqueando a
-  // resposta: uma chamada de rede lenta ou travada não pode segurar uma
-  // conexão do pool nem atrasar o cadastro. `enviarToken` nunca lança (usa
-  // Promise.allSettled internamente), mas o .catch aqui é defensivo.
-  async function gerarTokenPendente(client, usuarioId) {
-    const codigo = tokenService.gerarToken();
-    const expiraEm = new Date(Date.now() + tokenService.TOKEN_EXPIRACAO_MINUTOS * 60000);
-    await client.query(
-      `INSERT INTO tokens_validacao (user_id, token, expires_at) VALUES ($1, $2, $3)`,
-      [usuarioId, codigo, expiraEm.toISOString()]
-    );
-    return codigo;
-  }
-
-  function dispararEnvioToken(usuario) {
-    tokenService.enviarToken(usuario).catch((err) => {
-      fastify.log.error({ err }, 'Falha ao disparar envio do token de verificação');
-    });
-  }
-
   fastify.post('/api/auth/register', async (request, reply) => {
     const {
       nome,
@@ -318,11 +296,17 @@ async function start() {
       );
       const usuarioId = usuarioRows[0].id;
 
-      const codigo = await gerarTokenPendente(client, usuarioId);
+      // Gera e persiste o token dentro da mesma transação da criação do
+      // usuário (US21/CA01/CA05). O envio por e-mail/WhatsApp (chamada de
+      // rede pra provedor externo) é disparado depois do COMMIT e sem await
+      // bloqueando a resposta: uma chamada de rede lenta ou travada não pode
+      // segurar uma conexão do pool nem atrasar o cadastro. `enviarPorCanais`
+      // nunca lança (usa Promise.allSettled internamente).
+      const codigo = await tokenService.criarToken(client, { userId: usuarioId, tipo: 'email_verificacao' });
 
       await client.query('COMMIT');
 
-      dispararEnvioToken({ email: emailLimpo, whatsappNacional: whatsapp, token: codigo });
+      tokenService.enviarPorCanais({ token: codigo, email: emailLimpo, whatsapp, nome: nomeLimpo });
 
       // Loga o usuário já autenticado (mas com email_verified=false) pra ele
       // seguir direto pra tela de validação do token (CA07).
@@ -365,40 +349,19 @@ async function start() {
       return reply.code(400).send({ error: 'Código incorreto. Tente novamente.' });
     }
 
-    const { rows } = await pool.query(
-      `SELECT id, token, expires_at, tentativas
-       FROM tokens_validacao
-       WHERE user_id = $1 AND NOT usado
-       ORDER BY criado_em DESC
-       LIMIT 1`,
-      [userId]
-    );
-    const pendente = rows[0];
-    if (!pendente) {
-      return reply.code(400).send({ error: 'Nenhum código pendente. Solicite um novo.' });
-    }
-    if (new Date(pendente.expires_at).getTime() < Date.now()) {
-      return reply.code(400).send({ error: 'Código expirado. Solicite um novo.' });
-    }
-    if (pendente.tentativas >= MAX_TENTATIVAS_TOKEN) {
-      return reply.code(400).send({ error: 'Número máximo de tentativas atingido. Solicite um novo código.' });
+    const { valido, motivo } = await tokenService.validate({ userId, tipo: 'email_verificacao', token: codigo });
+    if (!valido) {
+      const mensagens = {
+        nao_encontrado: 'Nenhum código pendente. Solicite um novo.',
+        expirado: 'Código expirado. Solicite um novo.',
+        bloqueado: 'Número máximo de tentativas atingido. Solicite um novo código.',
+        incorreto: 'Código incorreto. Tente novamente.',
+      };
+      return reply.code(400).send({ error: mensagens[motivo] || mensagens.incorreto });
     }
 
-    if (pendente.token !== codigo) {
-      const { rows: attRows } = await pool.query(
-        'UPDATE tokens_validacao SET tentativas = tentativas + 1 WHERE id = $1 RETURNING tentativas',
-        [pendente.id]
-      );
-      if (attRows[0].tentativas >= MAX_TENTATIVAS_TOKEN) {
-        // Esgotou as tentativas: invalida o token pra forçar um reenvio.
-        await pool.query('UPDATE tokens_validacao SET usado = true WHERE id = $1', [pendente.id]);
-        return reply.code(400).send({ error: 'Número máximo de tentativas atingido. Solicite um novo código.' });
-      }
-      return reply.code(400).send({ error: 'Código incorreto. Tente novamente.' });
-    }
-
-    // Token correto: marca como usado (uso único — CA05) e verifica o e-mail.
-    await pool.query('UPDATE tokens_validacao SET usado = true WHERE id = $1', [pendente.id]);
+    // Token correto (validado e marcado como usado por `tokenService.validate`
+    // — uso único, CA05): verifica o e-mail.
     await pool.query('UPDATE usuarios SET email_verified = true WHERE id = $1', [userId]);
     // ativado_em (US30) marca o momento exato da ativação — usado depois pra
     // calcular o trial (ativado_em + 14 dias). COALESCE garante que revalidar
@@ -418,7 +381,7 @@ async function start() {
          COUNT(*)::int AS na_hora,
          MAX(criado_em) AS ultimo
        FROM tokens_validacao
-       WHERE user_id = $1 AND criado_em > now() - interval '1 hour'`,
+       WHERE user_id = $1 AND tipo = 'email_verificacao' AND criado_em > now() - interval '1 hour'`,
       [userId]
     );
     if (contagem[0].na_hora >= MAX_REENVIOS_HORA) {
@@ -439,9 +402,9 @@ async function start() {
     let codigo;
     try {
       await client.query('BEGIN');
-      // Invalida qualquer token pendente antes de gerar o novo.
-      await client.query('UPDATE tokens_validacao SET usado = true WHERE user_id = $1 AND NOT usado', [userId]);
-      codigo = await gerarTokenPendente(client, userId);
+      // Invalida qualquer token pendente do mesmo tipo antes de gerar o novo
+      // (feito internamente por `criarToken` — US21/CA05).
+      codigo = await tokenService.criarToken(client, { userId, tipo: 'email_verificacao' });
       await client.query('COMMIT');
     } catch (erro) {
       await client.query('ROLLBACK');
@@ -453,7 +416,7 @@ async function start() {
     // Tenant criado pela área admin (US16) pode não ter WhatsApp cadastrado —
     // nesse caso reenvia só por e-mail em vez de disparar pro provedor com um
     // número inexistente.
-    dispararEnvioToken({ email, whatsappNacional: whatsapp || undefined, token: codigo });
+    tokenService.enviarPorCanais({ token: codigo, email, whatsapp: whatsapp || undefined });
 
     return { ok: true };
   });
@@ -1208,7 +1171,7 @@ async function start() {
 
   fastify.get('/admin/api/tenants', { preHandler: [fastify.authenticateAdmin] }, async () => {
     const { rows } = await pool.query(
-      `SELECT t.id, t.nome, t.segmento, t.ativo, t.criado_em, t.ativado_em,
+      `SELECT t.id, t.nome, t.segmento, t.ativo, t.criado_em, t.cadastrado_em, t.ativado_em,
               (SELECT COUNT(*)::int FROM usuarios u WHERE u.tenant_id = t.id) AS total_usuarios
        FROM tenants t
        ORDER BY t.criado_em DESC`
