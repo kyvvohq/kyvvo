@@ -78,18 +78,33 @@ function renderCabecalho() {
   }).join('');
 }
 
+// `nome`/`responsavel`/`email` vêm do cadastro self-service (US20), que só
+// valida tamanho mínimo e um regex frouxo de e-mail — não impedem `<`, `>`
+// ou `"`. Escapa antes de interpolar no innerHTML pra não abrir XSS
+// armazenado contra a sessão do admin (que guarda o token no localStorage).
+function escapeHtml(valor) {
+  return String(valor ?? '').replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  }[c]));
+}
+
 function renderLinha(t) {
   const statusClasse = STATUS_CLASSES[t.status_conta] || 'badge-status-inativo';
+  const email = escapeHtml(t.email);
   return `
-    <tr data-id="${t.id}">
-      <td>${t.nome}</td>
-      <td>${t.responsavel || '—'}</td>
-      <td>${t.email ? `<a href="mailto:${t.email}">${t.email}</a>` : '—'}</td>
+    <tr data-id="${escapeHtml(t.id)}">
+      <td>${escapeHtml(t.nome)}</td>
+      <td>${t.responsavel ? escapeHtml(t.responsavel) : '—'}</td>
+      <td>${t.email ? `<a href="mailto:${email}">${email}</a>` : '—'}</td>
       <td>${formatarWhatsapp(t.whatsapp)}</td>
       <td>${formatarData(t.cadastrado_em)}</td>
       <td>${formatarData(t.ativado_em)}</td>
-      <td><span class="badge badge-status ${statusClasse}">${t.status_conta}</span></td>
-      <td><a class="btn-ver-detalhes" href="/admin/tenants/${t.id}">Ver detalhes</a></td>
+      <td><span class="badge badge-status ${statusClasse}">${escapeHtml(t.status_conta)}</span></td>
+      <td><a class="btn-ver-detalhes" href="/admin/tenants/${encodeURIComponent(t.id)}">Ver detalhes</a></td>
     </tr>
   `;
 }

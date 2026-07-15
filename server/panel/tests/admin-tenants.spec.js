@@ -55,6 +55,30 @@ test.describe('Admin — listagem de tenants (US26)', () => {
     await expect(linha.locator('.btn-ver-detalhes')).toHaveAttribute('href', '/admin/tenants/t1');
   });
 
+  test('escapa nome/responsavel/email antes de inserir na tabela (proteção contra XSS)', async ({ page }) => {
+    let dialogDisparado = false;
+    page.on('dialog', async (dialog) => {
+      dialogDisparado = true;
+      await dialog.dismiss();
+    });
+
+    await entrarNaListaDeTenants(page, [
+      tenantMock({
+        nome: '<img src=x onerror="window.__xss=true">',
+        responsavel: '"><script>window.__xss=true</script>',
+        email: 'a"onmouseover="window.__xss=true"@evil.com',
+      }),
+    ]);
+
+    const linha = page.locator('.tabela-tenants tbody tr').first();
+    await expect(linha).toBeVisible();
+    // O texto malicioso aparece escapado como texto, nunca executado.
+    await expect(linha).toContainText('<img src=x onerror=');
+    const xssExecutado = await page.evaluate(() => window.__xss === true);
+    expect(xssExecutado).toBe(false);
+    expect(dialogDisparado).toBe(false);
+  });
+
   test('estado vazio quando não há tenants cadastrados (CA05)', async ({ page }) => {
     await entrarNaListaDeTenants(page, []);
     await expect(page.locator('.vazio')).toHaveText('Nenhum tenant cadastrado ainda.');
