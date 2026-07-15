@@ -1145,6 +1145,22 @@ async function start() {
   // Todas as rotas abaixo usam fastify.authenticateAdmin (JWT/tabela
   // separados dos tenants) — nunca fastify.authenticate. Servem a equipe da
   // Kyvvo, não os clientes.
+
+  // Status de conta exibido na listagem de tenants (US26/CA02). Usa os campos
+  // já existentes desde o cadastro self-service (US20) — `status` e
+  // `trial_expires_at` — sem calcular nada novo a partir de `ativado_em`
+  // (esse cálculo mais preciso de trial é escopo da US31, que também
+  // atualiza esta mesma coluna).
+  function statusContaTenant(tenant) {
+    if (!tenant.ativo) return 'Inativo';
+    if (tenant.status === 'trial') {
+      const aindaNoPrazo = tenant.trial_expires_at && new Date(tenant.trial_expires_at) >= new Date();
+      return aindaNoPrazo ? 'Trial ativo' : 'Trial expirado';
+    }
+    if (tenant.status === 'ativo') return 'Ativo';
+    return 'Inativo';
+  }
+
   fastify.post('/admin/api/auth/login', async (request, reply) => {
     const { email, senha } = request.body || {};
     if (!email || !senha) {
@@ -1169,14 +1185,62 @@ async function start() {
     return { token, nome: admin.nome, email: admin.email };
   });
 
-  fastify.get('/admin/api/tenants', { preHandler: [fastify.authenticateAdmin] }, async () => {
+  // Colunas ordenáveis da tela de listagem de tenants (US26/CA03) — mapa
+  // explícito pra nunca interpolar `order_by` direto numa query SQL.
+  const TENANTS_ORDER_COLUMNS = {
+    nome: 't.nome',
+    cadastrado_em: 't.cadastrado_em',
+    ativado_em: 't.ativado_em',
+    status: 't.status',
+  };
+
+  fastify.get('/admin/api/tenants', { preHandler: [fastify.authenticateAdmin] }, async (request) => {
+    const { page, limit, order_by: orderByParam, order_dir: orderDirParam } = request.query;
+
+    // Sem paginação explícita, mantém o comportamento legado (lista completa,
+    // ordenada por data de cadastro do sistema) — não muda o CRUD de tenants
+    // já existente (US16/painel.html), que consome este mesmo endpoint sem
+    // esses parâmetros.
+    if (page === undefined && limit === undefined) {
+      const { rows } = await pool.query(
+        `SELECT t.id, t.nome, t.segmento, t.ativo, t.criado_em, t.cadastrado_em, t.ativado_em,
+                (SELECT COUNT(*)::int FROM usuarios u WHERE u.tenant_id = t.id) AS total_usuarios
+         FROM tenants t
+         ORDER BY t.criado_em DESC`
+      );
+      return { tenants: rows };
+    }
+
+    const limitNum = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
+    const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+    const offset = (pageNum - 1) * limitNum;
+    const orderColumn = TENANTS_ORDER_COLUMNS[orderByParam] || TENANTS_ORDER_COLUMNS.cadastrado_em;
+    const orderDir = String(orderDirParam).toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+
+    const { rows: totalRows } = await pool.query('SELECT COUNT(*)::int AS total FROM tenants');
+    const total = totalRows[0].total;
+
     const { rows } = await pool.query(
       `SELECT t.id, t.nome, t.segmento, t.ativo, t.criado_em, t.cadastrado_em, t.ativado_em,
+              t.whatsapp, t.status, t.trial_expires_at,
+              resp.nome AS responsavel, resp.email AS email,
               (SELECT COUNT(*)::int FROM usuarios u WHERE u.tenant_id = t.id) AS total_usuarios
        FROM tenants t
-       ORDER BY t.criado_em DESC`
+       LEFT JOIN LATERAL (
+         SELECT nome, email FROM usuarios WHERE tenant_id = t.id ORDER BY criado_em ASC LIMIT 1
+       ) resp ON true
+       ORDER BY ${orderColumn} ${orderDir} NULLS LAST
+       LIMIT $1 OFFSET $2`,
+      [limitNum, offset]
     );
-    return { tenants: rows };
+
+    return {
+      tenants: rows.map((t) => ({ ...t, status_conta: statusContaTenant(t) })),
+      page: pageNum,
+      limit: limitNum,
+      total,
+      total_paginas: Math.max(Math.ceil(total / limitNum), 1),
+    };
   });
 
   fastify.get('/admin/api/tenants/:id', { preHandler: [fastify.authenticateAdmin] }, async (request, reply) => {

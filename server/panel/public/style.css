@@ -177,6 +177,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .topbar .logo { margin: 0; font-size: 20px; }
 .saudacao { font-size: 13px; color: #a1a5c4; }
 
+.topbar-acoes { display: flex; align-items: center; gap: 16px; }
+.topbar-nav-link { color: #a1a5c4; font-size: 14px; text-decoration: none; }
+.topbar-nav-link:hover { color: #f2f2f7; }
+
 /* Área admin da Kyvvo (US16) — distintivo visual pra nunca confundir com o
    portal do tenant (CA04). */
 .admin-badge {
@@ -438,6 +442,60 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .agendamento-cancelado { opacity: 0.55; }
 .agendamento-cancelado .agendamento-hora { text-decoration: line-through; }
+
+/* Listagem de tenants (US26) */
+.badge-status { margin-left: 0; }
+.badge-trial-ativo { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
+.badge-trial-expirado { background: rgba(255, 107, 107, 0.15); color: #ff6b6b; }
+.badge-status-ativo { background: rgba(0, 212, 255, 0.15); color: var(--cyan); }
+.badge-status-inativo { background: rgba(161, 165, 196, 0.15); color: #a1a5c4; }
+
+.tabela-wrapper { overflow-x: auto; margin-bottom: 16px; }
+
+.tabela-tenants {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.tabela-tenants th, .tabela-tenants td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid #232847;
+}
+
+.tabela-tenants th { color: #a1a5c4; font-weight: 600; }
+
+.tabela-tenants tbody tr:hover { background: rgba(124, 92, 252, 0.06); }
+
+.th-ordenar {
+  width: auto;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  color: #a1a5c4;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+
+.th-ordenar:hover { background: transparent; color: #f2f2f7; }
+.th-ordenar-ativo { color: var(--accent-light); }
+
+.btn-ver-detalhes {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: #232847;
+  color: #f2f2f7;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.btn-ver-detalhes:hover { background: #2a2f52; }
 
 .btn-acoes {
   width: auto;
