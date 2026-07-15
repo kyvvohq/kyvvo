@@ -104,6 +104,15 @@ async function start() {
     prefix: '/',
   });
 
+  // Página de detalhe do tenant (US28/CA01) — rota dinâmica que o
+  // @fastify/static não resolve sozinho, já que não existe um arquivo físico
+  // `/admin/tenants/<id>.html`. Autenticação é feita do mesmo jeito das
+  // outras páginas admin: client-side (token no localStorage) + servidor via
+  // a API JSON que a página consome.
+  fastify.get('/admin/tenants/:id', async (request, reply) => {
+    return reply.type('text/html').sendFile('admin/tenant-detalhe.html');
+  });
+
   // Rotas que uma conta ainda não verificada (US20/CA10) precisa continuar
   // acessando pra completar a verificação, pedir reenvio ou sair — checado
   // direto em `authenticate` (em vez de um preHandler à parte que cada rota
@@ -1158,7 +1167,17 @@ async function start() {
       return aindaNoPrazo ? 'Trial ativo' : 'Trial expirado';
     }
     if (tenant.status === 'ativo') return 'Ativo';
+    if (tenant.status === 'suspenso') return 'Suspenso';
     return 'Inativo';
+  }
+
+  // Rótulo de exibição do plano (US28/CA04). `plano` é texto livre — só
+  // `'trial'` é escrito hoje (cadastro self-service, US20); tenants criados
+  // manualmente pelo CRUD antigo (US16) nascem com `plano` nulo, daí o
+  // fallback.
+  const PLANOS_LABELS = { trial: 'Trial', starter: 'Starter', profissional: 'Profissional', empresarial: 'Empresarial' };
+  function planoAtualTenant(tenant) {
+    return PLANOS_LABELS[tenant.plano] || 'Não definido';
   }
 
   fastify.post('/admin/api/auth/login', async (request, reply) => {
@@ -1252,18 +1271,50 @@ async function start() {
     }
 
     const { rows: modulosAtivos } = await pool.query(
-      `SELECT m.key, m.nome FROM tenant_modulos tm JOIN modulos m ON m.key = tm.modulo_key WHERE tm.tenant_id = $1 AND tm.ativo`,
+      `SELECT m.key, m.nome, m.preco_mensal
+       FROM tenant_modulos tm JOIN modulos m ON m.key = tm.modulo_key
+       WHERE tm.tenant_id = $1 AND tm.ativo
+       ORDER BY m.nome`,
       [id]
     );
     const { rows: usuarios } = await pool.query('SELECT id, email, nome FROM usuarios WHERE tenant_id = $1 ORDER BY nome', [id]);
+    // Responsável = primeiro usuário cadastrado do tenant (US28/CA03) — mesmo
+    // critério (criado_em ASC) usado na listagem (US26); consulta separada
+    // porque a lista `usuarios` acima é ordenada por nome (usada pelo CRUD
+    // antigo do US16) e não por data de criação.
+    const { rows: responsavelRows } = await pool.query(
+      'SELECT nome, email FROM usuarios WHERE tenant_id = $1 ORDER BY criado_em ASC LIMIT 1',
+      [id]
+    );
+    const responsavel = responsavelRows[0] || null;
     const { rows: contagemRows } = await pool.query(
       `SELECT
          (SELECT COUNT(*)::int FROM servicos WHERE tenant_id = $1) AS servicos,
-         (SELECT COUNT(*)::int FROM profissionais WHERE tenant_id = $1) AS profissionais`,
+         (SELECT COUNT(*)::int FROM profissionais WHERE tenant_id = $1) AS profissionais,
+         (SELECT COUNT(*)::int FROM agendamentos WHERE tenant_id = $1) AS total_agendamentos,
+         (SELECT MAX(data_hora) FROM agendamentos WHERE tenant_id = $1) AS ultimo_agendamento,
+         (SELECT COUNT(*)::int FROM clientes WHERE tenant_id = $1) AS total_clientes`,
       [id]
     );
 
-    return { ...tenant, modulos_ativos: modulosAtivos, usuarios, contagens: contagemRows[0] };
+    // Dias restantes de trial (US28/CA04) — mesmo cálculo do banner de trial
+    // do portal (GET /api/tenant/status).
+    let diasRestantesTrial = null;
+    if (tenant.trial_expires_at) {
+      const ms = new Date(tenant.trial_expires_at).getTime() - Date.now();
+      diasRestantesTrial = Math.max(0, Math.ceil(ms / (24 * 60 * 60 * 1000)));
+    }
+
+    return {
+      ...tenant,
+      status_conta: statusContaTenant(tenant),
+      plano_atual: planoAtualTenant(tenant),
+      dias_restantes_trial: diasRestantesTrial,
+      responsavel,
+      modulos_ativos: modulosAtivos,
+      usuarios,
+      contagens: contagemRows[0],
+    };
   });
 
   fastify.post('/admin/api/tenants', { preHandler: [fastify.authenticateAdmin] }, async (request, reply) => {

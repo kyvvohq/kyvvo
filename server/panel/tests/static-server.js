@@ -14,7 +14,10 @@ const MIME = {
 http
   .createServer((req, res) => {
     const urlPath = req.url.split('?')[0];
-    const filePath = path.join(PUBLIC_DIR, urlPath === '/' ? '/index.html' : urlPath);
+    // Espelha a rota dinâmica `/admin/tenants/:id` registrada no Fastify real
+    // (US28/CA01) — aqui não existe arquivo físico com esse nome.
+    const rota = /^\/admin\/tenants\/[^/]+$/.test(urlPath) ? '/admin/tenant-detalhe.html' : urlPath;
+    const filePath = path.join(PUBLIC_DIR, rota === '/' ? '/index.html' : rota);
 
     if (!filePath.startsWith(PUBLIC_DIR)) {
       res.writeHead(403);
