@@ -44,6 +44,7 @@ const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET;
 if (!ADMIN_JWT_SECRET) throw new Error('ADMIN_JWT_SECRET não configurado');
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+tokenService.init(pool);
 
 // Converte um "time" do Postgres ("08:00:00" ou "08:00") em minutos desde a
 // meia-noite, pra comparar com o horário (também em minutos) de um

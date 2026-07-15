@@ -19,13 +19,18 @@
 // logada e engolida, o outro canal ainda é tentado (CA04).
 
 const crypto = require('crypto');
-const { Pool } = require('pg');
 
 const TOKEN_EXPIRACAO_MINUTOS = 30;
 const MAX_TENTATIVAS = 5;
 const TIPOS_VALIDOS = ['email_verificacao', 'recuperacao_senha', 'alteracao_email', 'alteracao_whatsapp'];
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+// `send`/`validate` usam o pool compartilhado do index.js (injetado via
+// `init`) em vez de abrir uma conexão própria — evita duplicar o pool de
+// conexões com o Postgres dentro do mesmo processo.
+let pool = null;
+function init(sharedPool) {
+  pool = sharedPool;
+}
 
 function validarTipo(tipo) {
   if (!TIPOS_VALIDOS.includes(tipo)) {
@@ -226,6 +231,7 @@ async function validate({ userId, tipo, token }) {
 module.exports = {
   TOKEN_EXPIRACAO_MINUTOS,
   MAX_TENTATIVAS,
+  init,
   gerarToken,
   mascararEmail,
   criarToken,
