@@ -1167,7 +1167,7 @@ async function start() {
 
   fastify.get('/admin/api/tenants', { preHandler: [fastify.authenticateAdmin] }, async () => {
     const { rows } = await pool.query(
-      `SELECT t.id, t.nome, t.segmento, t.ativo, t.criado_em,
+      `SELECT t.id, t.nome, t.segmento, t.ativo, t.criado_em, t.cadastrado_em,
               (SELECT COUNT(*)::int FROM usuarios u WHERE u.tenant_id = t.id) AS total_usuarios
        FROM tenants t
        ORDER BY t.criado_em DESC`
