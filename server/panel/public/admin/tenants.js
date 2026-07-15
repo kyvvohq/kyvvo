@@ -165,6 +165,16 @@ async function renderTenants() {
     ${renderPaginacao(data)}
   `;
 
+  // Clicar em qualquer parte da linha navega pro detalhe do tenant (US28/CA01)
+  // — exceto quando o clique já foi num link (mailto:/"Ver detalhes"), que
+  // cuida da própria navegação.
+  conteudo.querySelectorAll('.tabela-tenants tbody tr').forEach((tr) => {
+    tr.addEventListener('click', (e) => {
+      if (e.target.closest('a')) return;
+      window.location.href = `/admin/tenants/${encodeURIComponent(tr.dataset.id)}`;
+    });
+  });
+
   conteudo.querySelectorAll('.th-ordenar').forEach((btn) => {
     btn.addEventListener('click', () => {
       const orderBy = btn.dataset.orderBy;
