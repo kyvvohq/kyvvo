@@ -1406,7 +1406,10 @@ async function start() {
             postalCode: tenant.endereco_cep,
             addressNumber: tenant.endereco_numero,
             addressComplement: tenant.endereco_complemento || undefined,
-            phone: contato || undefined,
+            // A Asaas valida `phone` como fixo (10 dígitos) e `mobilePhone`
+            // como celular (11) separadamente — mandar um número de 11
+            // dígitos em `phone` é rejeitado como inválido. `telefone`/
+            // `whatsapp` no Kyvvo são sempre celular (DDD + 9 dígitos) hoje.
             mobilePhone: contato || undefined,
           },
           remoteIp: request.ip,
