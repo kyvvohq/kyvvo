@@ -112,11 +112,16 @@ function validarObrigatorios(form) {
 }
 
 // ---------- Listagem de tenants (busca, ordenação, paginação) ----------
-const COLUNAS_ORDENAVEIS = [
-  { key: 'nome', label: 'Nome da empresa' },
-  { key: 'cadastrado_em', label: 'Data de cadastro' },
-  { key: 'ativado_em', label: 'Data de ativação' },
-  { key: 'status', label: 'Status' },
+// Precisa bater exatamente com a ordem das células em `renderLinha` — cada
+// coluna aqui vira um <th>, ordenável (botão) ou não (texto simples).
+const COLUNAS_TABELA = [
+  { key: 'nome', label: 'Nome da empresa', ordenavel: true },
+  { key: 'responsavel', label: 'Responsável' },
+  { key: 'email', label: 'E-mail' },
+  { key: 'whatsapp', label: 'WhatsApp' },
+  { key: 'cadastrado_em', label: 'Data de cadastro', ordenavel: true },
+  { key: 'ativado_em', label: 'Data de ativação', ordenavel: true },
+  { key: 'status', label: 'Status', ordenavel: true },
 ];
 
 const STATUS_CLASSES = {
@@ -155,7 +160,8 @@ function formatarData(iso) {
 }
 
 function renderCabecalho() {
-  return COLUNAS_ORDENAVEIS.map((col) => {
+  return COLUNAS_TABELA.map((col) => {
+    if (!col.ordenavel) return `<th>${col.label}</th>`;
     const ativa = estado.orderBy === col.key;
     const seta = ativa ? (estado.orderDir === 'asc' ? ' ▲' : ' ▼') : '';
     return `<th><button type="button" class="th-ordenar${ativa ? ' th-ordenar-ativo' : ''}" data-order-by="${col.key}">${col.label}${seta}</button></th>`;
