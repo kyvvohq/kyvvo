@@ -60,13 +60,20 @@ test.describe('Perfil (US33)', () => {
     await expect(page.locator('.perfil-form')).toContainText('Profissional');
   });
 
-  // A aba de Pagamentos (US32) ainda não existe nesta versão do portal — o
-  // link só passa a navegar de fato quando aquele PR for mesclado. Aqui só
-  // garante que clicar não quebra a página nesse meio-tempo.
-  test('link "ver aba de Pagamentos" não quebra a página quando a aba ainda não existe', async ({ page }) => {
+  // A aba de Pagamentos (US32) já existe no menu — o link navega até ela.
+  test('link "ver aba de Pagamentos" leva até a aba de Pagamentos', async ({ page }) => {
+    await page.route('**/api/pagamentos', (route) => {
+      if (route.request().method() !== 'GET') return route.fallback();
+      return route.fulfill({
+        json: {
+          status: 'ativo', plano: 'profissional', plano_nome: 'Profissional', valor_plano: 247,
+          meio_pagamento: 'pix', cartao_final: null, proxima_cobranca: null, historico: [], asaas_js_url: null,
+        },
+      });
+    });
     await entrarNoPainel(page);
     await page.click('#link-perfil-pagamentos');
-    await expect(page.locator('#form-perfil')).toBeVisible();
+    await expect(page.locator('.menu-item[data-menu="pagamentos"]')).toHaveClass(/active/);
   });
 
   test('campos obrigatórios em branco ficam destacados com mensagem específica (CA03)', async ({ page }) => {
