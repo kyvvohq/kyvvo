@@ -529,7 +529,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .toggle-readonly.toggle-on::after { left: 18px; }
 .toggle-readonly.toggle-off { background: #3a3f5c; }
 
-.tabela-tenants tbody tr { cursor: pointer; }
+.tabela-tenants tbody tr { cursor: pointer; background: #12162a; }
 
 /* Detalhe do tenant (US28) */
 .titulo-detalhe { font-size: 22px; margin: 16px 0 20px; }
@@ -594,7 +594,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .tabela-tenants th { color: #a1a5c4; font-weight: 600; }
 
-.tabela-tenants tbody tr:hover { background: rgba(124, 92, 252, 0.06); }
+/* Fundo por linha (mesmo tom de card do resto do painel, ex: .agendamento-item) */
+.tabela-tenants tbody tr:hover { background: #171c38; }
 
 .th-ordenar {
   width: auto;
