@@ -1,7 +1,6 @@
-// Área admin da Kyvvo (US16) — JS próprio, separado do app.js do portal do
-// tenant. Usa localStorage/token/rotas totalmente distintos
-// (kyvvo_admin_token, /admin/api/...), então não compartilha nada com a
-// sessão de um tenant aberta no mesmo navegador.
+// Área admin da Kyvvo — CRUD, busca, ordenação e paginação de tenants, tudo
+// numa única tela. Clicar numa linha da tabela navega pro detalhe
+// consolidado do tenant em /admin/tenants/:id.
 
 const token = localStorage.getItem('kyvvo_admin_token');
 document.getElementById('admin-nome').textContent = localStorage.getItem('kyvvo_admin_nome') || '';
@@ -40,9 +39,21 @@ const SEGMENTOS_ADMIN = {
   outro: 'Outro',
 };
 
-// ---------- Modal genérico + toast (duplicado do app.js do portal — os dois
-// arquivos são intencionalmente independentes, ver decisão de isolamento em
-// US16) ----------
+// `nome`/`responsavel`/`email` vêm do cadastro self-service (US20), que só
+// valida tamanho mínimo e um regex frouxo de e-mail — não impedem `<`, `>`
+// ou `"`. Escapa antes de interpolar no innerHTML pra não abrir XSS
+// armazenado contra a sessão do admin (que guarda o token no localStorage).
+function escapeHtml(valor) {
+  return String(valor ?? '').replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  }[c]));
+}
+
+// ---------- Modal genérico + toast ----------
 function escFecharModal(e) {
   if (e.key === 'Escape') fecharModal();
 }
@@ -100,71 +111,201 @@ function validarObrigatorios(form) {
   return primeiroInvalido;
 }
 
-// ---------- Lista de tenants ----------
+// ---------- Listagem de tenants (busca, ordenação, paginação) ----------
+const COLUNAS_ORDENAVEIS = [
+  { key: 'nome', label: 'Nome da empresa' },
+  { key: 'cadastrado_em', label: 'Data de cadastro' },
+  { key: 'ativado_em', label: 'Data de ativação' },
+  { key: 'status', label: 'Status' },
+];
+
+const STATUS_CLASSES = {
+  'Trial ativo': 'badge-trial-ativo',
+  'Trial expirado': 'badge-trial-expirado',
+  'Não ativado': 'badge-status-nao-ativado',
+  Ativo: 'badge-status-ativo',
+  Inativo: 'badge-status-inativo',
+  Suspenso: 'badge-status-suspenso',
+};
+
+const estado = {
+  page: 1,
+  limit: 20,
+  orderBy: 'cadastrado_em',
+  orderDir: 'desc',
+  search: '',
+};
+
 let tenantsAtuais = [];
 
-function renderTenantItem(t) {
+// WhatsApp é guardado só com dígitos (DDD + número, sem DDI) — formata pra
+// exibição: (XX) XXXXX-XXXX ou (XX) XXXX-XXXX pra fixo de 8 dígitos.
+function formatarWhatsapp(digitos) {
+  if (!digitos) return '—';
+  const d = String(digitos).replace(/\D/g, '');
+  if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return digitos;
+}
+
+function formatarData(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function renderCabecalho() {
+  return COLUNAS_ORDENAVEIS.map((col) => {
+    const ativa = estado.orderBy === col.key;
+    const seta = ativa ? (estado.orderDir === 'asc' ? ' ▲' : ' ▼') : '';
+    return `<th><button type="button" class="th-ordenar${ativa ? ' th-ordenar-ativo' : ''}" data-order-by="${col.key}">${col.label}${seta}</button></th>`;
+  }).join('');
+}
+
+// Status "Trial ativo" ganha a contagem de dias restantes ao lado — só
+// quando o backend manda `trial_dias_restantes` (ausente em tenants que
+// nunca chegaram a esse estado).
+function renderStatusLabel(t) {
+  if (t.status_conta === 'Trial ativo' && t.trial_dias_restantes !== undefined && t.trial_dias_restantes !== null) {
+    return `Trial ativo (${t.trial_dias_restantes} dias)`;
+  }
+  return t.status_conta;
+}
+
+function renderLinha(t) {
+  const statusClasse = STATUS_CLASSES[t.status_conta] || 'badge-status-inativo';
+  const email = escapeHtml(t.email);
   return `
-    <div class="agendamento-item" data-id="${t.id}">
-      <div class="agendamento-linha-principal" data-tenant-toggle="${t.id}">
-        <div>
-          <div class="agendamento-hora">${t.nome}${!t.ativo ? ' <span class="badge badge-cancelado">Desativado</span>' : ''}</div>
-          <div class="agendamento-detalhe">${SEGMENTOS_ADMIN[t.segmento] || t.segmento} · ${t.total_usuarios} usuário(s)</div>
-        </div>
-        <button class="btn-acoes" aria-label="Ações">⋮</button>
-      </div>
-      <div class="menu-acoes" id="menu-tenant-${t.id}">
-        <button data-tenant-acao="editar" data-id="${t.id}">Ver / editar</button>
-        <button data-tenant-acao="alternar" data-id="${t.id}" class="${t.ativo ? 'acao-perigo' : ''}">${t.ativo ? 'Desativar' : 'Ativar'}</button>
-      </div>
+    <tr data-id="${escapeHtml(t.id)}">
+      <td>${escapeHtml(t.nome)}</td>
+      <td>${t.responsavel ? escapeHtml(t.responsavel) : '—'}</td>
+      <td>${t.email ? `<a href="mailto:${email}">${email}</a>` : '—'}</td>
+      <td>${formatarWhatsapp(t.whatsapp)}</td>
+      <td>${formatarData(t.cadastrado_em)}</td>
+      <td>${formatarData(t.ativado_em)}</td>
+      <td><span class="badge badge-status ${statusClasse}">${escapeHtml(renderStatusLabel(t))}</span></td>
+      <td class="td-acoes">
+        <a class="btn-ver-detalhes" href="/admin/tenants/${encodeURIComponent(t.id)}">Ver detalhes</a>
+        <button type="button" class="btn-acao-tabela" data-tenant-acao="editar" data-id="${escapeHtml(t.id)}">Editar</button>
+        <button type="button" class="btn-acao-tabela${t.ativo ? ' acao-perigo' : ''}" data-tenant-acao="alternar" data-id="${escapeHtml(t.id)}">${t.ativo ? 'Desativar' : 'Ativar'}</button>
+      </td>
+    </tr>
+  `;
+}
+
+function renderPaginacao(meta) {
+  const paginaAtual = meta.page || 1;
+  const totalPaginas = meta.total_paginas || 1;
+  return `
+    <div class="nav-periodo">
+      <button type="button" id="btn-pagina-anterior" ${paginaAtual <= 1 ? 'disabled' : ''}>← Anterior</button>
+      <span>Página ${paginaAtual} de ${totalPaginas}</span>
+      <button type="button" id="btn-pagina-proxima" ${paginaAtual >= totalPaginas ? 'disabled' : ''}>Próximo →</button>
     </div>
   `;
 }
 
 async function renderTenants() {
   conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
-  const data = await api('/admin/api/tenants');
-  if (!data) return;
-  tenantsAtuais = data.tenants;
 
-  let html = `
+  const params = new URLSearchParams({
+    page: estado.page,
+    limit: estado.limit,
+    order_by: estado.orderBy,
+    order_dir: estado.orderDir,
+  });
+  if (estado.search) {
+    params.set('search', estado.search);
+  }
+  const data = await api(`/admin/api/tenants?${params.toString()}`);
+  if (!data) return;
+
+  tenantsAtuais = data.tenants || [];
+
+  const totalLabel = estado.search
+    ? `${data.total ?? tenantsAtuais.length} tenants encontrados`
+    : `Tenants (${data.total ?? tenantsAtuais.length})`;
+
+  const cabecalhoLista = `
     <div class="nav-periodo">
-      <strong>Tenants (${tenantsAtuais.length})</strong>
-      <button class="btn-novo-agendamento" id="btn-novo-tenant">+ Novo tenant</button>
+      <strong>${totalLabel}</strong>
+      <button type="button" class="btn-novo-agendamento" id="btn-novo-tenant">+ Novo tenant</button>
     </div>
   `;
-  html += tenantsAtuais.length
-    ? tenantsAtuais.map(renderTenantItem).join('')
-    : '<div class="vazio">Nenhum tenant cadastrado ainda.</div>';
 
-  conteudo.innerHTML = html;
-  document.getElementById('btn-novo-tenant').addEventListener('click', () => abrirModalTenant(null));
-}
-
-conteudo.addEventListener('click', (e) => {
-  const toggleEl = e.target.closest('[data-tenant-toggle]');
-  if (toggleEl) {
-    const id = toggleEl.dataset.tenantToggle;
-    const menu = document.getElementById(`menu-tenant-${id}`);
-    const jaAberto = menu.classList.contains('aberto');
-    document.querySelectorAll('.menu-acoes.aberto').forEach((m) => m.classList.remove('aberto'));
-    if (!jaAberto) menu.classList.add('aberto');
+  if (tenantsAtuais.length === 0) {
+    const mensagemVazia = estado.search
+      ? `Nenhum tenant encontrado para '${escapeHtml(estado.search)}'.`
+      : 'Nenhum tenant cadastrado ainda.';
+    conteudo.innerHTML = `${cabecalhoLista}<div class="vazio">${mensagemVazia}</div>`;
+    document.getElementById('btn-novo-tenant').addEventListener('click', () => abrirModalTenant(null));
     return;
   }
 
+  conteudo.innerHTML = `
+    ${cabecalhoLista}
+    <div class="tabela-wrapper">
+      <table class="tabela-tenants">
+        <thead><tr>${renderCabecalho()}<th>Ações</th></tr></thead>
+        <tbody>${tenantsAtuais.map(renderLinha).join('')}</tbody>
+      </table>
+    </div>
+    ${renderPaginacao(data)}
+  `;
+
+  document.getElementById('btn-novo-tenant').addEventListener('click', () => abrirModalTenant(null));
+
+  conteudo.querySelectorAll('.th-ordenar').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const orderBy = btn.dataset.orderBy;
+      if (estado.orderBy === orderBy) {
+        estado.orderDir = estado.orderDir === 'asc' ? 'desc' : 'asc';
+      } else {
+        estado.orderBy = orderBy;
+        estado.orderDir = 'desc';
+      }
+      estado.page = 1;
+      renderTenants();
+    });
+  });
+
+  const btnAnterior = document.getElementById('btn-pagina-anterior');
+  const btnProxima = document.getElementById('btn-pagina-proxima');
+  if (btnAnterior) {
+    btnAnterior.addEventListener('click', () => {
+      if (estado.page > 1) {
+        estado.page -= 1;
+        renderTenants();
+      }
+    });
+  }
+  if (btnProxima) {
+    btnProxima.addEventListener('click', () => {
+      if (estado.page < (data.total_paginas || 1)) {
+        estado.page += 1;
+        renderTenants();
+      }
+    });
+  }
+}
+
+// Delegado em `conteudo` (não recriado a cada render, ao contrário das linhas
+// da tabela): clicar numa linha navega pro detalhe do tenant, exceto quando
+// o clique já foi num link ou botão de ação ("Ver detalhes"/"Editar"/
+// "Ativar"/"Desativar"/mailto), que cuidam da própria ação.
+conteudo.addEventListener('click', (e) => {
   const acaoBtn = e.target.closest('[data-tenant-acao]');
   if (acaoBtn) {
-    document.querySelectorAll('.menu-acoes.aberto').forEach((m) => m.classList.remove('aberto'));
     const tenant = tenantsAtuais.find((t) => t.id === acaoBtn.dataset.id);
     if (!tenant) return;
     if (acaoBtn.dataset.tenantAcao === 'editar') abrirModalTenant(tenant);
     if (acaoBtn.dataset.tenantAcao === 'alternar') alternarAtivoTenant(tenant);
+    return;
   }
-});
 
-document.addEventListener('click', (e) => {
-  if (!e.target.closest('.agendamento-item')) {
-    document.querySelectorAll('.menu-acoes.aberto').forEach((m) => m.classList.remove('aberto'));
+  const tr = e.target.closest('.tabela-tenants tbody tr');
+  if (tr && !e.target.closest('a') && !e.target.closest('button')) {
+    window.location.href = `/admin/tenants/${encodeURIComponent(tr.dataset.id)}`;
   }
 });
 
@@ -198,8 +339,8 @@ async function abrirModalTenant(tenantResumo) {
   const detalheHtml = editando
     ? `
       <div class="modal-texto">
-        <strong>Módulos ativos:</strong> ${detalhe.modulos_ativos.length ? detalhe.modulos_ativos.map((m) => m.nome).join(', ') : 'nenhum'}<br>
-        <strong>Usuários de login:</strong> ${detalhe.usuarios.length ? detalhe.usuarios.map((u) => u.email).join(', ') : 'nenhum'}<br>
+        <strong>Módulos ativos:</strong> ${detalhe.modulos_ativos.length ? detalhe.modulos_ativos.map((m) => escapeHtml(m.nome)).join(', ') : 'nenhum'}<br>
+        <strong>Usuários de login:</strong> ${detalhe.usuarios.length ? detalhe.usuarios.map((u) => escapeHtml(u.email)).join(', ') : 'nenhum'}<br>
         <strong>Serviços cadastrados:</strong> ${detalhe.contagens.servicos} · <strong>Profissionais:</strong> ${detalhe.contagens.profissionais}
       </div>
     `
@@ -229,13 +370,13 @@ async function abrirModalTenant(tenantResumo) {
         <div class="modal-erro" id="tenant-erro"></div>
         ${detalheHtml}
         <label for="tenant-nome">Nome *</label>
-        <input type="text" id="tenant-nome" data-obrigatorio value="${editando ? detalhe.nome : ''}">
+        <input type="text" id="tenant-nome" data-obrigatorio value="${editando ? escapeHtml(detalhe.nome) : ''}">
         <label for="tenant-segmento">Segmento</label>
         <select id="tenant-segmento">${opcoesSegmento}</select>
         <label for="tenant-telefone">Telefone</label>
-        <input type="text" id="tenant-telefone" value="${editando ? detalhe.telefone || '' : ''}">
+        <input type="text" id="tenant-telefone" value="${editando ? escapeHtml(detalhe.telefone || '') : ''}">
         <label for="tenant-endereco">Endereço</label>
-        <input type="text" id="tenant-endereco" value="${editando ? detalhe.endereco || '' : ''}">
+        <input type="text" id="tenant-endereco" value="${editando ? escapeHtml(detalhe.endereco || '') : ''}">
         ${usuarioNovoHtml}
         <div class="modal-acoes">
           <button type="button" class="btn-secundario" id="btn-cancelar-tenant">Cancelar</button>
@@ -304,5 +445,29 @@ async function abrirModalTenant(tenantResumo) {
     }
   });
 }
+
+// ---------- Busca (US27) ----------
+const inputBusca = document.getElementById('busca-tenants');
+const btnLimparBusca = document.getElementById('btn-limpar-busca');
+let debounceBusca = null;
+
+inputBusca.addEventListener('input', () => {
+  btnLimparBusca.hidden = inputBusca.value.length === 0;
+  clearTimeout(debounceBusca);
+  debounceBusca = setTimeout(() => {
+    estado.search = inputBusca.value.trim();
+    estado.page = 1;
+    renderTenants();
+  }, 400);
+});
+
+btnLimparBusca.addEventListener('click', () => {
+  inputBusca.value = '';
+  btnLimparBusca.hidden = true;
+  clearTimeout(debounceBusca);
+  estado.search = '';
+  estado.page = 1;
+  renderTenants();
+});
 
 renderTenants();

@@ -182,14 +182,14 @@ async function renderDetalhe() {
 
   if (data.error) {
     conteudo.innerHTML = `
-      <a class="topbar-nav-link" href="/admin/tenants.html">← Voltar para lista</a>
+      <a class="topbar-nav-link" href="/admin/painel.html">← Voltar para lista</a>
       <div class="vazio">${escapeHtml(data.error)}</div>
     `;
     return;
   }
 
   conteudo.innerHTML = `
-    <a class="topbar-nav-link" href="/admin/tenants.html">← Voltar para lista</a>
+    <a class="topbar-nav-link" href="/admin/painel.html">← Voltar para lista</a>
     <h2 class="titulo-detalhe">${escapeHtml(data.nome)}</h2>
     ${renderSecaoNegocio(data)}
     ${renderSecaoResponsavel(data)}
