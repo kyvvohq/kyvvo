@@ -76,6 +76,27 @@ test.describe('Pagamentos (US32)', () => {
     await expect(page.locator('input[name="meio"][value="cartao"]')).toBeDisabled();
   });
 
+  test('CPF/CNPJ é obrigatório na primeira vez (CA04)', async ({ page }) => {
+    await entrarNoPainel(page, {
+      status: 'trial',
+      plano: 'trial',
+      plano_nome: null,
+      valor_plano: null,
+      meio_pagamento: null,
+      cartao_final: null,
+      cpf_cnpj: null,
+      proxima_cobranca: null,
+      historico: [],
+      asaas_js_url: null,
+    });
+
+    await page.click('#btn-cadastrar-pagamento');
+    await page.fill('#pagamento-cpf-cnpj', '123');
+    await page.click('#btn-salvar-pagamento');
+
+    await expect(page.locator('#pagamento-erro')).toHaveText(/CPF.*CNPJ/);
+  });
+
   test('cadastra Pix recorrente com sucesso', async ({ page }) => {
     await entrarNoPainel(page, {
       status: 'trial',
@@ -84,6 +105,7 @@ test.describe('Pagamentos (US32)', () => {
       valor_plano: null,
       meio_pagamento: null,
       cartao_final: null,
+      cpf_cnpj: null,
       proxima_cobranca: null,
       historico: [],
       asaas_js_url: null,
@@ -100,6 +122,7 @@ test.describe('Pagamentos (US32)', () => {
           valor_plano: 247,
           meio_pagamento: 'pix',
           cartao_final: null,
+          cpf_cnpj: '12345678900',
           proxima_cobranca: { data: '2026-08-01', valor: 247 },
           historico: [],
           asaas_js_url: null,
@@ -108,10 +131,29 @@ test.describe('Pagamentos (US32)', () => {
     });
 
     await page.click('#btn-cadastrar-pagamento');
+    await page.fill('#pagamento-cpf-cnpj', '123.456.789-00');
     await page.click('#btn-salvar-pagamento');
 
     await expect(page.locator('.toast-sucesso')).toHaveText(/assinatura está ativa/);
-    expect(corpoEnviado).toMatchObject({ meio: 'pix' });
+    expect(corpoEnviado).toMatchObject({ meio: 'pix', cpf_cnpj: '12345678900' });
+  });
+
+  test('CPF/CNPJ não é pedido de novo ao trocar de meio de pagamento (CA09)', async ({ page }) => {
+    await entrarNoPainel(page, {
+      status: 'ativo',
+      plano: 'profissional',
+      plano_nome: 'Profissional',
+      valor_plano: 247,
+      meio_pagamento: 'pix',
+      cartao_final: null,
+      cpf_cnpj: '12345678900',
+      proxima_cobranca: { data: '2026-08-01', valor: 247 },
+      historico: [],
+      asaas_js_url: null,
+    });
+
+    await page.click('#btn-cadastrar-pagamento');
+    await expect(page.locator('#pagamento-cpf-cnpj')).toHaveCount(0);
   });
 
   test('erro do backend na integração com a Asaas aparece no modal', async ({ page }) => {
@@ -122,6 +164,7 @@ test.describe('Pagamentos (US32)', () => {
       valor_plano: null,
       meio_pagamento: null,
       cartao_final: null,
+      cpf_cnpj: null,
       proxima_cobranca: null,
       historico: [],
       asaas_js_url: null,
@@ -131,6 +174,7 @@ test.describe('Pagamentos (US32)', () => {
     );
 
     await page.click('#btn-cadastrar-pagamento');
+    await page.fill('#pagamento-cpf-cnpj', '123.456.789-00');
     await page.click('#btn-salvar-pagamento');
 
     await expect(page.locator('#pagamento-erro')).toHaveText(/Não foi possível processar/);
