@@ -190,13 +190,13 @@ function fecharModal() {
   document.removeEventListener('keydown', escFecharModal);
 }
 
-function abrirModal(tituloHtml, conteudoHtml) {
+function abrirModal(tituloHtml, conteudoHtml, classeExtra) {
   fecharModal();
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.id = 'modal-overlay';
   overlay.innerHTML = `
-    <div class="modal-card">
+    <div class="modal-card${classeExtra ? ` ${classeExtra}` : ''}">
       <button class="modal-close" id="modal-close" aria-label="Fechar">✕</button>
       ${tituloHtml}
       ${conteudoHtml}
@@ -968,6 +968,11 @@ function abrirModalPagamento(dadosAtuais) {
   // primeira vez (CA04); se o tenant já tem um cadastrado, não perguntamos
   // de novo ao trocar de meio de pagamento (CA09).
   const cpfCnpjJaCadastrado = !!dadosAtuais.cpf_cnpj;
+  // Endereço do titular (exigido só pra cartão, CA04): se já tiver, mostra
+  // somente leitura com opção de atualizar; senão, pede no ato.
+  const enderecoJaCadastrado = !!(dadosAtuais.endereco_cep && dadosAtuais.endereco_numero);
+  const opcoesUF = UF_OPCOES.map((uf) => `<option value="${uf}" ${uf === dadosAtuais.endereco_uf ? 'selected' : ''}>${uf}</option>`).join('');
+  const desabilitarEndereco = enderecoJaCadastrado ? 'disabled' : '';
 
   abrirModal(
     '<h3>Forma de pagamento</h3>',
@@ -978,51 +983,119 @@ function abrirModalPagamento(dadosAtuais) {
           <label for="pagamento-cpf-cnpj">CPF ou CNPJ *</label>
           <input type="text" id="pagamento-cpf-cnpj" inputmode="numeric" placeholder="Somente números">
         `}
-        <label>
-          <input type="radio" name="meio" value="pix" checked> Pix recorrente
-        </label>
-        <label>
-          <input type="radio" name="meio" value="cartao"> Cartão de crédito
-        </label>
+
+        <label for="pagamento-meio">Forma de pagamento</label>
+        <select id="pagamento-meio">
+          <option value="pix">Pix recorrente</option>
+          <option value="cartao">Cartão de crédito</option>
+        </select>
+
         <div id="campos-cartao" hidden>
-          <label for="cartao-numero">Número do cartão *</label>
-          <input type="text" id="cartao-numero" inputmode="numeric" autocomplete="cc-number" placeholder="0000 0000 0000 0000">
-          <label for="cartao-nome">Nome impresso no cartão *</label>
-          <input type="text" id="cartao-nome" autocomplete="cc-name">
-          <label for="cartao-validade">Validade (MM/AAAA) *</label>
-          <input type="text" id="cartao-validade" autocomplete="cc-exp" placeholder="MM/AAAA">
-          <label for="cartao-cvv">CVV *</label>
-          <input type="text" id="cartao-cvv" autocomplete="cc-csc" placeholder="123">
+          <div class="pagamento-grid-2col">
+            <div>
+              <label for="cartao-numero">Número do cartão *</label>
+              <input type="text" id="cartao-numero" inputmode="numeric" autocomplete="cc-number" placeholder="0000 0000 0000 0000">
+            </div>
+            <div>
+              <label for="cartao-nome">Nome impresso *</label>
+              <input type="text" id="cartao-nome" autocomplete="cc-name">
+            </div>
+            <div>
+              <label for="cartao-validade">Validade (MM/AAAA) *</label>
+              <input type="text" id="cartao-validade" autocomplete="cc-exp" placeholder="MM/AAAA">
+            </div>
+            <div>
+              <label for="cartao-cvv">CVV *</label>
+              <input type="text" id="cartao-cvv" autocomplete="cc-csc" placeholder="123">
+            </div>
+          </div>
+
+          ${enderecoJaCadastrado ? `
+            <label class="pagamento-checkbox">
+              <input type="checkbox" id="pagamento-atualizar-endereco"> Atualizar endereço de cobrança
+            </label>
+          ` : '<label style="margin-top:16px">Endereço de cobrança *</label>'}
+          <div class="pagamento-grid-2col" id="campos-endereco">
+            <div>
+              <label for="pagamento-cep">CEP *</label>
+              <input type="text" id="pagamento-cep" inputmode="numeric" placeholder="00000-000" value="${dadosAtuais.endereco_cep || ''}" ${desabilitarEndereco}>
+            </div>
+            <div>
+              <label for="pagamento-numero">Número *</label>
+              <input type="text" id="pagamento-numero" value="${dadosAtuais.endereco_numero || ''}" ${desabilitarEndereco}>
+            </div>
+            <div>
+              <label for="pagamento-logradouro">Logradouro *</label>
+              <input type="text" id="pagamento-logradouro" value="${dadosAtuais.endereco_logradouro || ''}" ${desabilitarEndereco}>
+            </div>
+            <div>
+              <label for="pagamento-complemento">Complemento</label>
+              <input type="text" id="pagamento-complemento" value="${dadosAtuais.endereco_complemento || ''}" ${desabilitarEndereco}>
+            </div>
+            <div>
+              <label for="pagamento-bairro">Bairro *</label>
+              <input type="text" id="pagamento-bairro" value="${dadosAtuais.endereco_bairro || ''}" ${desabilitarEndereco}>
+            </div>
+            <div>
+              <label for="pagamento-cidade">Cidade *</label>
+              <input type="text" id="pagamento-cidade" value="${dadosAtuais.endereco_cidade || ''}" ${desabilitarEndereco}>
+            </div>
+            <div>
+              <label for="pagamento-uf">Estado *</label>
+              <select id="pagamento-uf" ${desabilitarEndereco}>${opcoesUF}</select>
+            </div>
+          </div>
         </div>
+
         <div class="modal-acoes">
           <button type="button" class="btn-secundario" id="btn-cancelar-pagamento">Cancelar</button>
           <button type="submit" class="btn-primario" id="btn-salvar-pagamento">Confirmar</button>
         </div>
       </form>
-    `
+    `,
+    'modal-card-pagamento'
   );
 
   document.getElementById('btn-cancelar-pagamento').addEventListener('click', fecharModal);
 
   const camposCartao = document.getElementById('campos-cartao');
-  document.querySelectorAll('input[name="meio"]').forEach((radio) => {
-    radio.addEventListener('change', () => {
-      camposCartao.hidden = radio.value !== 'cartao' || !radio.checked;
-    });
+  document.getElementById('pagamento-meio').addEventListener('change', (e) => {
+    camposCartao.hidden = e.target.value !== 'cartao';
   });
+
+  const checkboxAtualizarEndereco = document.getElementById('pagamento-atualizar-endereco');
+  if (checkboxAtualizarEndereco) {
+    checkboxAtualizarEndereco.addEventListener('change', (e) => {
+      document.querySelectorAll('#campos-endereco input, #campos-endereco select').forEach((campo) => {
+        campo.disabled = !e.target.checked;
+      });
+    });
+  }
 
   const form = document.getElementById('form-pagamento');
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const erroEl = document.getElementById('pagamento-erro');
     erroEl.textContent = '';
-    const meio = form.querySelector('input[name="meio"]:checked').value;
+    const meio = document.getElementById('pagamento-meio').value;
 
     const cpfCnpjInput = document.getElementById('pagamento-cpf-cnpj');
     const cpfCnpjLimpo = cpfCnpjInput ? cpfCnpjInput.value.replace(/\D/g, '') : '';
     if (cpfCnpjInput && ![11, 14].includes(cpfCnpjLimpo.length)) {
       erroEl.textContent = 'Informe um CPF (11 dígitos) ou CNPJ (14 dígitos) válido.';
       return;
+    }
+
+    // Só manda endereço se o tenant nunca cadastrou um, ou se marcou a
+    // opção de atualizar (CA09-like — não pede de novo sem necessidade).
+    const enviarEndereco = meio === 'cartao' && (!enderecoJaCadastrado || (checkboxAtualizarEndereco && checkboxAtualizarEndereco.checked));
+    if (enviarEndereco) {
+      const camposObrigatorios = ['pagamento-cep', 'pagamento-numero', 'pagamento-logradouro', 'pagamento-bairro', 'pagamento-cidade'];
+      const algumVazio = camposObrigatorios.some((id) => !document.getElementById(id).value.trim());
+      if (algumVazio) {
+        erroEl.textContent = 'Preencha todos os campos do endereço.';
+        return;
+      }
     }
 
     const btn = document.getElementById('btn-salvar-pagamento');
@@ -1041,6 +1114,17 @@ function abrirModalPagamento(dadosAtuais) {
       payload.cartao_validade_mes = (mes || '').trim();
       payload.cartao_validade_ano = (ano || '').trim();
       payload.cartao_cvv = document.getElementById('cartao-cvv').value;
+    }
+    if (enviarEndereco) {
+      payload.endereco = {
+        cep: document.getElementById('pagamento-cep').value.replace(/\D/g, ''),
+        logradouro: document.getElementById('pagamento-logradouro').value,
+        numero: document.getElementById('pagamento-numero').value,
+        complemento: document.getElementById('pagamento-complemento').value,
+        bairro: document.getElementById('pagamento-bairro').value,
+        cidade: document.getElementById('pagamento-cidade').value,
+        uf: document.getElementById('pagamento-uf').value,
+      };
     }
 
     const resultado = await api('/api/pagamentos/cadastrar', {

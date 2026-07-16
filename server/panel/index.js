@@ -1279,6 +1279,13 @@ async function start() {
       meio_pagamento: tenant.asaas_meio_pagamento,
       cartao_final: tenant.asaas_cartao_final,
       cpf_cnpj: tenant.cpf_cnpj,
+      endereco_cep: tenant.endereco_cep,
+      endereco_logradouro: tenant.endereco_logradouro,
+      endereco_numero: tenant.endereco_numero,
+      endereco_complemento: tenant.endereco_complemento,
+      endereco_bairro: tenant.endereco_bairro,
+      endereco_cidade: tenant.endereco_cidade,
+      endereco_uf: tenant.endereco_uf,
       proxima_cobranca: subscription ? { data: subscription.nextDueDate, valor: subscription.value } : null,
       historico: historico.map((p) => ({
         data: p.dueDate,
@@ -1293,7 +1300,9 @@ async function start() {
     const { tenantId } = request.user;
     const { rows } = await pool.query(
       `SELECT plano, status, ativado_em, asaas_customer_id, asaas_subscription_id,
-              asaas_meio_pagamento, asaas_cartao_final, cpf_cnpj
+              asaas_meio_pagamento, asaas_cartao_final, cpf_cnpj,
+              endereco_cep, endereco_logradouro, endereco_numero,
+              endereco_complemento, endereco_bairro, endereco_cidade, endereco_uf
        FROM tenants WHERE id = $1`,
       [tenantId]
     );
@@ -1319,6 +1328,7 @@ async function start() {
       cartao_validade_mes: cartaoValidadeMes,
       cartao_validade_ano: cartaoValidadeAno,
       cartao_cvv: cartaoCvv,
+      endereco: enderecoBruto,
     } = request.body || {};
 
     if (!['pix', 'cartao'].includes(meio)) {
@@ -1343,7 +1353,8 @@ async function start() {
 
     const { rows } = await pool.query(
       `SELECT nome, whatsapp, telefone, plano, ativado_em, asaas_customer_id, asaas_subscription_id, cpf_cnpj,
-              endereco_cep, endereco_numero, endereco_complemento
+              endereco_cep, endereco_logradouro, endereco_numero,
+              endereco_complemento, endereco_bairro, endereco_cidade, endereco_uf
        FROM tenants WHERE id = $1`,
       [tenantId]
     );
@@ -1359,11 +1370,46 @@ async function start() {
     if (!tenant.asaas_customer_id && !CPF_CNPJ_REGEX.test(cpfCnpjLimpo || '')) {
       return reply.code(400).send({ error: 'Informe um CPF (11 dígitos) ou CNPJ (14 dígitos) válido.' });
     }
-    // A Asaas exige endereço no Customer/tokenização de cartão (CEP e
-    // número) — pede pra completar o perfil (US33) em vez de mandar um
-    // endereço incompleto/inventado à Asaas.
-    if (meio === 'cartao' && !(tenant.endereco_cep && tenant.endereco_numero)) {
-      return reply.code(400).send({ error: 'Complete seu endereço em "Meu Perfil" antes de cadastrar um cartão.' });
+
+    // A Asaas exige endereço no Customer/tokenização de cartão. O modal de
+    // pagamento coleta o endereço no ato se o tenant não tiver um (ou se
+    // marcou a opção de atualizar) — vem em `endereco` no corpo; senão,
+    // reaproveita o que já está salvo no tenant (US33).
+    let endereco = {
+      cep: tenant.endereco_cep,
+      logradouro: tenant.endereco_logradouro,
+      numero: tenant.endereco_numero,
+      complemento: tenant.endereco_complemento,
+      bairro: tenant.endereco_bairro,
+      cidade: tenant.endereco_cidade,
+      uf: tenant.endereco_uf,
+    };
+    if (meio === 'cartao') {
+      if (enderecoBruto) {
+        const { cep, logradouro, numero, complemento, bairro, cidade, uf } = enderecoBruto;
+        const cepLimpo = String(cep || '').replace(/\D/g, '');
+        const enderecoValido =
+          /^\d{8}$/.test(cepLimpo) &&
+          (logradouro || '').trim() &&
+          (numero || '').trim() &&
+          (bairro || '').trim() &&
+          (cidade || '').trim() &&
+          UF_VALIDAS.includes(String(uf || '').toUpperCase());
+        if (!enderecoValido) {
+          return reply.code(400).send({ error: 'Preencha todos os campos do endereço.' });
+        }
+        endereco = {
+          cep: cepLimpo,
+          logradouro: logradouro.trim(),
+          numero: numero.trim(),
+          complemento: (complemento || '').trim() || null,
+          bairro: bairro.trim(),
+          cidade: cidade.trim(),
+          uf: String(uf).toUpperCase(),
+        };
+      } else if (!(endereco.cep && endereco.numero)) {
+        return reply.code(400).send({ error: 'Informe seu endereço para cadastrar um cartão.' });
+      }
     }
 
     // Trial (ou tenant sem plano definido) ainda não escolheu um plano pago —
@@ -1403,9 +1449,9 @@ async function start() {
             name: tenant.nome,
             email: request.user.email,
             cpfCnpj: cpfCnpjLimpo,
-            postalCode: tenant.endereco_cep,
-            addressNumber: tenant.endereco_numero,
-            addressComplement: tenant.endereco_complemento || undefined,
+            postalCode: endereco.cep,
+            addressNumber: endereco.numero,
+            addressComplement: endereco.complemento || undefined,
             // A Asaas valida `phone` como fixo (10 dígitos) e `mobilePhone`
             // como celular (11) separadamente — mandar um número de 11
             // dígitos em `phone` é rejeitado como inválido. `telefone`/
@@ -1449,11 +1495,23 @@ async function start() {
          status = 'ativo',
          asaas_meio_pagamento = $5,
          asaas_cartao_final = $6,
-         cpf_cnpj = $7
+         cpf_cnpj = $7,
+         endereco_cep = $8,
+         endereco_logradouro = $9,
+         endereco_numero = $10,
+         endereco_complemento = $11,
+         endereco_bairro = $12,
+         endereco_cidade = $13,
+         endereco_uf = $14
        WHERE id = $1
        RETURNING plano, status, ativado_em, asaas_customer_id, asaas_subscription_id,
-                 asaas_meio_pagamento, asaas_cartao_final, cpf_cnpj`,
-      [tenantId, customer.id, subscriptionId, plano, meio, meio === 'cartao' ? cartaoFinal : null, cpfCnpjLimpo]
+                 asaas_meio_pagamento, asaas_cartao_final, cpf_cnpj,
+                 endereco_cep, endereco_logradouro, endereco_numero,
+                 endereco_complemento, endereco_bairro, endereco_cidade, endereco_uf`,
+      [
+        tenantId, customer.id, subscriptionId, plano, meio, meio === 'cartao' ? cartaoFinal : null, cpfCnpjLimpo,
+        endereco.cep, endereco.logradouro, endereco.numero, endereco.complemento, endereco.bairro, endereco.cidade, endereco.uf,
+      ]
     );
 
     return montarResumoPagamentos(atualizado[0]);

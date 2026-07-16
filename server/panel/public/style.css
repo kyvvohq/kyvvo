@@ -479,6 +479,31 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   .endereco-grid { grid-template-columns: 1fr; }
 }
 
+/* Modal de pagamento (US32) — mais largo e em 2 colunas pra caber sem
+   scroll (vertical ou horizontal) mesmo com cartão + endereço juntos. */
+.modal-card-pagamento { max-width: 640px; }
+.pagamento-grid-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 16px;
+  margin-top: 12px;
+}
+.pagamento-grid-2col > div { display: flex; flex-direction: column; }
+.pagamento-grid-2col label { margin-top: 0; }
+.pagamento-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  font-size: 13px;
+  color: #a1a5c4;
+}
+.pagamento-checkbox input { width: auto; margin: 0; }
+@media (max-width: 640px) {
+  .modal-card-pagamento { max-width: 420px; }
+  .pagamento-grid-2col { grid-template-columns: 1fr; }
+}
+
 /* Ações de agendamento (US08) */
 .agendamento-linha-principal {
   display: flex;

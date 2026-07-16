@@ -119,6 +119,88 @@ test.describe('Pagamentos (US32)', () => {
     expect(corpoEnviado).toMatchObject({ meio: 'pix', cpf_cnpj: '12345678900' });
   });
 
+  test('dropdown "Forma de pagamento" mostra os campos de cartão e endereço ao selecionar', async ({ page }) => {
+    await entrarNoPainel(page, {
+      status: 'trial',
+      plano: 'trial',
+      plano_nome: null,
+      valor_plano: null,
+      meio_pagamento: null,
+      cartao_final: null,
+      cpf_cnpj: '12345678900',
+      endereco_cep: null,
+      proxima_cobranca: null,
+      historico: [],
+    });
+
+    await page.click('#btn-cadastrar-pagamento');
+    await expect(page.locator('#campos-cartao')).toBeHidden();
+    await page.selectOption('#pagamento-meio', 'cartao');
+    await expect(page.locator('#campos-cartao')).toBeVisible();
+    await expect(page.locator('#cartao-numero')).toBeVisible();
+    await expect(page.locator('#pagamento-cep')).toBeVisible();
+  });
+
+  test('endereço não cadastrado: campos aparecem editáveis e obrigatórios pra cartão', async ({ page }) => {
+    await entrarNoPainel(page, {
+      status: 'trial',
+      plano: 'trial',
+      plano_nome: null,
+      valor_plano: null,
+      meio_pagamento: null,
+      cartao_final: null,
+      cpf_cnpj: '12345678900',
+      endereco_cep: null,
+      endereco_numero: null,
+      proxima_cobranca: null,
+      historico: [],
+    });
+
+    await page.click('#btn-cadastrar-pagamento');
+    await page.selectOption('#pagamento-meio', 'cartao');
+    await expect(page.locator('#pagamento-atualizar-endereco')).toHaveCount(0);
+    await expect(page.locator('#pagamento-cep')).toBeEnabled();
+
+    await page.fill('#cartao-numero', '4242 4242 4242 4242');
+    await page.fill('#cartao-nome', 'ANA SOUZA');
+    await page.fill('#cartao-validade', '12/2030');
+    await page.fill('#cartao-cvv', '123');
+    await page.click('#btn-salvar-pagamento');
+
+    await expect(page.locator('#pagamento-erro')).toHaveText(/endereço/);
+  });
+
+  test('endereço já cadastrado: aparece bloqueado com checkbox pra atualizar', async ({ page }) => {
+    await entrarNoPainel(page, {
+      status: 'trial',
+      plano: 'trial',
+      plano_nome: null,
+      valor_plano: null,
+      meio_pagamento: null,
+      cartao_final: null,
+      cpf_cnpj: '12345678900',
+      endereco_cep: '38400100',
+      endereco_logradouro: 'Avenida Floriano Peixoto',
+      endereco_numero: '123',
+      endereco_complemento: null,
+      endereco_bairro: 'Centro',
+      endereco_cidade: 'Uberlândia',
+      endereco_uf: 'MG',
+      proxima_cobranca: null,
+      historico: [],
+    });
+
+    await page.click('#btn-cadastrar-pagamento');
+    await page.selectOption('#pagamento-meio', 'cartao');
+
+    await expect(page.locator('#pagamento-cep')).toHaveValue('38400100');
+    await expect(page.locator('#pagamento-cep')).toBeDisabled();
+    await expect(page.locator('#pagamento-atualizar-endereco')).toBeVisible();
+
+    await page.check('#pagamento-atualizar-endereco');
+    await expect(page.locator('#pagamento-cep')).toBeEnabled();
+  });
+
   test('cadastra cartão de crédito enviando os dados direto ao backend (sem script client-side)', async ({ page }) => {
     await entrarNoPainel(page, {
       status: 'trial',
@@ -128,6 +210,8 @@ test.describe('Pagamentos (US32)', () => {
       meio_pagamento: null,
       cartao_final: null,
       cpf_cnpj: null,
+      endereco_cep: null,
+      endereco_numero: null,
       proxima_cobranca: null,
       historico: [],
     });
@@ -152,11 +236,17 @@ test.describe('Pagamentos (US32)', () => {
 
     await page.click('#btn-cadastrar-pagamento');
     await page.fill('#pagamento-cpf-cnpj', '123.456.789-00');
-    await page.click('input[name="meio"][value="cartao"]');
+    await page.selectOption('#pagamento-meio', 'cartao');
     await page.fill('#cartao-numero', '4242 4242 4242 4242');
     await page.fill('#cartao-nome', 'ANA SOUZA');
     await page.fill('#cartao-validade', '12/2030');
     await page.fill('#cartao-cvv', '123');
+    await page.fill('#pagamento-cep', '38400100');
+    await page.fill('#pagamento-numero', '123');
+    await page.fill('#pagamento-logradouro', 'Avenida Floriano Peixoto');
+    await page.fill('#pagamento-bairro', 'Centro');
+    await page.fill('#pagamento-cidade', 'Uberlândia');
+    await page.selectOption('#pagamento-uf', 'MG');
     await page.click('#btn-salvar-pagamento');
 
     await expect(page.locator('.toast-sucesso')).toHaveText(/assinatura está ativa/);
@@ -167,7 +257,65 @@ test.describe('Pagamentos (US32)', () => {
       cartao_validade_mes: '12',
       cartao_validade_ano: '2030',
       cartao_cvv: '123',
+      endereco: {
+        cep: '38400100',
+        numero: '123',
+        logradouro: 'Avenida Floriano Peixoto',
+        bairro: 'Centro',
+        cidade: 'Uberlândia',
+        uf: 'MG',
+      },
     });
+  });
+
+  test('endereço já cadastrado sem marcar "atualizar" não é reenviado no payload', async ({ page }) => {
+    await entrarNoPainel(page, {
+      status: 'trial',
+      plano: 'trial',
+      plano_nome: null,
+      valor_plano: null,
+      meio_pagamento: null,
+      cartao_final: null,
+      cpf_cnpj: '12345678900',
+      endereco_cep: '38400100',
+      endereco_logradouro: 'Avenida Floriano Peixoto',
+      endereco_numero: '123',
+      endereco_complemento: null,
+      endereco_bairro: 'Centro',
+      endereco_cidade: 'Uberlândia',
+      endereco_uf: 'MG',
+      proxima_cobranca: null,
+      historico: [],
+    });
+
+    let corpoEnviado = null;
+    await page.route('**/api/pagamentos/cadastrar', (route) => {
+      corpoEnviado = route.request().postDataJSON();
+      return route.fulfill({
+        json: {
+          status: 'ativo',
+          plano: 'profissional',
+          plano_nome: 'Profissional',
+          valor_plano: 247,
+          meio_pagamento: 'cartao',
+          cartao_final: '4242',
+          cpf_cnpj: '12345678900',
+          proxima_cobranca: { data: '2026-08-01', valor: 247 },
+          historico: [],
+        },
+      });
+    });
+
+    await page.click('#btn-cadastrar-pagamento');
+    await page.selectOption('#pagamento-meio', 'cartao');
+    await page.fill('#cartao-numero', '4242 4242 4242 4242');
+    await page.fill('#cartao-nome', 'ANA SOUZA');
+    await page.fill('#cartao-validade', '12/2030');
+    await page.fill('#cartao-cvv', '123');
+    await page.click('#btn-salvar-pagamento');
+
+    await expect(page.locator('.toast-sucesso')).toHaveText(/assinatura está ativa/);
+    expect(corpoEnviado.endereco).toBeUndefined();
   });
 
   test('CPF/CNPJ não é pedido de novo ao trocar de meio de pagamento (CA09)', async ({ page }) => {
@@ -208,33 +356,5 @@ test.describe('Pagamentos (US32)', () => {
     await page.click('#btn-salvar-pagamento');
 
     await expect(page.locator('#pagamento-erro')).toHaveText(/Não foi possível processar/);
-  });
-
-  test('backend recusa cartão sem endereço completo no perfil', async ({ page }) => {
-    await entrarNoPainel(page, {
-      status: 'trial',
-      plano: 'trial',
-      plano_nome: null,
-      valor_plano: null,
-      meio_pagamento: null,
-      cartao_final: null,
-      cpf_cnpj: null,
-      proxima_cobranca: null,
-      historico: [],
-    });
-    await page.route('**/api/pagamentos/cadastrar', (route) =>
-      route.fulfill({ status: 400, json: { error: 'Complete seu endereço em "Meu Perfil" antes de cadastrar um cartão.' } })
-    );
-
-    await page.click('#btn-cadastrar-pagamento');
-    await page.fill('#pagamento-cpf-cnpj', '123.456.789-00');
-    await page.click('input[name="meio"][value="cartao"]');
-    await page.fill('#cartao-numero', '4242 4242 4242 4242');
-    await page.fill('#cartao-nome', 'ANA SOUZA');
-    await page.fill('#cartao-validade', '12/2030');
-    await page.fill('#cartao-cvv', '123');
-    await page.click('#btn-salvar-pagamento');
-
-    await expect(page.locator('#pagamento-erro')).toHaveText(/Meu Perfil/);
   });
 });
