@@ -479,29 +479,59 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   .endereco-grid { grid-template-columns: 1fr; }
 }
 
-/* Modal de pagamento (US32) — mais largo e em 2 colunas pra caber sem
-   scroll (vertical ou horizontal) mesmo com cartão + endereço juntos. */
-.modal-card-pagamento { max-width: 640px; }
-.pagamento-grid-2col {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px 16px;
-  margin-top: 12px;
+/* Modal de pagamento (US32) — mais largo e compacto (cartão em 2 colunas,
+   endereço em 3) pra caber sem scroll vertical nem horizontal mesmo com
+   cartão + endereço juntos na tela. */
+.modal-card-pagamento {
+  max-width: 640px;
+  padding: 14px 28px;
 }
-.pagamento-grid-2col > div { display: flex; flex-direction: column; }
-.pagamento-grid-2col label { margin-top: 0; }
+.modal-card-pagamento h3 { margin-bottom: 0; }
+.modal-card-pagamento label { margin-top: 3px; font-size: 12px; }
+.modal-card-pagamento input,
+.modal-card-pagamento select { padding: 6px 12px; }
+.modal-card-pagamento .modal-erro { min-height: 0; margin-top: 4px; }
+.modal-card-pagamento .modal-acoes { margin-top: 10px; }
+.pagamento-grid-2col,
+.pagamento-grid-3col {
+  display: grid;
+  gap: 0 16px;
+  margin-top: 4px;
+}
+.pagamento-grid-2col { grid-template-columns: 1fr 1fr; }
+.pagamento-grid-3col { grid-template-columns: 1fr 1fr 1fr; }
+.pagamento-grid-2col > div,
+.pagamento-grid-3col > div { display: flex; flex-direction: column; }
+.pagamento-grid-2col label,
+.pagamento-grid-3col label { margin-top: 0; }
+.pagamento-span-3 { grid-column: 1 / -1; }
+.pagamento-secao-endereco {
+  border-top: 1px solid #232847;
+  padding-top: 8px;
+  margin-top: 12px !important;
+}
+.pagamento-secao-endereco::before {
+  content: 'Endereço de cobrança';
+  grid-column: 1 / -1;
+  font-size: 11px;
+  color: #6b7099;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
 .pagamento-checkbox {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 16px;
+  margin-top: 10px;
   font-size: 13px;
   color: #a1a5c4;
 }
 .pagamento-checkbox input { width: auto; margin: 0; }
 @media (max-width: 640px) {
   .modal-card-pagamento { max-width: 420px; }
-  .pagamento-grid-2col { grid-template-columns: 1fr; }
+  .pagamento-grid-2col,
+  .pagamento-grid-3col { grid-template-columns: 1fr; }
+  .pagamento-span-3 { grid-column: auto; }
 }
 
 /* Ações de agendamento (US08) */

@@ -1014,8 +1014,12 @@ function abrirModalPagamento(dadosAtuais) {
             <label class="pagamento-checkbox">
               <input type="checkbox" id="pagamento-atualizar-endereco"> Atualizar endereço de cobrança
             </label>
-          ` : '<label style="margin-top:16px">Endereço de cobrança *</label>'}
-          <div class="pagamento-grid-2col" id="campos-endereco">
+          ` : ''}
+          <div class="pagamento-grid-3col pagamento-secao-endereco" id="campos-endereco">
+            <div class="pagamento-span-3">
+              <label for="pagamento-logradouro">Logradouro *</label>
+              <input type="text" id="pagamento-logradouro" value="${dadosAtuais.endereco_logradouro || ''}" ${desabilitarEndereco}>
+            </div>
             <div>
               <label for="pagamento-cep">CEP *</label>
               <input type="text" id="pagamento-cep" inputmode="numeric" placeholder="00000-000" value="${dadosAtuais.endereco_cep || ''}" ${desabilitarEndereco}>
@@ -1023,10 +1027,6 @@ function abrirModalPagamento(dadosAtuais) {
             <div>
               <label for="pagamento-numero">Número *</label>
               <input type="text" id="pagamento-numero" value="${dadosAtuais.endereco_numero || ''}" ${desabilitarEndereco}>
-            </div>
-            <div>
-              <label for="pagamento-logradouro">Logradouro *</label>
-              <input type="text" id="pagamento-logradouro" value="${dadosAtuais.endereco_logradouro || ''}" ${desabilitarEndereco}>
             </div>
             <div>
               <label for="pagamento-complemento">Complemento</label>
