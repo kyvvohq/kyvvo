@@ -63,6 +63,19 @@
 .diagnostico-cta a{color:var(--accent-light);font-weight:600;text-decoration:none}
 .diagnostico-cta a:hover{text-decoration:underline}
 
+.quem-somos-section{padding:80px 6%;border-top:1px solid var(--border)}
+.fundadores-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,260px));justify-content:center;gap:24px;margin-top:44px}
+.fundador-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:28px 24px;text-align:center;transition:border-color .2s}
+.fundador-card:hover{border-color:rgba(124,92,252,.4)}
+.fundador-avatar{width:80px;height:80px;border-radius:50%;margin:0 auto 16px;display:flex;align-items:center;justify-content:center;font-family:var(--font-d);font-weight:800;font-size:1.4rem;background:linear-gradient(135deg,var(--accent-light),var(--cyan));color:var(--bg)}
+.fundador-nome{font-family:var(--font-d);font-size:1.05rem;font-weight:700;margin-bottom:4px}
+.fundador-cargo{font-size:.78rem;color:var(--accent-light);font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px}
+.fundador-bio{font-size:.86rem;color:var(--muted);line-height:1.6}
+.fundador-linkedin{display:inline-block;margin-top:12px;font-size:.8rem;color:var(--accent-light);text-decoration:none;font-weight:600}
+.fundador-linkedin:hover{text-decoration:underline}
+.quem-somos-origem{text-align:center;margin-top:36px;font-size:.85rem;color:var(--muted)}
+@media(max-width:700px){.fundadores-grid{grid-template-columns:1fr}}
+
 .nav-link{
   font-family:var(--font-b);font-size:.85rem;font-weight:500;
   color:var(--muted);text-decoration:none;transition:color .2s;
@@ -254,6 +267,26 @@
   </div>
 </section>
 
+<!-- Quem somos -->
+<section class="quem-somos-section" id="quem-somos">
+  <div class="section-eyebrow" data-pt="Quem somos" data-en="About us">Quem somos</div>
+  <h2 class="section-title" data-pt="Um time pequeno resolvendo um problema real" data-en="A small team solving a real problem">Um time pequeno resolvendo um problema real</h2>
+  <p class="section-sub" data-pt="Acreditamos que pequeno negócio merece tecnologia boa sem complicação. Construímos o Kyvvo pra você atender sua cliente pelo WhatsApp que já usa, sem perder tempo com sistema difícil." data-en="We believe small businesses deserve good technology without the hassle. We built Kyvvo so you can serve your clients on the WhatsApp they already use, without wasting time on complicated software.">
+    Acreditamos que pequeno negócio merece tecnologia boa sem complicação. Construímos o Kyvvo pra você atender sua cliente pelo WhatsApp que já usa, sem perder tempo com sistema difícil.
+  </p>
+
+  <div class="fundadores-grid">
+    <div class="fundador-card">
+      <div class="fundador-avatar" aria-hidden="true">BA</div>
+      <h3 class="fundador-nome">Bruno Alves</h3>
+      <p class="fundador-cargo" data-pt="Fundador" data-en="Founder">Fundador</p>
+      <p class="fundador-bio" data-pt="Depois de ver de perto a bagunça de agenda em papel e planilha de pequenos negócios, resolvi construir a ferramenta que eu queria que existisse: simples, direto no WhatsApp." data-en="After seeing firsthand the mess of paper schedules and spreadsheets in small businesses, I decided to build the tool I wished existed: simple, straight on WhatsApp.">Depois de ver de perto a bagunça de agenda em papel e planilha de pequenos negócios, resolvi construir a ferramenta que eu queria que existisse: simples, direto no WhatsApp.</p>
+    </div>
+  </div>
+
+  <p class="quem-somos-origem" data-pt="📍 Uberlândia, MG — fundada em 2026" data-en="📍 Uberlândia, Brazil — founded in 2026">📍 Uberlândia, MG — fundada em 2026</p>
+</section>
+
 <!-- FAQ -->
 <section class="faq-section" id="faq">
   <div class="section-eyebrow" data-pt="FAQ" data-en="FAQ">FAQ</div>
@@ -388,6 +421,7 @@ function onSharedReady() {
   const navRight = document.getElementById('navRight');
   if (navRight) {
     navRight.insertAdjacentHTML('afterbegin', `
+      <a class="nav-link" href="#quem-somos" data-pt="Quem somos" data-en="About us">Quem somos</a>
       <a class="nav-link" href="#faq" data-pt="Perguntas frequentes" data-en="FAQ">Perguntas frequentes</a>
       <div class="lang-toggle">
         <button class="lang-btn active" onclick="setLang('pt')">PT</button>
