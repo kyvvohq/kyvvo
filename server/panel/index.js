@@ -1342,7 +1342,7 @@ async function start() {
     }
 
     const { rows } = await pool.query(
-      `SELECT nome, whatsapp, plano, ativado_em, asaas_customer_id, asaas_subscription_id, cpf_cnpj,
+      `SELECT nome, whatsapp, telefone, plano, ativado_em, asaas_customer_id, asaas_subscription_id, cpf_cnpj,
               endereco_cep, endereco_numero, endereco_complemento
        FROM tenants WHERE id = $1`,
       [tenantId]
@@ -1373,6 +1373,11 @@ async function start() {
     const billingType = meio === 'pix' ? 'PIX' : 'CREDIT_CARD';
     const cartaoFinal = meio === 'cartao' ? cartaoNumeroLimpo.slice(-4) : null;
 
+    // Número de contato do titular (exigido na tokenização de cartão) — nem
+    // todo tenant tem WhatsApp cadastrado (ex: criado pela área admin, US16),
+    // mas `telefone` é obrigatório desde a US33; usa o que tiver.
+    const contato = tenant.whatsapp || tenant.telefone;
+
     let customer;
     let subscriptionId;
     try {
@@ -1380,7 +1385,7 @@ async function start() {
         tenantId,
         nome: tenant.nome,
         email: request.user.email,
-        whatsapp: tenant.whatsapp,
+        whatsapp: contato,
         cpfCnpj: cpfCnpjLimpo,
         asaasCustomerId: tenant.asaas_customer_id,
       });
@@ -1401,8 +1406,8 @@ async function start() {
             postalCode: tenant.endereco_cep,
             addressNumber: tenant.endereco_numero,
             addressComplement: tenant.endereco_complemento || undefined,
-            phone: tenant.whatsapp || undefined,
-            mobilePhone: tenant.whatsapp || undefined,
+            phone: contato || undefined,
+            mobilePhone: contato || undefined,
           },
           remoteIp: request.ip,
         });
