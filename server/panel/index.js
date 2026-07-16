@@ -6,6 +6,7 @@ const path = require('path');
 const bcrypt = require('bcryptjs');
 const { Pool } = require('pg');
 const tokenService = require('./token-service');
+const asaasService = require('./asaas-service');
 
 // ---------- Cadastro self-service (US20) ----------
 const TRIAL_DIAS = 14;
@@ -85,6 +86,17 @@ function dataAtualBrasilia() {
 // Mês (YYYY-MM) de "agora" em horário de Brasília — mesmo raciocínio acima.
 function mesAtualBrasilia() {
   return new Date(Date.now() - OFFSET_BRASILIA_MINUTOS * 60000).toISOString().slice(0, 7);
+}
+
+// US32/CA05 — data da primeira cobrança da assinatura Asaas: se o trial (14
+// dias a partir de `ativado_em`) ainda não acabou, a cobrança só nasce pra
+// vencer no fim do trial; senão, vence hoje (tenant já devia estar pagando).
+function proximaCobrancaRespeitandoTrial(tenant) {
+  if (tenant.ativado_em) {
+    const trialFim = new Date(new Date(tenant.ativado_em).getTime() + TRIAL_DIAS * 24 * 60 * 60 * 1000);
+    if (trialFim.getTime() > Date.now()) return trialFim.toISOString().slice(0, 10);
+  }
+  return new Date().toISOString().slice(0, 10);
 }
 
 async function start() {
@@ -1149,6 +1161,178 @@ async function start() {
       return rows[0];
     }
   );
+
+  // ---------- Pagamentos / Asaas (US32) ----------
+  const CARTAO_FINAL_REGEX = /^\d{4}$/;
+
+  // Monta o payload de resposta da aba de pagamentos (CA02/CA07/CA08) — usado
+  // tanto pelo GET quanto pela resposta do POST /cadastrar, pra sempre
+  // devolver o mesmo formato depois de qualquer mudança de estado.
+  async function montarResumoPagamentos(tenant) {
+    const planoInfo = asaasService.PLANOS[tenant.plano] || null;
+    const subscription = await asaasService.buscarSubscription(tenant.asaas_subscription_id).catch((erro) => {
+      console.error(`[pagamentos] falha ao buscar subscription ${tenant.asaas_subscription_id}: ${erro.message}`);
+      return null;
+    });
+    const historico = await asaasService.listarUltimasCobrancas(tenant.asaas_subscription_id).catch((erro) => {
+      console.error(`[pagamentos] falha ao listar cobranças da subscription ${tenant.asaas_subscription_id}: ${erro.message}`);
+      return [];
+    });
+
+    return {
+      status: tenant.status,
+      plano: tenant.plano,
+      plano_nome: planoInfo ? planoInfo.nome : null,
+      valor_plano: planoInfo ? planoInfo.valor : null,
+      meio_pagamento: tenant.asaas_meio_pagamento,
+      cartao_final: tenant.asaas_cartao_final,
+      proxima_cobranca: subscription ? { data: subscription.nextDueDate, valor: subscription.value } : null,
+      historico: historico.map((p) => ({
+        data: p.dueDate,
+        valor: p.value,
+        status: p.status,
+      })),
+      // CA06 — o front só tokeniza cartão via Asaas.js se essa URL estiver
+      // configurada (script oficial obtido no painel da Asaas); sem ela, a
+      // aba oferece só Pix em vez de arriscar um endpoint de tokenização
+      // inventado/desatualizado.
+      asaas_js_url: process.env.ASAAS_JS_URL || null,
+    };
+  }
+
+  // CA02/CA07/CA08 — estado atual da aba de pagamentos do tenant logado.
+  fastify.get('/api/pagamentos', { preHandler: [fastify.authenticate] }, async (request) => {
+    const { tenantId } = request.user;
+    const { rows } = await pool.query(
+      `SELECT plano, status, ativado_em, asaas_customer_id, asaas_subscription_id,
+              asaas_meio_pagamento, asaas_cartao_final
+       FROM tenants WHERE id = $1`,
+      [tenantId]
+    );
+    return montarResumoPagamentos(rows[0]);
+  });
+
+  // CA04/CA05/CA09 — orquestra Customer + Subscription no Asaas. Cria na
+  // primeira vez; se o tenant já tem assinatura, apenas troca o meio de
+  // pagamento (CA09 — atualiza, não cancela).
+  fastify.post('/api/pagamentos/cadastrar', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const { tenantId } = request.user;
+    const { meio, credit_card_token: creditCardToken, cartao_final: cartaoFinal } = request.body || {};
+
+    if (!['pix', 'cartao'].includes(meio)) {
+      return reply.code(400).send({ error: 'Campo "meio" deve ser "pix" ou "cartao"' });
+    }
+    if (meio === 'cartao') {
+      if (!creditCardToken) {
+        return reply.code(400).send({ error: 'Token do cartão (tokenizado via Asaas.js) é obrigatório' });
+      }
+      if (!CARTAO_FINAL_REGEX.test(cartaoFinal || '')) {
+        return reply.code(400).send({ error: 'Informe os 4 últimos dígitos do cartão' });
+      }
+    }
+
+    const { rows } = await pool.query(
+      `SELECT nome, whatsapp, plano, ativado_em, asaas_customer_id, asaas_subscription_id
+       FROM tenants WHERE id = $1`,
+      [tenantId]
+    );
+    const tenant = rows[0];
+    if (!tenant) {
+      return reply.code(404).send({ error: 'Tenant não encontrado' });
+    }
+
+    // Trial (ou tenant sem plano definido) ainda não escolheu um plano pago —
+    // hoje só existe o Profissional (mesmo conjunto de módulos liberado no
+    // trial, ver MODULOS_TRIAL); vira o plano contratado.
+    const plano = tenant.plano && tenant.plano !== 'trial' ? tenant.plano : asaasService.PLANO_PADRAO;
+    const billingType = meio === 'pix' ? 'PIX' : 'CREDIT_CARD';
+
+    let customer;
+    let subscriptionId;
+    try {
+      customer = await asaasService.criarOuRecuperarCustomer({
+        tenantId,
+        nome: tenant.nome,
+        email: request.user.email,
+        whatsapp: tenant.whatsapp,
+        asaasCustomerId: tenant.asaas_customer_id,
+      });
+
+      if (tenant.asaas_subscription_id) {
+        await asaasService.atualizarSubscription({
+          subscriptionId: tenant.asaas_subscription_id,
+          billingType,
+          creditCardToken,
+          tenantId,
+        });
+        subscriptionId = tenant.asaas_subscription_id;
+      } else {
+        const subscription = await asaasService.criarSubscription({
+          customerId: customer.id,
+          billingType,
+          plano,
+          nextDueDate: proximaCobrancaRespeitandoTrial(tenant),
+          creditCardToken,
+          tenantId,
+        });
+        subscriptionId = subscription.id;
+      }
+    } catch (erro) {
+      console.error(`[pagamentos] falha na integração com a Asaas para tenant ${tenantId}: ${erro.message}`);
+      return reply.code(502).send({ error: 'Não foi possível processar o pagamento agora. Tente novamente em instantes.' });
+    }
+
+    const { rows: atualizado } = await pool.query(
+      `UPDATE tenants SET
+         asaas_customer_id = $2,
+         asaas_subscription_id = $3,
+         plano = $4,
+         status = 'ativo',
+         asaas_meio_pagamento = $5,
+         asaas_cartao_final = $6
+       WHERE id = $1
+       RETURNING plano, status, ativado_em, asaas_customer_id, asaas_subscription_id,
+                 asaas_meio_pagamento, asaas_cartao_final`,
+      [tenantId, customer.id, subscriptionId, plano, meio, meio === 'cartao' ? cartaoFinal : null]
+    );
+
+    return montarResumoPagamentos(atualizado[0]);
+  });
+
+  // CA10 — webhook da Asaas: atualiza o status do tenant conforme o evento da
+  // cobrança/assinatura. Sem fastify.authenticate — quem chama é a Asaas, não
+  // um usuário logado; a validação é pelo token no header (CA12).
+  const ASAAS_EVENTO_PARA_STATUS = {
+    PAYMENT_CONFIRMED: 'ativo',
+    PAYMENT_RECEIVED: 'ativo',
+    PAYMENT_OVERDUE: 'inadimplente',
+    PAYMENT_DELETED: 'suspenso',
+    SUBSCRIPTION_CANCELLED: 'suspenso',
+  };
+
+  fastify.post('/webhooks/asaas', async (request, reply) => {
+    const tokenEsperado = process.env.ASAAS_WEBHOOK_TOKEN;
+    const tokenRecebido = request.headers['asaas-access-token'];
+    if (!tokenEsperado || tokenRecebido !== tokenEsperado) {
+      return reply.code(401).send({ error: 'Token de webhook inválido' });
+    }
+
+    const { event, payment, subscription } = request.body || {};
+    const novoStatus = ASAAS_EVENTO_PARA_STATUS[event];
+    // Evento sem mapeamento (ex: PAYMENT_CREATED) ou sem uma cobrança/
+    // assinatura pra identificar o tenant: apenas confirma o recebimento —
+    // é assim que a Asaas espera 200 pra não reenviar o mesmo evento.
+    if (!novoStatus) {
+      return { ok: true };
+    }
+    const subscriptionId = (payment && payment.subscription) || (subscription && subscription.id);
+    if (!subscriptionId) {
+      return { ok: true };
+    }
+
+    await pool.query('UPDATE tenants SET status = $2 WHERE asaas_subscription_id = $1', [subscriptionId, novoStatus]);
+    return { ok: true };
+  });
 
   // ---------- Área admin da Kyvvo (US16) ----------
   // Todas as rotas abaixo usam fastify.authenticateAdmin (JWT/tabela

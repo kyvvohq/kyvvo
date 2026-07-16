@@ -499,6 +499,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .badge-status-inativo { background: rgba(161, 165, 196, 0.15); color: #a1a5c4; }
 .badge-status-suspenso { background: rgba(240, 179, 84, 0.15); color: #f0b354; }
 .badge-status-nao-ativado { background: rgba(250, 204, 21, 0.15); color: #facc15; }
+/* Pagamentos (US32) */
+.badge-status-inadimplente { background: rgba(255, 107, 107, 0.15); color: #ff6b6b; }
 
 /* Indicador de trial somente leitura (US31) */
 .badge-trial-indicador { margin-left: 0; }
