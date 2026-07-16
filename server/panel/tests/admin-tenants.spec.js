@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
-// Cobre US26: tela dedicada de listagem de tenants no admin da Kyvvo,
-// separada do CRUD simples em painel.html (US16). API mockada via
+// Cobre US26/US27/US28/US31: listagem de tenants (busca, ordenação,
+// paginação, badges de status) dentro do painel admin. API mockada via
 // page.route — sem dependência de Postgres real.
 
 function tenantMock(overrides = {}) {
@@ -31,12 +31,12 @@ async function entrarNaListaDeTenants(page, tenants = [], meta = {}) {
     window.localStorage.setItem('kyvvo_admin_token', 'admin-token-fake');
     window.localStorage.setItem('kyvvo_admin_nome', 'Equipe Kyvvo');
   });
-  await page.goto('/admin/tenants.html');
+  await page.goto('/admin/painel.html');
 }
 
 test.describe('Admin — listagem de tenants (US26)', () => {
   test('redireciona para o login se não autenticado como admin', async ({ page }) => {
-    await page.goto('/admin/tenants.html');
+    await page.goto('/admin/painel.html');
     await expect(page).toHaveURL(/\/admin\/login\.html/);
   });
 
@@ -117,7 +117,7 @@ test.describe('Admin — listagem de tenants (US26)', () => {
     await page.addInitScript(() => {
       window.localStorage.setItem('kyvvo_admin_token', 'admin-token-fake');
     });
-    await page.goto('/admin/tenants.html');
+    await page.goto('/admin/painel.html');
 
     expect(urlRecebida).toContain('order_by=cadastrado_em');
     expect(urlRecebida).toContain('order_dir=desc');
@@ -132,7 +132,7 @@ test.describe('Admin — listagem de tenants (US26)', () => {
     await page.addInitScript(() => {
       window.localStorage.setItem('kyvvo_admin_token', 'admin-token-fake');
     });
-    await page.goto('/admin/tenants.html');
+    await page.goto('/admin/painel.html');
 
     await page.click('[data-order-by="nome"]');
     await expect.poll(() => requisicoes.at(-1)).toContain('order_by=nome');
@@ -156,7 +156,7 @@ test.describe('Admin — listagem de tenants (US26)', () => {
     await page.addInitScript(() => {
       window.localStorage.setItem('kyvvo_admin_token', 'admin-token-fake');
     });
-    await page.goto('/admin/tenants.html');
+    await page.goto('/admin/painel.html');
 
     await expect(page.getByText('Página 1 de 2')).toBeVisible();
     await expect(page.locator('#btn-pagina-anterior')).toBeDisabled();
@@ -185,7 +185,7 @@ test.describe('Admin — busca na listagem de tenants (US27)', () => {
     await page.addInitScript(() => {
       window.localStorage.setItem('kyvvo_admin_token', 'admin-token-fake');
     });
-    await page.goto('/admin/tenants.html');
+    await page.goto('/admin/painel.html');
 
     await page.fill('#busca-tenants', '@gmail');
 
@@ -202,7 +202,7 @@ test.describe('Admin — busca na listagem de tenants (US27)', () => {
     await page.addInitScript(() => {
       window.localStorage.setItem('kyvvo_admin_token', 'admin-token-fake');
     });
-    await page.goto('/admin/tenants.html');
+    await page.goto('/admin/painel.html');
 
     await page.fill('#busca-tenants', '3499');
     await expect.poll(() => requisicoes.at(-1)).toContain('search=3499');
@@ -220,7 +220,7 @@ test.describe('Admin — busca na listagem de tenants (US27)', () => {
     await page.addInitScript(() => {
       window.localStorage.setItem('kyvvo_admin_token', 'admin-token-fake');
     });
-    await page.goto('/admin/tenants.html');
+    await page.goto('/admin/painel.html');
 
     await page.fill('#busca-tenants', 'inexistente');
     await expect(page.getByText("Nenhum tenant encontrado para 'inexistente'.")).toBeVisible();
@@ -240,7 +240,7 @@ test.describe('Admin — busca na listagem de tenants (US27)', () => {
     await page.addInitScript(() => {
       window.localStorage.setItem('kyvvo_admin_token', 'admin-token-fake');
     });
-    await page.goto('/admin/tenants.html');
+    await page.goto('/admin/painel.html');
 
     const btnLimpar = page.locator('#btn-limpar-busca');
     await expect(btnLimpar).toBeHidden();

@@ -188,7 +188,7 @@ test.describe('Admin — detalhe do tenant (US28)', () => {
   test('botão "Voltar para lista" leva de volta à listagem (CA01)', async ({ page }) => {
     await entrarNoDetalheDoTenant(page, tenantDetalheMock());
     await page.click('text=Voltar para lista');
-    await expect(page).toHaveURL(/\/admin\/tenants\.html/);
+    await expect(page).toHaveURL(/\/admin\/painel\.html/);
   });
 
   test('tenant inexistente mostra a mensagem de erro do backend', async ({ page }) => {
@@ -220,7 +220,7 @@ test.describe('Admin — detalhe do tenant (US28)', () => {
     await page.addInitScript(() => {
       window.localStorage.setItem('kyvvo_admin_token', 'admin-token-fake');
     });
-    await page.goto('/admin/tenants.html');
+    await page.goto('/admin/painel.html');
 
     await page.click('.tabela-tenants tbody tr td:first-child');
     await expect(page).toHaveURL(/\/admin\/tenants\/t1$/);

@@ -21,7 +21,7 @@ test.describe('Admin — login (US16)', () => {
     await page.route('**/admin/api/auth/login', (route) =>
       route.fulfill({ json: { token: 'admin-token-fake', nome: 'Equipe Kyvvo', email: 'equipe@kyvvo.com.br' } })
     );
-    await page.route('**/admin/api/tenants', (route) => route.fulfill({ json: { tenants: [] } }));
+    await page.route('**/admin/api/tenants*', (route) => route.fulfill({ json: { tenants: [], page: 1, limit: 20, total: 0, total_paginas: 1 } }));
 
     await page.goto('/admin/login.html');
     await page.fill('#email', 'equipe@kyvvo.com.br');
@@ -47,10 +47,22 @@ test.describe('Admin — login (US16)', () => {
 });
 
 test.describe('Admin — CRUD de tenants (US16)', () => {
+  function tenantMock(overrides = {}) {
+    return {
+      id: 't1',
+      nome: 'Salão Kyvvo Teste',
+      segmento: 'salao_beleza',
+      ativo: true,
+      status_conta: 'Ativo',
+      total_usuarios: 1,
+      ...overrides,
+    };
+  }
+
   async function entrarNoPainelAdmin(page, tenants = []) {
-    await page.route('**/admin/api/tenants', (route) => {
+    await page.route('**/admin/api/tenants*', (route) => {
       if (route.request().method() !== 'GET') return route.fallback();
-      return route.fulfill({ json: { tenants } });
+      return route.fulfill({ json: { tenants, page: 1, limit: 20, total: tenants.length, total_paginas: 1 } });
     });
     await page.addInitScript(() => {
       window.localStorage.setItem('kyvvo_admin_token', 'admin-token-fake');
@@ -61,18 +73,18 @@ test.describe('Admin — CRUD de tenants (US16)', () => {
 
   test('lista os tenants cadastrados', async ({ page }) => {
     await entrarNoPainelAdmin(page, [
-      { id: 't1', nome: 'Salão Kyvvo Teste', segmento: 'salao_beleza', ativo: true, total_usuarios: 1 },
-      { id: 't2', nome: 'PetShop Amigo Fiel', segmento: 'petshop', ativo: true, total_usuarios: 1 },
+      tenantMock({ id: 't1', nome: 'Salão Kyvvo Teste' }),
+      tenantMock({ id: 't2', nome: 'PetShop Amigo Fiel' }),
     ]);
-    await expect(page.locator('.agendamento-item')).toHaveCount(2);
-    await expect(page.locator('.agendamento-item').first()).toContainText('Salão Kyvvo Teste');
+    await expect(page.locator('.tabela-tenants tbody tr')).toHaveCount(2);
+    await expect(page.locator('.tabela-tenants tbody tr').first()).toContainText('Salão Kyvvo Teste');
   });
 
-  test('tenant desativado mostra o selo "Desativado"', async ({ page }) => {
-    await entrarNoPainelAdmin(page, [
-      { id: 't1', nome: 'Cliente Antigo', segmento: 'outro', ativo: false, total_usuarios: 1 },
-    ]);
-    await expect(page.locator('.agendamento-item')).toContainText('Desativado');
+  test('tenant desativado mostra o status "Inativo" e o botão "Ativar"', async ({ page }) => {
+    await entrarNoPainelAdmin(page, [tenantMock({ id: 't1', nome: 'Cliente Antigo', ativo: false, status_conta: 'Inativo' })]);
+    const linha = page.locator('.tabela-tenants tbody tr').first();
+    await expect(linha.locator('.badge-status')).toHaveText('Inativo');
+    await expect(linha.locator('[data-tenant-acao="alternar"]')).toHaveText('Ativar');
   });
 
   test('cria um tenant novo, sem usuário de login junto', async ({ page }) => {
@@ -116,9 +128,7 @@ test.describe('Admin — CRUD de tenants (US16)', () => {
   });
 
   test('editar mostra módulos ativos, usuários e contagens do tenant', async ({ page }) => {
-    await entrarNoPainelAdmin(page, [
-      { id: 't1', nome: 'Salão Kyvvo Teste', segmento: 'salao_beleza', ativo: true, total_usuarios: 1 },
-    ]);
+    await entrarNoPainelAdmin(page, [tenantMock({ id: 't1', nome: 'Salão Kyvvo Teste' })]);
     await page.route('**/admin/api/tenants/t1', (route) => {
       if (route.request().method() !== 'GET') return route.fallback();
       return route.fulfill({
@@ -136,8 +146,7 @@ test.describe('Admin — CRUD de tenants (US16)', () => {
       });
     });
 
-    await page.click('[data-tenant-toggle="t1"]');
-    await page.click('[data-tenant-acao="editar"]');
+    await page.click('[data-tenant-acao="editar"][data-id="t1"]');
 
     await expect(page.locator('.modal-texto')).toContainText('Agenda Inteligente');
     await expect(page.locator('.modal-texto')).toContainText('ana@salaokyvvo.com');
@@ -146,9 +155,7 @@ test.describe('Admin — CRUD de tenants (US16)', () => {
   });
 
   test('desativar um tenant chama o PATCH correto e atualiza a lista', async ({ page }) => {
-    await entrarNoPainelAdmin(page, [
-      { id: 't1', nome: 'Salão Kyvvo Teste', segmento: 'salao_beleza', ativo: true, total_usuarios: 1 },
-    ]);
+    await entrarNoPainelAdmin(page, [tenantMock({ id: 't1', nome: 'Salão Kyvvo Teste' })]);
     let corpoEnviado = null;
     await page.route('**/admin/api/tenants/t1', (route) => {
       if (route.request().method() !== 'PATCH') return route.fallback();
@@ -156,11 +163,16 @@ test.describe('Admin — CRUD de tenants (US16)', () => {
       return route.fulfill({ json: { id: 't1', ativo: false } });
     });
 
-    await page.click('[data-tenant-toggle="t1"]');
-    await page.click('[data-tenant-acao="alternar"]');
+    await page.click('[data-tenant-acao="alternar"][data-id="t1"]');
 
     await expect(page.locator('.toast-sucesso')).toHaveText(/desativado com sucesso/);
     expect(corpoEnviado).toMatchObject({ ativo: false });
+  });
+
+  test('clicar numa linha da tabela navega pro detalhe do tenant', async ({ page }) => {
+    await entrarNoPainelAdmin(page, [tenantMock({ id: 't1', nome: 'Salão Kyvvo Teste' })]);
+    await page.click('.tabela-tenants tbody tr[data-id="t1"]');
+    await expect(page).toHaveURL(/\/admin\/tenants\/t1/);
   });
 
   test('nome em branco fica destacado como obrigatório', async ({ page }) => {
