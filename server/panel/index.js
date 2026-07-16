@@ -1249,6 +1249,10 @@ async function start() {
 
   // ---------- Pagamentos / Asaas (US32) ----------
   const CARTAO_FINAL_REGEX = /^\d{4}$/;
+  // A Asaas exige CPF (11 dígitos) ou CNPJ (14) do Customer pra emitir
+  // cobrança — descoberto só ao testar com uma chave de API real (o modo
+  // dev nunca chama a API de verdade, então nunca acusaria essa exigência).
+  const CPF_CNPJ_REGEX = /^\d{11}$|^\d{14}$/;
 
   // Monta o payload de resposta da aba de pagamentos (CA02/CA07/CA08) — usado
   // tanto pelo GET quanto pela resposta do POST /cadastrar, pra sempre
@@ -1271,6 +1275,7 @@ async function start() {
       valor_plano: planoInfo ? planoInfo.valor : null,
       meio_pagamento: tenant.asaas_meio_pagamento,
       cartao_final: tenant.asaas_cartao_final,
+      cpf_cnpj: tenant.cpf_cnpj,
       proxima_cobranca: subscription ? { data: subscription.nextDueDate, valor: subscription.value } : null,
       historico: historico.map((p) => ({
         data: p.dueDate,
@@ -1290,7 +1295,7 @@ async function start() {
     const { tenantId } = request.user;
     const { rows } = await pool.query(
       `SELECT plano, status, ativado_em, asaas_customer_id, asaas_subscription_id,
-              asaas_meio_pagamento, asaas_cartao_final
+              asaas_meio_pagamento, asaas_cartao_final, cpf_cnpj
        FROM tenants WHERE id = $1`,
       [tenantId]
     );
@@ -1302,7 +1307,12 @@ async function start() {
   // pagamento (CA09 — atualiza, não cancela).
   fastify.post('/api/pagamentos/cadastrar', { preHandler: [fastify.authenticate] }, async (request, reply) => {
     const { tenantId } = request.user;
-    const { meio, credit_card_token: creditCardToken, cartao_final: cartaoFinal } = request.body || {};
+    const {
+      meio,
+      credit_card_token: creditCardToken,
+      cartao_final: cartaoFinal,
+      cpf_cnpj: cpfCnpjBruto,
+    } = request.body || {};
 
     if (!['pix', 'cartao'].includes(meio)) {
       return reply.code(400).send({ error: 'Campo "meio" deve ser "pix" ou "cartao"' });
@@ -1317,13 +1327,21 @@ async function start() {
     }
 
     const { rows } = await pool.query(
-      `SELECT nome, whatsapp, plano, ativado_em, asaas_customer_id, asaas_subscription_id
+      `SELECT nome, whatsapp, plano, ativado_em, asaas_customer_id, asaas_subscription_id, cpf_cnpj
        FROM tenants WHERE id = $1`,
       [tenantId]
     );
     const tenant = rows[0];
     if (!tenant) {
       return reply.code(404).send({ error: 'Tenant não encontrado' });
+    }
+
+    // CPF/CNPJ só é pedido na primeira vez (CA04) — se o tenant já tiver um
+    // Customer criado na Asaas, ele já foi enviado então e não muda a troca
+    // de meio de pagamento (CA09).
+    const cpfCnpjLimpo = String(cpfCnpjBruto || '').replace(/\D/g, '') || tenant.cpf_cnpj;
+    if (!tenant.asaas_customer_id && !CPF_CNPJ_REGEX.test(cpfCnpjLimpo || '')) {
+      return reply.code(400).send({ error: 'Informe um CPF (11 dígitos) ou CNPJ (14 dígitos) válido.' });
     }
 
     // Trial (ou tenant sem plano definido) ainda não escolheu um plano pago —
@@ -1340,6 +1358,7 @@ async function start() {
         nome: tenant.nome,
         email: request.user.email,
         whatsapp: tenant.whatsapp,
+        cpfCnpj: cpfCnpjLimpo,
         asaasCustomerId: tenant.asaas_customer_id,
       });
 
@@ -1374,11 +1393,12 @@ async function start() {
          plano = $4,
          status = 'ativo',
          asaas_meio_pagamento = $5,
-         asaas_cartao_final = $6
+         asaas_cartao_final = $6,
+         cpf_cnpj = $7
        WHERE id = $1
        RETURNING plano, status, ativado_em, asaas_customer_id, asaas_subscription_id,
-                 asaas_meio_pagamento, asaas_cartao_final`,
-      [tenantId, customer.id, subscriptionId, plano, meio, meio === 'cartao' ? cartaoFinal : null]
+                 asaas_meio_pagamento, asaas_cartao_final, cpf_cnpj`,
+      [tenantId, customer.id, subscriptionId, plano, meio, meio === 'cartao' ? cartaoFinal : null, cpfCnpjLimpo]
     );
 
     return montarResumoPagamentos(atualizado[0]);

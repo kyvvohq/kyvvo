@@ -60,7 +60,7 @@ async function chamar(metodo, caminho, corpo) {
 
 // CA04 — cria (ou recupera, se já existir) o Customer no Asaas pro tenant.
 // Em modo dev, devolve um id fake e loga em vez de chamar a API.
-async function criarOuRecuperarCustomer({ tenantId, nome, email, whatsapp, asaasCustomerId }) {
+async function criarOuRecuperarCustomer({ tenantId, nome, email, whatsapp, cpfCnpj, asaasCustomerId }) {
   if (asaasCustomerId) return { id: asaasCustomerId };
 
   if (modoDev()) {
@@ -73,6 +73,7 @@ async function criarOuRecuperarCustomer({ tenantId, nome, email, whatsapp, asaas
     name: nome,
     email,
     phone: whatsapp || undefined,
+    cpfCnpj,
     externalReference: tenantId,
   });
 }

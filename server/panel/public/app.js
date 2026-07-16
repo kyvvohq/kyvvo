@@ -982,12 +982,20 @@ function carregarAsaasJs(url) {
 
 function abrirModalPagamento(dadosAtuais) {
   const cartaoDisponivel = !!dadosAtuais.asaas_js_url;
+  // A Asaas exige CPF/CNPJ do Customer pra emitir cobrança — só pedimos na
+  // primeira vez (CA04); se o tenant já tem um cadastrado, não perguntamos
+  // de novo ao trocar de meio de pagamento (CA09).
+  const cpfCnpjJaCadastrado = !!dadosAtuais.cpf_cnpj;
 
   abrirModal(
     '<h3>Forma de pagamento</h3>',
     `
       <form id="form-pagamento">
         <div class="modal-erro" id="pagamento-erro"></div>
+        ${cpfCnpjJaCadastrado ? '' : `
+          <label for="pagamento-cpf-cnpj">CPF ou CNPJ *</label>
+          <input type="text" id="pagamento-cpf-cnpj" inputmode="numeric" placeholder="Somente números">
+        `}
         <label>
           <input type="radio" name="meio" value="pix" checked> Pix recorrente
         </label>
@@ -1029,11 +1037,19 @@ function abrirModalPagamento(dadosAtuais) {
     erroEl.textContent = '';
     const meio = form.querySelector('input[name="meio"]:checked').value;
 
+    const cpfCnpjInput = document.getElementById('pagamento-cpf-cnpj');
+    const cpfCnpjLimpo = cpfCnpjInput ? cpfCnpjInput.value.replace(/\D/g, '') : '';
+    if (cpfCnpjInput && ![11, 14].includes(cpfCnpjLimpo.length)) {
+      erroEl.textContent = 'Informe um CPF (11 dígitos) ou CNPJ (14 dígitos) válido.';
+      return;
+    }
+
     const btn = document.getElementById('btn-salvar-pagamento');
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner"></span>';
 
     let payload = { meio };
+    if (cpfCnpjInput) payload.cpf_cnpj = cpfCnpjLimpo;
     if (meio === 'cartao') {
       try {
         await carregarAsaasJs(dadosAtuais.asaas_js_url);
