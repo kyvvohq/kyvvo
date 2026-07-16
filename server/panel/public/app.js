@@ -870,9 +870,222 @@ function abrirModalLancamento() {
   });
 }
 
+// ---------- Pagamentos / Asaas (US32) ----------
+const PAGAMENTOS_STATUS_LABEL = {
+  trial: 'Trial',
+  ativo: 'Ativo',
+  inadimplente: 'Inadimplente',
+  suspenso: 'Suspenso',
+  expirado: 'Expirado',
+  cancelado: 'Cancelado',
+};
+const PAGAMENTOS_STATUS_BADGE = {
+  trial: 'badge-trial-ativo',
+  ativo: 'badge-status-ativo',
+  inadimplente: 'badge-status-inadimplente',
+  suspenso: 'badge-status-suspenso',
+  expirado: 'badge-trial-expirado',
+  cancelado: 'badge-status-inativo',
+};
+
+function formatarDataCurtaISO(dataISO) {
+  if (!dataISO) return '—';
+  // dueDate/data vêm como "YYYY-MM-DD" (sem hora) tanto do banco quanto da
+  // Asaas — new Date("YYYY-MM-DD") interpreta como UTC meia-noite, então
+  // formata os componentes direto da string em vez de usar o Date local.
+  const [ano, mes, dia] = dataISO.slice(0, 10).split('-');
+  return `${dia}/${mes}/${ano}`;
+}
+
+async function renderPagamentos() {
+  conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
+  const dados = await api('/api/pagamentos');
+  if (!dados) return;
+
+  const meioLabel = dados.meio_pagamento === 'cartao'
+    ? `Cartão •••• ${dados.cartao_final || '----'}`
+    : dados.meio_pagamento === 'pix'
+      ? 'Pix recorrente'
+      : 'Não cadastrado';
+
+  const statusBadge = `<span class="badge ${PAGAMENTOS_STATUS_BADGE[dados.status] || 'badge-status-inativo'}">${PAGAMENTOS_STATUS_LABEL[dados.status] || dados.status}</span>`;
+
+  let html = '<div class="nav-periodo"><strong>Pagamentos</strong></div>';
+
+  if (dados.status === 'trial') {
+    html += `
+      <div class="financeiro-resumo-card" style="margin-bottom:16px">
+        <div class="financeiro-resumo-label">Plano atual</div>
+        <div>${dados.plano_nome || 'A definir'}${dados.valor_plano != null ? ` — ${formatarPreco(dados.valor_plano)}/mês após o trial` : ''}</div>
+      </div>
+      <p class="modal-texto">Cadastre um meio de pagamento para manter o acesso ao Kyvvo quando o trial acabar.</p>
+      <button class="btn-novo-agendamento" id="btn-cadastrar-pagamento">Cadastrar forma de pagamento</button>
+    `;
+  } else if (!dados.meio_pagamento) {
+    html += `
+      <p class="modal-texto">Nenhum meio de pagamento cadastrado.</p>
+      <button class="btn-novo-agendamento" id="btn-cadastrar-pagamento">Cadastrar forma de pagamento</button>
+    `;
+  } else {
+    html += `
+      <div class="financeiro-resumo">
+        <div class="financeiro-resumo-card">
+          <div class="financeiro-resumo-label">Plano atual</div>
+          <div>${dados.plano_nome || '—'}${dados.valor_plano != null ? ` — ${formatarPreco(dados.valor_plano)}` : ''}</div>
+        </div>
+        <div class="financeiro-resumo-card">
+          <div class="financeiro-resumo-label">Meio de pagamento</div>
+          <div>${meioLabel}</div>
+        </div>
+        <div class="financeiro-resumo-card">
+          <div class="financeiro-resumo-label">Status</div>
+          <div>${statusBadge}</div>
+        </div>
+      </div>
+      <p class="modal-texto">
+        Próxima cobrança: ${dados.proxima_cobranca ? `${formatarPreco(dados.proxima_cobranca.valor)} em ${formatarDataCurtaISO(dados.proxima_cobranca.data)}` : 'não disponível'}
+      </p>
+      <button class="btn-secundario" id="btn-cadastrar-pagamento" style="margin-bottom:16px">Alterar forma de pagamento</button>
+      <div class="tabela-wrapper">
+        <table class="tabela-tenants">
+          <thead><tr><th>Data</th><th>Valor</th><th>Status</th></tr></thead>
+          <tbody>
+            ${dados.historico.length
+              ? dados.historico.map((h) => `<tr><td>${formatarDataCurtaISO(h.data)}</td><td>${formatarPreco(h.valor)}</td><td>${h.status}</td></tr>`).join('')
+              : '<tr><td colspan="3">Nenhuma cobrança registrada ainda.</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  conteudo.innerHTML = html;
+  document.getElementById('btn-cadastrar-pagamento').addEventListener('click', () => abrirModalPagamento(dados));
+}
+
+// Carrega o Asaas.js sob demanda (só quando o usuário escolhe cartão), e só
+// uma vez por sessão. Sem ASAAS_JS_URL configurada no servidor (dev/sandbox
+// sem conta Asaas ligada), a opção "Cartão" fica desabilitada — melhor do que
+// carregar uma URL de tokenizador adivinhada/desatualizada (CA06).
+let asaasJsCarregado = null;
+function carregarAsaasJs(url) {
+  if (asaasJsCarregado) return asaasJsCarregado;
+  asaasJsCarregado = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = url;
+    script.onload = resolve;
+    script.onerror = () => reject(new Error('Falha ao carregar Asaas.js'));
+    document.head.appendChild(script);
+  });
+  return asaasJsCarregado;
+}
+
+function abrirModalPagamento(dadosAtuais) {
+  const cartaoDisponivel = !!dadosAtuais.asaas_js_url;
+
+  abrirModal(
+    '<h3>Forma de pagamento</h3>',
+    `
+      <form id="form-pagamento">
+        <div class="modal-erro" id="pagamento-erro"></div>
+        <label>
+          <input type="radio" name="meio" value="pix" checked> Pix recorrente
+        </label>
+        <label>
+          <input type="radio" name="meio" value="cartao" ${cartaoDisponivel ? '' : 'disabled'}>
+          Cartão de crédito${cartaoDisponivel ? '' : ' (indisponível no momento)'}
+        </label>
+        <div id="campos-cartao" hidden>
+          <label for="cartao-numero">Número do cartão *</label>
+          <input type="text" id="cartao-numero" inputmode="numeric" autocomplete="cc-number" placeholder="0000 0000 0000 0000">
+          <label for="cartao-nome">Nome impresso no cartão *</label>
+          <input type="text" id="cartao-nome" autocomplete="cc-name">
+          <label for="cartao-validade">Validade (MM/AAAA) *</label>
+          <input type="text" id="cartao-validade" autocomplete="cc-exp" placeholder="MM/AAAA">
+          <label for="cartao-cvv">CVV *</label>
+          <input type="text" id="cartao-cvv" autocomplete="cc-csc" placeholder="123">
+        </div>
+        <div class="modal-acoes">
+          <button type="button" class="btn-secundario" id="btn-cancelar-pagamento">Cancelar</button>
+          <button type="submit" class="btn-primario" id="btn-salvar-pagamento">Confirmar</button>
+        </div>
+      </form>
+    `
+  );
+
+  document.getElementById('btn-cancelar-pagamento').addEventListener('click', fecharModal);
+
+  const camposCartao = document.getElementById('campos-cartao');
+  document.querySelectorAll('input[name="meio"]').forEach((radio) => {
+    radio.addEventListener('change', () => {
+      camposCartao.hidden = radio.value !== 'cartao' || !radio.checked;
+    });
+  });
+
+  const form = document.getElementById('form-pagamento');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const erroEl = document.getElementById('pagamento-erro');
+    erroEl.textContent = '';
+    const meio = form.querySelector('input[name="meio"]:checked').value;
+
+    const btn = document.getElementById('btn-salvar-pagamento');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    let payload = { meio };
+    if (meio === 'cartao') {
+      try {
+        await carregarAsaasJs(dadosAtuais.asaas_js_url);
+        const numero = document.getElementById('cartao-numero').value.replace(/\s/g, '');
+        const [mes, ano] = document.getElementById('cartao-validade').value.split('/');
+        // Assinatura conforme a documentação da Asaas.js; validar contra a
+        // versão vigente do script antes de habilitar cartão em produção.
+        const resposta = await new Promise((resolve, reject) => {
+          window.Asaas.tokenizeCreditCard(
+            {
+              creditCard: {
+                holderName: document.getElementById('cartao-nome').value,
+                number: numero,
+                expiryMonth: mes,
+                expiryYear: ano,
+                ccv: document.getElementById('cartao-cvv').value,
+              },
+            },
+            (resp) => (resp && resp.creditCardToken ? resolve(resp) : reject(new Error(resp && resp.errors)))
+          );
+        });
+        payload.credit_card_token = resposta.creditCardToken;
+        payload.cartao_final = numero.slice(-4);
+      } catch (erro) {
+        erroEl.textContent = 'Não foi possível processar o cartão. Verifique os dados e tente novamente.';
+        btn.disabled = false;
+        btn.textContent = 'Confirmar';
+        return;
+      }
+    }
+
+    const resultado = await api('/api/pagamentos/cadastrar', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+
+    if (resultado && !resultado.error) {
+      fecharModal();
+      mostrarToast('Pagamento cadastrado com sucesso! Sua assinatura está ativa.', 'sucesso');
+      renderPagamentos();
+    } else {
+      erroEl.textContent = (resultado && resultado.error) || 'Erro ao cadastrar pagamento.';
+      btn.disabled = false;
+      btn.textContent = 'Confirmar';
+    }
+  });
+}
+
 async function render() {
   if (menuAtual === 'configuracao') return renderConfiguracao();
   if (menuAtual === 'perfil') return renderPerfil();
+  if (menuAtual === 'pagamentos') return renderPagamentos();
   if (menuAtual === 'servicos') return renderServicos();
   if (menuAtual === 'profissionais') return renderProfissionais();
   if (menuAtual === 'modulo:financeiro') return renderFinanceiro();
