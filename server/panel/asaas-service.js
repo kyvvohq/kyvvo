@@ -78,6 +78,25 @@ async function criarOuRecuperarCustomer({ tenantId, nome, email, whatsapp, cpfCn
   });
 }
 
+// CA06 — tokeniza o cartão de crédito. A Asaas não tem um script client-side
+// pra isso (diferente da Efí, avaliada antes) — a tokenização é sempre um
+// endpoint de servidor (`POST /creditCard/tokenize`), então o dado do cartão
+// precisa passar (só de passagem, nunca armazenado/logado) pelo backend do
+// Kyvvo antes de virar token. Em modo dev, devolve um token fake.
+async function tokenizarCartao({ customerId, holderName, number, expiryMonth, expiryYear, ccv, holderInfo, remoteIp }) {
+  if (modoDev()) {
+    console.log(`[asaas-service] (dev) tokeniza cartão do customer ${customerId}`);
+    return { creditCardToken: `card_dev_${customerId}` };
+  }
+
+  return chamar('POST', '/creditCard/tokenize', {
+    customer: customerId,
+    creditCard: { holderName, number, expiryMonth, expiryYear, ccv },
+    creditCardHolderInfo: holderInfo,
+    remoteIp,
+  });
+}
+
 // CA05 — cria a Subscription no Asaas (Pix ou cartão). `nextDueDate` deve
 // respeitar o trial restante (calculado pelo chamador). Em modo dev, devolve
 // um id fake e loga.
@@ -151,6 +170,7 @@ module.exports = {
   ambiente,
   modoDev,
   criarOuRecuperarCustomer,
+  tokenizarCartao,
   criarSubscription,
   atualizarSubscription,
   atualizarCustomer,

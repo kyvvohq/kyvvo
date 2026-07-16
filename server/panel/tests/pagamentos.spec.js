@@ -1,9 +1,11 @@
 const { test, expect } = require('@playwright/test');
 
 // Cobre US32: aba de Pagamentos no portal (Pix recorrente ou cartão de
-// crédito) e a integração com a Asaas orquestrada pelo backend. Como nos
-// outros specs, as chamadas de API são mockadas via page.route — sem
-// dependência de Postgres real nem de uma conta Asaas.
+// crédito) e a integração com a Asaas orquestrada pelo backend. A Asaas não
+// tem tokenização client-side (diferente de outros gateways) — o número do
+// cartão/validade/CVV vão direto pro nosso próprio backend, que tokeniza
+// server-side. Como nos outros specs, as chamadas de API são mockadas via
+// page.route — sem dependência de Postgres real nem de uma conta Asaas.
 
 async function entrarNoPainel(page, pagamentos) {
   await page.route('**/api/configuracao', (route) =>
@@ -36,7 +38,6 @@ test.describe('Pagamentos (US32)', () => {
       cartao_final: null,
       proxima_cobranca: null,
       historico: [],
-      asaas_js_url: null,
     });
     await expect(page.locator('#btn-cadastrar-pagamento')).toHaveText('Cadastrar forma de pagamento');
     await expect(page.locator('.modal-texto')).toContainText('meio de pagamento');
@@ -52,28 +53,11 @@ test.describe('Pagamentos (US32)', () => {
       cartao_final: null,
       proxima_cobranca: { data: '2026-08-01', valor: 247 },
       historico: [{ data: '2026-07-01', valor: 247, status: 'CONFIRMED' }],
-      asaas_js_url: null,
     });
     await expect(page.locator('.financeiro-resumo-card')).toContainText(['Profissional', 'Pix recorrente', 'Ativo']);
     await expect(page.locator('.modal-texto')).toContainText('01/08/2026');
     await expect(page.locator('.tabela-tenants tbody tr').first()).toContainText('01/07/2026');
     await expect(page.locator('#btn-cadastrar-pagamento')).toHaveText('Alterar forma de pagamento');
-  });
-
-  test('cartão de crédito fica desabilitado sem Asaas.js configurada', async ({ page }) => {
-    await entrarNoPainel(page, {
-      status: 'trial',
-      plano: 'trial',
-      plano_nome: null,
-      valor_plano: null,
-      meio_pagamento: null,
-      cartao_final: null,
-      proxima_cobranca: null,
-      historico: [],
-      asaas_js_url: null,
-    });
-    await page.click('#btn-cadastrar-pagamento');
-    await expect(page.locator('input[name="meio"][value="cartao"]')).toBeDisabled();
   });
 
   test('CPF/CNPJ é obrigatório na primeira vez (CA04)', async ({ page }) => {
@@ -87,7 +71,6 @@ test.describe('Pagamentos (US32)', () => {
       cpf_cnpj: null,
       proxima_cobranca: null,
       historico: [],
-      asaas_js_url: null,
     });
 
     await page.click('#btn-cadastrar-pagamento');
@@ -108,7 +91,6 @@ test.describe('Pagamentos (US32)', () => {
       cpf_cnpj: null,
       proxima_cobranca: null,
       historico: [],
-      asaas_js_url: null,
     });
 
     let corpoEnviado = null;
@@ -125,7 +107,6 @@ test.describe('Pagamentos (US32)', () => {
           cpf_cnpj: '12345678900',
           proxima_cobranca: { data: '2026-08-01', valor: 247 },
           historico: [],
-          asaas_js_url: null,
         },
       });
     });
@@ -136,6 +117,57 @@ test.describe('Pagamentos (US32)', () => {
 
     await expect(page.locator('.toast-sucesso')).toHaveText(/assinatura está ativa/);
     expect(corpoEnviado).toMatchObject({ meio: 'pix', cpf_cnpj: '12345678900' });
+  });
+
+  test('cadastra cartão de crédito enviando os dados direto ao backend (sem script client-side)', async ({ page }) => {
+    await entrarNoPainel(page, {
+      status: 'trial',
+      plano: 'trial',
+      plano_nome: null,
+      valor_plano: null,
+      meio_pagamento: null,
+      cartao_final: null,
+      cpf_cnpj: null,
+      proxima_cobranca: null,
+      historico: [],
+    });
+
+    let corpoEnviado = null;
+    await page.route('**/api/pagamentos/cadastrar', (route) => {
+      corpoEnviado = route.request().postDataJSON();
+      return route.fulfill({
+        json: {
+          status: 'ativo',
+          plano: 'profissional',
+          plano_nome: 'Profissional',
+          valor_plano: 247,
+          meio_pagamento: 'cartao',
+          cartao_final: '4242',
+          cpf_cnpj: '12345678900',
+          proxima_cobranca: { data: '2026-08-01', valor: 247 },
+          historico: [],
+        },
+      });
+    });
+
+    await page.click('#btn-cadastrar-pagamento');
+    await page.fill('#pagamento-cpf-cnpj', '123.456.789-00');
+    await page.click('input[name="meio"][value="cartao"]');
+    await page.fill('#cartao-numero', '4242 4242 4242 4242');
+    await page.fill('#cartao-nome', 'ANA SOUZA');
+    await page.fill('#cartao-validade', '12/2030');
+    await page.fill('#cartao-cvv', '123');
+    await page.click('#btn-salvar-pagamento');
+
+    await expect(page.locator('.toast-sucesso')).toHaveText(/assinatura está ativa/);
+    expect(corpoEnviado).toMatchObject({
+      meio: 'cartao',
+      cartao_numero: '4242424242424242',
+      cartao_nome: 'ANA SOUZA',
+      cartao_validade_mes: '12',
+      cartao_validade_ano: '2030',
+      cartao_cvv: '123',
+    });
   });
 
   test('CPF/CNPJ não é pedido de novo ao trocar de meio de pagamento (CA09)', async ({ page }) => {
@@ -149,7 +181,6 @@ test.describe('Pagamentos (US32)', () => {
       cpf_cnpj: '12345678900',
       proxima_cobranca: { data: '2026-08-01', valor: 247 },
       historico: [],
-      asaas_js_url: null,
     });
 
     await page.click('#btn-cadastrar-pagamento');
@@ -167,7 +198,6 @@ test.describe('Pagamentos (US32)', () => {
       cpf_cnpj: null,
       proxima_cobranca: null,
       historico: [],
-      asaas_js_url: null,
     });
     await page.route('**/api/pagamentos/cadastrar', (route) =>
       route.fulfill({ status: 502, json: { error: 'Não foi possível processar o pagamento agora. Tente novamente em instantes.' } })
@@ -178,5 +208,33 @@ test.describe('Pagamentos (US32)', () => {
     await page.click('#btn-salvar-pagamento');
 
     await expect(page.locator('#pagamento-erro')).toHaveText(/Não foi possível processar/);
+  });
+
+  test('backend recusa cartão sem endereço completo no perfil', async ({ page }) => {
+    await entrarNoPainel(page, {
+      status: 'trial',
+      plano: 'trial',
+      plano_nome: null,
+      valor_plano: null,
+      meio_pagamento: null,
+      cartao_final: null,
+      cpf_cnpj: null,
+      proxima_cobranca: null,
+      historico: [],
+    });
+    await page.route('**/api/pagamentos/cadastrar', (route) =>
+      route.fulfill({ status: 400, json: { error: 'Complete seu endereço em "Meu Perfil" antes de cadastrar um cartão.' } })
+    );
+
+    await page.click('#btn-cadastrar-pagamento');
+    await page.fill('#pagamento-cpf-cnpj', '123.456.789-00');
+    await page.click('input[name="meio"][value="cartao"]');
+    await page.fill('#cartao-numero', '4242 4242 4242 4242');
+    await page.fill('#cartao-nome', 'ANA SOUZA');
+    await page.fill('#cartao-validade', '12/2030');
+    await page.fill('#cartao-cvv', '123');
+    await page.click('#btn-salvar-pagamento');
+
+    await expect(page.locator('#pagamento-erro')).toHaveText(/Meu Perfil/);
   });
 });

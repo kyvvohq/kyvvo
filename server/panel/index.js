@@ -1,4 +1,7 @@
-const fastify = require('fastify')({ logger: true });
+// trustProxy: nginx (na frente do processo) já repassa X-Forwarded-For real —
+// necessário pra `request.ip` refletir o IP do cliente, não o do proxy
+// interno. Usado pelo `remoteIp` exigido na tokenização de cartão (US32).
+const fastify = require('fastify')({ logger: true, trustProxy: true });
 const jwt = require('@fastify/jwt');
 const cors = require('@fastify/cors');
 const staticPlugin = require('@fastify/static');
@@ -1282,11 +1285,6 @@ async function start() {
         valor: p.value,
         status: p.status,
       })),
-      // CA06 — o front só tokeniza cartão via Asaas.js se essa URL estiver
-      // configurada (script oficial obtido no painel da Asaas); sem ela, a
-      // aba oferece só Pix em vez de arriscar um endpoint de tokenização
-      // inventado/desatualizado.
-      asaas_js_url: process.env.ASAAS_JS_URL || null,
     };
   }
 
@@ -1305,29 +1303,47 @@ async function start() {
   // CA04/CA05/CA09 — orquestra Customer + Subscription no Asaas. Cria na
   // primeira vez; se o tenant já tem assinatura, apenas troca o meio de
   // pagamento (CA09 — atualiza, não cancela).
+  //
+  // Cartão de crédito: a Asaas não tem tokenização client-side (diferente da
+  // Efí, avaliada antes de escolher a Asaas) — só um endpoint de servidor
+  // (`POST /creditCard/tokenize`). Por isso o número/validade/CVV chegam aqui
+  // brutos (via HTTPS) e são tokenizados neste handler, nunca armazenados
+  // nem logados — só repassados à Asaas e descartados.
   fastify.post('/api/pagamentos/cadastrar', { preHandler: [fastify.authenticate] }, async (request, reply) => {
     const { tenantId } = request.user;
     const {
       meio,
-      credit_card_token: creditCardToken,
-      cartao_final: cartaoFinal,
       cpf_cnpj: cpfCnpjBruto,
+      cartao_numero: cartaoNumeroBruto,
+      cartao_nome: cartaoNome,
+      cartao_validade_mes: cartaoValidadeMes,
+      cartao_validade_ano: cartaoValidadeAno,
+      cartao_cvv: cartaoCvv,
     } = request.body || {};
 
     if (!['pix', 'cartao'].includes(meio)) {
       return reply.code(400).send({ error: 'Campo "meio" deve ser "pix" ou "cartao"' });
     }
+
+    const cartaoNumeroLimpo = String(cartaoNumeroBruto || '').replace(/\D/g, '');
     if (meio === 'cartao') {
-      if (!creditCardToken) {
-        return reply.code(400).send({ error: 'Token do cartão (tokenizado via Asaas.js) é obrigatório' });
+      if (!CARTAO_FINAL_REGEX.test(cartaoNumeroLimpo.slice(-4))) {
+        return reply.code(400).send({ error: 'Informe um número de cartão válido.' });
       }
-      if (!CARTAO_FINAL_REGEX.test(cartaoFinal || '')) {
-        return reply.code(400).send({ error: 'Informe os 4 últimos dígitos do cartão' });
+      if (!(cartaoNome || '').trim()) {
+        return reply.code(400).send({ error: 'Informe o nome impresso no cartão.' });
+      }
+      if (!/^\d{1,2}$/.test(cartaoValidadeMes || '') || !/^\d{4}$/.test(cartaoValidadeAno || '')) {
+        return reply.code(400).send({ error: 'Informe a validade do cartão (MM/AAAA).' });
+      }
+      if (!/^\d{3,4}$/.test(cartaoCvv || '')) {
+        return reply.code(400).send({ error: 'Informe o CVV do cartão.' });
       }
     }
 
     const { rows } = await pool.query(
-      `SELECT nome, whatsapp, plano, ativado_em, asaas_customer_id, asaas_subscription_id, cpf_cnpj
+      `SELECT nome, whatsapp, plano, ativado_em, asaas_customer_id, asaas_subscription_id, cpf_cnpj,
+              endereco_cep, endereco_numero, endereco_complemento
        FROM tenants WHERE id = $1`,
       [tenantId]
     );
@@ -1343,12 +1359,19 @@ async function start() {
     if (!tenant.asaas_customer_id && !CPF_CNPJ_REGEX.test(cpfCnpjLimpo || '')) {
       return reply.code(400).send({ error: 'Informe um CPF (11 dígitos) ou CNPJ (14 dígitos) válido.' });
     }
+    // A Asaas exige endereço no Customer/tokenização de cartão (CEP e
+    // número) — pede pra completar o perfil (US33) em vez de mandar um
+    // endereço incompleto/inventado à Asaas.
+    if (meio === 'cartao' && !(tenant.endereco_cep && tenant.endereco_numero)) {
+      return reply.code(400).send({ error: 'Complete seu endereço em "Meu Perfil" antes de cadastrar um cartão.' });
+    }
 
     // Trial (ou tenant sem plano definido) ainda não escolheu um plano pago —
     // hoje só existe o Profissional (mesmo conjunto de módulos liberado no
     // trial, ver MODULOS_TRIAL); vira o plano contratado.
     const plano = tenant.plano && tenant.plano !== 'trial' ? tenant.plano : asaasService.PLANO_PADRAO;
     const billingType = meio === 'pix' ? 'PIX' : 'CREDIT_CARD';
+    const cartaoFinal = meio === 'cartao' ? cartaoNumeroLimpo.slice(-4) : null;
 
     let customer;
     let subscriptionId;
@@ -1361,6 +1384,30 @@ async function start() {
         cpfCnpj: cpfCnpjLimpo,
         asaasCustomerId: tenant.asaas_customer_id,
       });
+
+      let creditCardToken;
+      if (meio === 'cartao') {
+        const tokenizado = await asaasService.tokenizarCartao({
+          customerId: customer.id,
+          holderName: cartaoNome.trim(),
+          number: cartaoNumeroLimpo,
+          expiryMonth: cartaoValidadeMes,
+          expiryYear: cartaoValidadeAno,
+          ccv: cartaoCvv,
+          holderInfo: {
+            name: tenant.nome,
+            email: request.user.email,
+            cpfCnpj: cpfCnpjLimpo,
+            postalCode: tenant.endereco_cep,
+            addressNumber: tenant.endereco_numero,
+            addressComplement: tenant.endereco_complemento || undefined,
+            phone: tenant.whatsapp || undefined,
+            mobilePhone: tenant.whatsapp || undefined,
+          },
+          remoteIp: request.ip,
+        });
+        creditCardToken = tokenizado.creditCardToken;
+      }
 
       if (tenant.asaas_subscription_id) {
         await asaasService.atualizarSubscription({
