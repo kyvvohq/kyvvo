@@ -180,12 +180,11 @@ function renderStatusLabel(t) {
 
 function renderLinha(t) {
   const statusClasse = STATUS_CLASSES[t.status_conta] || 'badge-status-inativo';
-  const email = escapeHtml(t.email);
   return `
     <tr data-id="${escapeHtml(t.id)}">
       <td>${escapeHtml(t.nome)}</td>
       <td>${t.responsavel ? escapeHtml(t.responsavel) : '—'}</td>
-      <td>${t.email ? `<a href="mailto:${email}">${email}</a>` : '—'}</td>
+      <td>${t.email ? escapeHtml(t.email) : '—'}</td>
       <td>${formatarWhatsapp(t.whatsapp)}</td>
       <td>${formatarData(t.cadastrado_em)}</td>
       <td>${formatarData(t.ativado_em)}</td>
