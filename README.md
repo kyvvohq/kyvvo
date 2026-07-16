@@ -1,77 +1,77 @@
 # Kyvvo
 
-CRM para pequenos negócios — agendamento inteligente via WhatsApp e visualização de agenda no app mobile.
+CRM multi-tenant para pequenos negócios (MEI/ME) — agendamento via WhatsApp e painel web de gestão.
 
 ## O que é
 
-Kyvvo é uma plataforma SaaS que permite clientes de salões de beleza (e outros pequenos negócios) agendarem horários diretamente pelo WhatsApp. O dono do negócio visualiza todos os agendamentos no app mobile.
+Kyvvo é uma plataforma SaaS que permite que negócios (salões de beleza, petshops, etc.) recebam e organizem agendamentos feitos pelos próprios clientes via WhatsApp. Cada negócio (tenant) tem seu próprio painel web para gerenciar agenda, clientes, serviços, financeiro e assinatura.
 
-## MVP
+## Componentes
 
-Dois épicos:
-
-- **E1 — Agendamento via WhatsApp**: bot conversacional que guia o cliente pelo fluxo de agendamento
-- **E2 — App mobile**: visualização da agenda (dia, semana, mês) e perfil do negócio
+- **Bot WhatsApp**: fluxo conversacional em n8n + Evolution API (Baileys), guia o cliente final pelo agendamento.
+- **Painel do tenant** (`server/panel/public/`): app web onde o dono do negócio gerencia agenda (dia/semana/mês), clientes, serviços, financeiro, perfil e forma de pagamento da assinatura.
+- **Painel admin** (`server/panel/public/admin/`): área interna da Kyvvo para gestão de todos os tenants (busca, detalhe, CRUD).
+- **Landing page** (`server/public/`, `landing/`): página pública e lista de espera.
 
 ## Stack
 
 | Camada | Tecnologia |
 |---|---|
 | Bot / Automação | n8n + Evolution API (WhatsApp Baileys) |
-| Backend | Node.js + Fastify + Supabase (PostgreSQL) |
-| Mobile | React Native + Expo |
-| Infra | Railway |
+| Backend (painel + admin) | Node.js + Fastify + PostgreSQL |
+| Pagamentos | Asaas (Pix recorrente + cartão de crédito, tokenização server-side) |
+| E-mail transacional | Resend |
+| Testes | Playwright |
+| Infra | EC2 (Docker Compose) atrás de Cloudflare |
+| CI/CD | GitHub Actions (deploy automático em push na `main`) |
 
 ## Estrutura do repositório
 
 ```
 kyvvo/
-├── docs/               # Documentação do produto
-│   ├── mvp-scope.md    # Escopo do MVP
-│   ├── epics.md        # Épicos e User Stories
-│   └── architecture.md # Arquitetura técnica
-├── n8n/                # Fluxos do n8n (JSON)
-│   └── whatsapp-bot-v2.json
-├── landing/            # Landing page e lista de espera
-│   └── index.html
-└── README.md
+├── docs/                     # Documentação do produto (escopo, épicos, arquitetura)
+├── n8n/                      # Fluxos do bot WhatsApp (JSON)
+├── landing/                  # Landing page e lista de espera
+├── server/
+│   ├── index.js              # Landing page / API pública
+│   ├── db/                   # Migrations SQL sequenciais (NNN_descricao.sql)
+│   └── panel/
+│       ├── index.js          # API do painel (tenant + admin)
+│       ├── asaas-service.js  # Integração com o gateway Asaas
+│       ├── token-service.js  # Verificação de e-mail / tokens
+│       ├── tests/            # Suíte Playwright
+│       └── public/
+│           ├── (painel do tenant)
+│           └── admin/        # Painel admin da Kyvvo
+└── .github/workflows/        # Deploy automático pra EC2
 ```
 
-## Configuração local
+## Desenvolvimento
 
 ### Pré-requisitos
 - Node.js 18+
-- Conta no Railway
-- Conta no Supabase
-- Número de WhatsApp para teste
+- PostgreSQL
+- Número de WhatsApp para teste (Evolution API)
 
-### Variáveis de ambiente (Evolution API)
-```env
-SERVER_URL=https://sua-url.railway.app
-AUTHENTICATION_TYPE=apikey
-AUTHENTICATION_API_KEY=sua-chave
-DATABASE_PROVIDER=postgresql
-DATABASE_CONNECTION_URI=postgresql://...
-DATABASE_ENABLED=true
-CACHE_REDIS_ENABLED=false
-CACHE_LOCAL_ENABLED=true
+### Rodando os testes (painel)
+```bash
+cd server/panel
+npm install
+npx playwright test
 ```
 
-### Variáveis de ambiente (n8n)
-```env
-N8N_HOST=0.0.0.0
-N8N_PORT=5678
-N8N_PROTOCOL=https
-WEBHOOK_URL=https://sua-url.railway.app
-N8N_ENCRYPTION_KEY=sua-chave
-GENERIC_TIMEZONE=America/Sao_Paulo
-```
+### Migrations
+Aplicadas manualmente em produção, em ordem, via `psql`. Ao criar uma nova, use o próximo número sequencial disponível em `server/db/`.
+
+## Deploy
+
+Deploy automático via GitHub Actions (`.github/workflows/deploy.yml`) a cada push na `main`: copia os arquivos alterados (landing e/ou painel, conforme o path) pra EC2 e reinicia o(s) container(s) via Docker Compose.
 
 ## Links úteis
 
 - [Evolution API Docs](https://doc.evolution-api.com)
 - [n8n Docs](https://docs.n8n.io)
-- [Supabase Docs](https://supabase.com/docs)
+- [Asaas API Docs](https://docs.asaas.com)
 
 ## Licença
 
