@@ -1484,7 +1484,13 @@ async function start() {
       }
     } catch (erro) {
       console.error(`[pagamentos] falha na integração com a Asaas para tenant ${tenantId}: ${erro.message}`);
-      return reply.code(502).send({ error: 'Não foi possível processar o pagamento agora. Tente novamente em instantes.' });
+      // 400, não 502/504 — a Cloudflare intercepta e substitui o corpo da
+      // resposta pela própria página de erro genérica ("Bad Gateway... Visit
+      // cloudflare.com") sempre que o código de status é um dos que ela
+      // também usa pra falha de conectividade do próprio proxy (502, 504,
+      // 520-527), mesmo quando é a origem (nós) que respondeu de propósito
+      // com esse status — não há como desativar isso sem plano Enterprise.
+      return reply.code(400).send({ error: 'Não foi possível processar o pagamento agora. Tente novamente em instantes.' });
     }
 
     const { rows: atualizado } = await pool.query(

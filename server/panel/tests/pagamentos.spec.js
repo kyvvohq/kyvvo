@@ -348,7 +348,7 @@ test.describe('Pagamentos (US32)', () => {
       historico: [],
     });
     await page.route('**/api/pagamentos/cadastrar', (route) =>
-      route.fulfill({ status: 502, json: { error: 'Não foi possível processar o pagamento agora. Tente novamente em instantes.' } })
+      route.fulfill({ status: 400, json: { error: 'Não foi possível processar o pagamento agora. Tente novamente em instantes.' } })
     );
 
     await page.click('#btn-cadastrar-pagamento');
