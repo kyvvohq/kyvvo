@@ -963,25 +963,7 @@ async function renderPagamentos() {
   document.getElementById('btn-cadastrar-pagamento').addEventListener('click', () => abrirModalPagamento(dados));
 }
 
-// Carrega o Asaas.js sob demanda (só quando o usuário escolhe cartão), e só
-// uma vez por sessão. Sem ASAAS_JS_URL configurada no servidor (dev/sandbox
-// sem conta Asaas ligada), a opção "Cartão" fica desabilitada — melhor do que
-// carregar uma URL de tokenizador adivinhada/desatualizada (CA06).
-let asaasJsCarregado = null;
-function carregarAsaasJs(url) {
-  if (asaasJsCarregado) return asaasJsCarregado;
-  asaasJsCarregado = new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = url;
-    script.onload = resolve;
-    script.onerror = () => reject(new Error('Falha ao carregar Asaas.js'));
-    document.head.appendChild(script);
-  });
-  return asaasJsCarregado;
-}
-
 function abrirModalPagamento(dadosAtuais) {
-  const cartaoDisponivel = !!dadosAtuais.asaas_js_url;
   // A Asaas exige CPF/CNPJ do Customer pra emitir cobrança — só pedimos na
   // primeira vez (CA04); se o tenant já tem um cadastrado, não perguntamos
   // de novo ao trocar de meio de pagamento (CA09).
@@ -1000,8 +982,7 @@ function abrirModalPagamento(dadosAtuais) {
           <input type="radio" name="meio" value="pix" checked> Pix recorrente
         </label>
         <label>
-          <input type="radio" name="meio" value="cartao" ${cartaoDisponivel ? '' : 'disabled'}>
-          Cartão de crédito${cartaoDisponivel ? '' : ' (indisponível no momento)'}
+          <input type="radio" name="meio" value="cartao"> Cartão de crédito
         </label>
         <div id="campos-cartao" hidden>
           <label for="cartao-numero">Número do cartão *</label>
@@ -1048,37 +1029,18 @@ function abrirModalPagamento(dadosAtuais) {
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner"></span>';
 
+    // Sem tokenização client-side na Asaas (diferente de outros gateways):
+    // o número/validade/CVV vão pro próprio backend do Kyvvo via HTTPS, que
+    // tokeniza server-side com a Asaas — nunca armazenados nem logados.
     let payload = { meio };
     if (cpfCnpjInput) payload.cpf_cnpj = cpfCnpjLimpo;
     if (meio === 'cartao') {
-      try {
-        await carregarAsaasJs(dadosAtuais.asaas_js_url);
-        const numero = document.getElementById('cartao-numero').value.replace(/\s/g, '');
-        const [mes, ano] = document.getElementById('cartao-validade').value.split('/');
-        // Assinatura conforme a documentação da Asaas.js; validar contra a
-        // versão vigente do script antes de habilitar cartão em produção.
-        const resposta = await new Promise((resolve, reject) => {
-          window.Asaas.tokenizeCreditCard(
-            {
-              creditCard: {
-                holderName: document.getElementById('cartao-nome').value,
-                number: numero,
-                expiryMonth: mes,
-                expiryYear: ano,
-                ccv: document.getElementById('cartao-cvv').value,
-              },
-            },
-            (resp) => (resp && resp.creditCardToken ? resolve(resp) : reject(new Error(resp && resp.errors)))
-          );
-        });
-        payload.credit_card_token = resposta.creditCardToken;
-        payload.cartao_final = numero.slice(-4);
-      } catch (erro) {
-        erroEl.textContent = 'Não foi possível processar o cartão. Verifique os dados e tente novamente.';
-        btn.disabled = false;
-        btn.textContent = 'Confirmar';
-        return;
-      }
+      const [mes, ano] = document.getElementById('cartao-validade').value.split('/');
+      payload.cartao_numero = document.getElementById('cartao-numero').value.replace(/\D/g, '');
+      payload.cartao_nome = document.getElementById('cartao-nome').value;
+      payload.cartao_validade_mes = (mes || '').trim();
+      payload.cartao_validade_ano = (ano || '').trim();
+      payload.cartao_cvv = document.getElementById('cartao-cvv').value;
     }
 
     const resultado = await api('/api/pagamentos/cadastrar', {
