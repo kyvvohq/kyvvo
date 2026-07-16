@@ -712,16 +712,16 @@ document.addEventListener('click', (e) => {
 
 const NOMES_DIAS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
 
-// Segmento de negócio do tenant — só adapta terminologia da UI (label do
-// campo "nome" no Perfil, texto de "dias de funcionamento" na Configuração),
-// sem mudar comportamento. Mesma lista fixa validada no backend.
+// Segmento de negócio do tenant — só adapta a terminologia do texto de "dias
+// de funcionamento" na Configuração, sem mudar comportamento. Mesma lista
+// fixa validada no backend.
 const SEGMENTOS = {
-  salao_beleza: { rotulo: 'Salão de beleza', nomeCampo: 'Nome do salão', dias: 'o salão' },
-  petshop: { rotulo: 'Pet Shop', nomeCampo: 'Nome do petshop', dias: 'o petshop' },
-  psicologia: { rotulo: 'Psicólogo(a)', nomeCampo: 'Nome da clínica', dias: 'o consultório' },
-  fisioterapia: { rotulo: 'Fisioterapia', nomeCampo: 'Nome da clínica', dias: 'a clínica' },
-  pilates: { rotulo: 'Pilates', nomeCampo: 'Nome do studio', dias: 'o studio' },
-  outro: { rotulo: 'Outro', nomeCampo: 'Nome do negócio', dias: 'o negócio' },
+  salao_beleza: { dias: 'o salão' },
+  petshop: { dias: 'o petshop' },
+  psicologia: { dias: 'o consultório' },
+  fisioterapia: { dias: 'a clínica' },
+  pilates: { dias: 'o studio' },
+  outro: { dias: 'o negócio' },
 };
 function infoSegmento(segmento) {
   return SEGMENTOS[segmento] || SEGMENTOS.outro;
@@ -1562,51 +1562,178 @@ async function renderMes() {
   });
 }
 
+// ---------- Perfil (US33) ----------
+const UF_OPCOES = [
+  'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB',
+  'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO',
+];
+
+// Máscara de telefone brasileiro (fixo ou celular) enquanto o usuário digita —
+// mesmo raciocínio de exibição do WhatsApp em cadastro.html, mas aqui aplicado
+// ao vivo no campo em vez de só no placeholder.
+function formatarTelefoneMascara(valor) {
+  const digitos = (valor || '').replace(/\D/g, '').slice(0, 11);
+  if (digitos.length <= 2) return digitos ? `(${digitos}` : '';
+  const ddd = digitos.slice(0, 2);
+  const resto = digitos.slice(2);
+  if (digitos.length <= 10) {
+    return resto.length > 4 ? `(${ddd}) ${resto.slice(0, 4)}-${resto.slice(4)}` : `(${ddd}) ${resto}`;
+  }
+  return `(${ddd}) ${resto.slice(0, 5)}-${resto.slice(5)}`;
+}
+
 async function renderPerfil() {
   conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
   const perfil = await api('/api/perfil');
   if (!perfil) return;
 
-  const segmentoAtual = perfil.segmento || 'salao_beleza';
-  const opcoesSegmento = Object.entries(SEGMENTOS)
-    .map(([key, s]) => `<option value="${key}" ${key === segmentoAtual ? 'selected' : ''}>${s.rotulo}</option>`)
-    .join('');
+  const opcoesUF = UF_OPCOES.map((uf) => `<option value="${uf}" ${uf === perfil.endereco_uf ? 'selected' : ''}>${uf}</option>`).join('');
 
   conteudo.innerHTML = `
-    <form class="perfil-form" id="form-perfil">
-      <label for="segmento">Segmento do negócio</label>
-      <select id="segmento" disabled>${opcoesSegmento}</select>
-      <div class="modal-texto" style="margin-top:4px">Só a equipe Kyvvo pode alterar o segmento — fale com o suporte se precisar mudar.</div>
-      <label for="nome" id="nome-label">${infoSegmento(segmentoAtual).nomeCampo}</label>
-      <input type="text" id="nome" value="${perfil.nome || ''}">
+    <form class="perfil-form" id="form-perfil" novalidate>
+      <label for="nome_responsavel">Nome do Responsável</label>
+      <input type="text" id="nome_responsavel" value="${perfil.nome_responsavel || ''}">
+      <div class="field-error" id="erro-nome_responsavel"></div>
+
+      <label for="nome_segmento">Nome do Segmento</label>
+      <input type="text" id="nome_segmento" value="${perfil.nome_segmento || ''}">
+      <div class="field-error" id="erro-nome_segmento"></div>
+
       <label for="telefone">Telefone</label>
-      <input type="text" id="telefone" value="${perfil.telefone || ''}">
-      <label for="endereco">Endereço</label>
-      <input type="text" id="endereco" value="${perfil.endereco || ''}">
-      <button type="submit">Salvar</button>
-      <div class="erro" id="perfil-msg"></div>
+      <input type="tel" id="telefone" placeholder="(11) 99999-9999" value="${formatarTelefoneMascara(perfil.telefone)}">
+      <div class="field-error" id="erro-telefone"></div>
+
+      <label>Endereço</label>
+      <div class="endereco-grid">
+        <div>
+          <label for="endereco-cep" class="endereco-sublabel">CEP</label>
+          <input type="text" id="endereco-cep" placeholder="00000-000" value="${perfil.endereco_cep || ''}">
+        </div>
+        <div>
+          <label for="endereco-numero" class="endereco-sublabel">Número</label>
+          <input type="text" id="endereco-numero" value="${perfil.endereco_numero || ''}">
+        </div>
+      </div>
+      <label for="endereco-logradouro" class="endereco-sublabel">Rua / Logradouro</label>
+      <input type="text" id="endereco-logradouro" value="${perfil.endereco_logradouro || ''}">
+      <label for="endereco-complemento" class="endereco-sublabel">Complemento (opcional)</label>
+      <input type="text" id="endereco-complemento" value="${perfil.endereco_complemento || ''}">
+      <label for="endereco-bairro" class="endereco-sublabel">Bairro</label>
+      <input type="text" id="endereco-bairro" value="${perfil.endereco_bairro || ''}">
+      <label for="endereco-cidade" class="endereco-sublabel">Cidade</label>
+      <input type="text" id="endereco-cidade" value="${perfil.endereco_cidade || ''}">
+      <label for="endereco-uf" class="endereco-sublabel">Estado</label>
+      <select id="endereco-uf">${opcoesUF}</select>
+      <div class="field-error" id="erro-endereco"></div>
+
+      <label>E-mail</label>
+      <input type="text" value="${perfil.email || ''}" disabled>
+      <label>WhatsApp</label>
+      <input type="text" value="${formatarTelefoneMascara(perfil.whatsapp)}" disabled>
+      <label>Plano atual</label>
+      <div class="modal-texto">${perfil.plano_nome} — <a href="#" id="link-perfil-pagamentos">ver aba de Pagamentos</a></div>
+
+      <button type="submit" id="btn-salvar-perfil">Salvar alterações</button>
     </form>
   `;
 
+  document.getElementById('link-perfil-pagamentos').addEventListener('click', (e) => {
+    e.preventDefault();
+    // A aba de Pagamentos (US32) pode ainda não existir nesta versão do
+    // portal — não navega (em vez de quebrar) se o item de menu não existir.
+    const itemPagamentos = document.querySelector('.menu-item[data-menu="pagamentos"]');
+    if (itemPagamentos) ativarMenuItem(itemPagamentos);
+  });
+
+  const telefoneInput = document.getElementById('telefone');
+  telefoneInput.addEventListener('input', () => {
+    telefoneInput.value = formatarTelefoneMascara(telefoneInput.value);
+  });
+
+  // CA04 — ao sair do campo CEP, autopreenche o resto do endereço via ViaCEP.
+  document.getElementById('endereco-cep').addEventListener('blur', async () => {
+    const cep = document.getElementById('endereco-cep').value.replace(/\D/g, '');
+    if (cep.length !== 8) return;
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+      const dados = await res.json();
+      if (dados.erro) {
+        document.getElementById('erro-endereco').textContent = 'CEP não encontrado. Preencha o endereço manualmente.';
+        return;
+      }
+      document.getElementById('erro-endereco').textContent = '';
+      document.getElementById('endereco-logradouro').value = dados.logradouro || '';
+      document.getElementById('endereco-bairro').value = dados.bairro || '';
+      document.getElementById('endereco-cidade').value = dados.localidade || '';
+      document.getElementById('endereco-uf').value = dados.uf || '';
+    } catch (erro) {
+      // Falha de rede na consulta ao ViaCEP: deixa o usuário preencher os
+      // subcampos manualmente em vez de bloquear o formulário.
+    }
+  });
+
   document.getElementById('form-perfil').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const msg = document.getElementById('perfil-msg');
-    msg.style.color = '';
-    msg.textContent = 'Salvando...';
+
+    const nomeResponsavel = document.getElementById('nome_responsavel').value;
+    const nomeSegmento = document.getElementById('nome_segmento').value;
+    const telefone = document.getElementById('telefone').value;
+    const cep = document.getElementById('endereco-cep').value;
+    const logradouro = document.getElementById('endereco-logradouro').value;
+    const numero = document.getElementById('endereco-numero').value;
+    const complemento = document.getElementById('endereco-complemento').value;
+    const bairro = document.getElementById('endereco-bairro').value;
+    const cidade = document.getElementById('endereco-cidade').value;
+    const uf = document.getElementById('endereco-uf').value;
+
+    const erros = {
+      nome_responsavel: nomeResponsavel.trim().length >= 2 ? '' : 'Informe o nome do responsável.',
+      nome_segmento: nomeSegmento.trim().length >= 2 ? '' : 'Informe o nome do seu negócio.',
+      telefone: telefone.replace(/\D/g, '').length >= 10 ? '' : 'Informe um telefone válido com DDD.',
+      endereco:
+        cep.replace(/\D/g, '').length === 8 && logradouro.trim() && numero.trim() && bairro.trim() && cidade.trim() && uf
+          ? ''
+          : 'Preencha todos os campos do endereço.',
+    };
+
+    let primeiroInvalido = null;
+    ['nome_responsavel', 'telefone'].forEach((campo) => {
+      document.getElementById(campo).classList.toggle('invalid', !!erros[campo]);
+      document.getElementById('erro-' + campo).textContent = erros[campo];
+      if (erros[campo] && !primeiroInvalido) primeiroInvalido = document.getElementById(campo);
+    });
+    document.getElementById('nome_segmento').classList.toggle('invalid', !!erros.nome_segmento);
+    document.getElementById('erro-nome_segmento').textContent = erros.nome_segmento;
+    if (erros.nome_segmento && !primeiroInvalido) primeiroInvalido = document.getElementById('nome_segmento');
+    document.getElementById('erro-endereco').textContent = erros.endereco;
+    if (erros.endereco && !primeiroInvalido) primeiroInvalido = document.getElementById('endereco-cep');
+
+    if (Object.values(erros).some(Boolean)) {
+      if (primeiroInvalido) primeiroInvalido.focus();
+      return;
+    }
+
+    const btn = document.getElementById('btn-salvar-perfil');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
     const resultado = await api('/api/perfil', {
       method: 'PATCH',
       body: JSON.stringify({
-        nome: document.getElementById('nome').value,
-        telefone: document.getElementById('telefone').value,
-        endereco: document.getElementById('endereco').value,
+        nome_responsavel: nomeResponsavel,
+        nome_segmento: nomeSegmento,
+        telefone,
+        endereco: { cep, logradouro, numero, complemento, bairro, cidade, uf },
       }),
     });
+
     if (resultado && !resultado.error) {
-      msg.style.color = '#4ade80';
-      msg.textContent = 'Salvo com sucesso!';
+      mostrarToast('Perfil atualizado com sucesso.', 'sucesso');
+      renderPerfil();
     } else {
-      msg.style.color = '#ff6b6b';
-      msg.textContent = (resultado && resultado.error) || 'Erro ao salvar perfil.';
+      mostrarToast((resultado && resultado.error) || 'Erro ao salvar. Tente novamente.', 'erro');
+      btn.disabled = false;
+      btn.textContent = 'Salvar alterações';
     }
   });
 }

@@ -1002,34 +1002,119 @@ async function start() {
     return detalhado[0];
   });
 
-  // ---------- Perfil ----------
+  // ---------- Perfil (US33) ----------
   const SEGMENTOS_VALIDOS = ['salao_beleza', 'petshop', 'psicologia', 'fisioterapia', 'pilates', 'outro'];
+  const UF_VALIDAS = [
+    'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB',
+    'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO',
+  ];
+
+  // Formato comum ao GET e à resposta do PATCH (CA02/CA05): nome_segmento é o
+  // `tenants.nome` já existente (nome comercial); nome_responsavel é o nome do
+  // próprio usuário logado (`usuarios.nome`) — um campo novo nesta US, distinto
+  // do nome do negócio.
+  async function buscarPerfil(userId) {
+    const { rows } = await pool.query(
+      `SELECT u.nome AS nome_responsavel, u.email,
+              t.nome AS nome_segmento, t.telefone, t.whatsapp, t.plano,
+              t.endereco_cep, t.endereco_logradouro, t.endereco_numero,
+              t.endereco_complemento, t.endereco_bairro, t.endereco_cidade, t.endereco_uf
+       FROM usuarios u JOIN tenants t ON t.id = u.tenant_id
+       WHERE u.id = $1`,
+      [userId]
+    );
+    const perfil = rows[0];
+    if (!perfil) return perfil;
+    // CA05 — rótulo amigável do plano atual, mesma fonte usada no detalhe do
+    // tenant na área admin (US28/planoAtualTenant), pra nunca divergir.
+    return { ...perfil, plano_nome: PLANOS_LABELS[perfil.plano] || 'Não definido' };
+  }
 
   fastify.get('/api/perfil', { preHandler: [fastify.authenticate] }, async (request) => {
-    const { tenantId } = request.user;
-    const { rows } = await pool.query(
-      'SELECT id, nome, telefone, endereco, segmento, criado_em FROM tenants WHERE id = $1',
-      [tenantId]
-    );
-    return rows[0];
+    return buscarPerfil(request.user.userId);
   });
 
   fastify.patch('/api/perfil', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const { tenantId } = request.user;
+    const { userId, tenantId } = request.user;
     // segmento não é editável pelo tenant — só a equipe Kyvvo altera, via
-    // PATCH /admin/api/tenants/:id.
-    const { nome, telefone, endereco } = request.body || {};
+    // PATCH /admin/api/tenants/:id (CA05).
+    const {
+      nome_responsavel: nomeResponsavelBruto,
+      nome_segmento: nomeSegmentoBruto,
+      telefone: telefoneBruto,
+      endereco,
+    } = request.body || {};
 
-    const { rows } = await pool.query(
-      `UPDATE tenants SET
-         nome = COALESCE($2, nome),
-         telefone = COALESCE($3, telefone),
-         endereco = COALESCE($4, endereco)
-       WHERE id = $1
-       RETURNING id, nome, telefone, endereco, segmento`,
-      [tenantId, nome, telefone, endereco]
-    );
-    return rows[0];
+    const nomeResponsavel = (nomeResponsavelBruto || '').trim();
+    const nomeSegmento = (nomeSegmentoBruto || '').trim();
+    if (nomeResponsavel.length < 2) {
+      return reply.code(400).send({ error: 'Informe o nome do responsável.' });
+    }
+    if (nomeSegmento.length < 2) {
+      return reply.code(400).send({ error: 'Informe o nome do seu negócio.' });
+    }
+    const telefone = normalizarWhatsapp(telefoneBruto);
+    if (!telefone) {
+      return reply.code(400).send({ error: 'Informe um telefone válido com DDD.' });
+    }
+
+    const { cep, logradouro, numero, complemento, bairro, cidade, uf } = endereco || {};
+    const cepLimpo = String(cep || '').replace(/\D/g, '');
+    const enderecoCompleto =
+      /^\d{8}$/.test(cepLimpo) &&
+      (logradouro || '').trim() &&
+      (numero || '').trim() &&
+      (bairro || '').trim() &&
+      (cidade || '').trim() &&
+      UF_VALIDAS.includes(String(uf || '').toUpperCase());
+    if (!enderecoCompleto) {
+      return reply.code(400).send({ error: 'Preencha todos os campos do endereço.' });
+    }
+
+    const client = await pool.connect();
+    let asaasCustomerId;
+    try {
+      await client.query('BEGIN');
+      await client.query('UPDATE usuarios SET nome = $2 WHERE id = $1', [userId, nomeResponsavel]);
+      const { rows: tenantAtualizado } = await client.query(
+        `UPDATE tenants SET
+           nome = $2, telefone = $3,
+           endereco_cep = $4, endereco_logradouro = $5, endereco_numero = $6,
+           endereco_complemento = $7, endereco_bairro = $8, endereco_cidade = $9, endereco_uf = $10
+         WHERE id = $1
+         RETURNING asaas_customer_id`,
+        [
+          tenantId,
+          nomeSegmento,
+          telefone,
+          cepLimpo,
+          logradouro.trim(),
+          numero.trim(),
+          (complemento || '').trim() || null,
+          bairro.trim(),
+          cidade.trim(),
+          String(uf).toUpperCase(),
+        ]
+      );
+      asaasCustomerId = tenantAtualizado[0].asaas_customer_id;
+      await client.query('COMMIT');
+    } catch (erro) {
+      await client.query('ROLLBACK');
+      throw erro;
+    } finally {
+      client.release();
+    }
+
+    // CA08 — mantém o Customer da Asaas sincronizado quando o tenant já tem
+    // assinatura (US32). Best-effort: uma falha aqui não deve impedir o
+    // perfil de ser salvo, já que os dados já estão persistidos no Kyvvo.
+    if (asaasCustomerId) {
+      asaasService
+        .atualizarCustomer({ customerId: asaasCustomerId, nome: nomeResponsavel, whatsapp: telefone })
+        .catch((erro) => console.error(`[perfil] falha ao sincronizar customer ${asaasCustomerId} na Asaas: ${erro.message}`));
+    }
+
+    return buscarPerfil(userId);
   });
 
   // ---------- Configuração ----------

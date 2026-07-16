@@ -114,6 +114,17 @@ async function atualizarSubscription({ subscriptionId, billingType, creditCardTo
   });
 }
 
+// CA08 (US33) — sincroniza nome/telefone com o Customer já existente no
+// Asaas quando o usuário edita o perfil. Em modo dev, só loga.
+async function atualizarCustomer({ customerId, nome, whatsapp }) {
+  if (modoDev()) {
+    console.log(`[asaas-service] (dev) atualiza customer ${customerId} — nome: ${nome}`);
+    return { id: customerId };
+  }
+
+  return chamar('PUT', `/customers/${customerId}`, { name: nome, phone: whatsapp || undefined });
+}
+
 // CA08 — últimas cobranças da assinatura, pro histórico na aba de pagamentos.
 // Em modo dev, devolve uma lista vazia (não há cobranças reais pra listar).
 async function listarUltimasCobrancas(subscriptionId, limite = 5) {
@@ -141,6 +152,7 @@ module.exports = {
   criarOuRecuperarCustomer,
   criarSubscription,
   atualizarSubscription,
+  atualizarCustomer,
   buscarSubscription,
   listarUltimasCobrancas,
 };

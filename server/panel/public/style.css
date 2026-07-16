@@ -467,6 +467,18 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .perfil-form label { margin-top: 20px; }
 
+/* Endereço composto (US33/CA04) */
+.endereco-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.endereco-grid > div { display: flex; flex-direction: column; }
+.perfil-form .endereco-sublabel { margin-top: 12px; }
+@media (max-width: 640px) {
+  .endereco-grid { grid-template-columns: 1fr; }
+}
+
 /* Ações de agendamento (US08) */
 .agendamento-linha-principal {
   display: flex;
