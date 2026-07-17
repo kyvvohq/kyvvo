@@ -88,3 +88,162 @@ test.describe('Configuração — horário de funcionamento', () => {
     await expect(page.locator('#config-msg')).toHaveText('Horário de abertura precisa ser antes do horário de fechamento');
   });
 });
+
+test.describe('Configuração — dias de funcionamento (grid de 7 colunas)', () => {
+  test('exibe um toggle por dia, marcado conforme dias_funcionamento', async ({ page }) => {
+    await entrarNaConfiguracao(page, {
+      dias_funcionamento: [1, 3, 5],
+      formato_hora: '24h',
+      horario_abertura: '08:00:00',
+      horario_fechamento: '20:00:00',
+    });
+
+    const toggles = page.locator('.dias-grid input[type="checkbox"]');
+    await expect(toggles).toHaveCount(7);
+    await expect(page.locator('.dias-grid input[value="1"]')).toBeChecked();
+    await expect(page.locator('.dias-grid input[value="3"]')).toBeChecked();
+    await expect(page.locator('.dias-grid input[value="5"]')).toBeChecked();
+    await expect(page.locator('.dias-grid input[value="0"]')).not.toBeChecked();
+  });
+
+  test('salva a lista de dias marcados', async ({ page }) => {
+    await entrarNaConfiguracao(page, {
+      dias_funcionamento: [1, 2, 3, 4, 5],
+      formato_hora: '24h',
+      horario_abertura: '08:00:00',
+      horario_fechamento: '20:00:00',
+    });
+
+    let corpoEnviado = null;
+    await page.route('**/api/configuracao', (route) => {
+      if (route.request().method() !== 'PATCH') return route.fallback();
+      corpoEnviado = route.request().postDataJSON();
+      return route.fulfill({ json: { dias_funcionamento: [0, 1, 2, 3, 4, 5, 6], formato_hora: '24h', horario_abertura: '08:00:00', horario_fechamento: '20:00:00' } });
+    });
+
+    await page.click('.dias-grid input[value="0"]');
+    await page.click('.dias-grid input[value="6"]');
+    await page.click('#form-config button[type="submit"]');
+
+    await expect(page.locator('#config-msg')).toHaveText('Salvo com sucesso!');
+    expect(corpoEnviado.diasFuncionamento.sort()).toEqual([0, 1, 2, 3, 4, 5, 6]);
+  });
+});
+
+test.describe('Configuração — horário de almoço', () => {
+  test('campos de início/término ficam ocultos quando o almoço está desativado', async ({ page }) => {
+    await entrarNaConfiguracao(page, {
+      dias_funcionamento: [1, 2, 3, 4, 5, 6],
+      formato_hora: '24h',
+      horario_abertura: '08:00:00',
+      horario_fechamento: '20:00:00',
+      horario_almoco_ativo: false,
+    });
+
+    await expect(page.locator('#config-almoco-ativo')).not.toBeChecked();
+    await expect(page.locator('#config-almoco-campos')).toBeHidden();
+  });
+
+  test('campos de início/término aparecem já preenchidos quando o almoço está ativo', async ({ page }) => {
+    await entrarNaConfiguracao(page, {
+      dias_funcionamento: [1, 2, 3, 4, 5, 6],
+      formato_hora: '24h',
+      horario_abertura: '08:00:00',
+      horario_fechamento: '20:00:00',
+      horario_almoco_ativo: true,
+      horario_almoco_inicio: '12:00:00',
+      horario_almoco_fim: '13:30:00',
+    });
+
+    await expect(page.locator('#config-almoco-ativo')).toBeChecked();
+    await expect(page.locator('#config-almoco-campos')).toBeVisible();
+    await expect(page.locator('#config-almoco-inicio')).toHaveValue('12:00');
+    await expect(page.locator('#config-almoco-fim')).toHaveValue('13:30');
+  });
+
+  test('ligar o toggle exibe os campos na hora, sem precisar salvar', async ({ page }) => {
+    await entrarNaConfiguracao(page, {
+      dias_funcionamento: [1, 2, 3, 4, 5, 6],
+      formato_hora: '24h',
+      horario_abertura: '08:00:00',
+      horario_fechamento: '20:00:00',
+      horario_almoco_ativo: false,
+    });
+
+    await expect(page.locator('#config-almoco-campos')).toBeHidden();
+    await page.click('#config-almoco-ativo');
+    await expect(page.locator('#config-almoco-campos')).toBeVisible();
+    await page.click('#config-almoco-ativo');
+    await expect(page.locator('#config-almoco-campos')).toBeHidden();
+  });
+
+  test('salva horário de almoço ativado com início/término', async ({ page }) => {
+    await entrarNaConfiguracao(page, {
+      dias_funcionamento: [1, 2, 3, 4, 5, 6],
+      formato_hora: '24h',
+      horario_abertura: '08:00:00',
+      horario_fechamento: '20:00:00',
+      horario_almoco_ativo: false,
+    });
+
+    let corpoEnviado = null;
+    await page.route('**/api/configuracao', (route) => {
+      if (route.request().method() !== 'PATCH') return route.fallback();
+      corpoEnviado = route.request().postDataJSON();
+      return route.fulfill({
+        json: {
+          dias_funcionamento: [1, 2, 3, 4, 5, 6],
+          formato_hora: '24h',
+          horario_abertura: '08:00:00',
+          horario_fechamento: '20:00:00',
+          horario_almoco_ativo: true,
+          horario_almoco_inicio: '12:00:00',
+          horario_almoco_fim: '13:00:00',
+        },
+      });
+    });
+
+    await page.click('#config-almoco-ativo');
+    await page.fill('#config-almoco-inicio', '12:00');
+    await page.fill('#config-almoco-fim', '13:00');
+    await page.click('#form-config button[type="submit"]');
+
+    await expect(page.locator('#config-msg')).toHaveText('Salvo com sucesso!');
+    expect(corpoEnviado).toMatchObject({ horarioAlmocoAtivo: true, horarioAlmocoInicio: '12:00', horarioAlmocoFim: '13:00' });
+  });
+
+  test('desativar o almoço envia horarioAlmocoAtivo: false e não envia horários', async ({ page }) => {
+    await entrarNaConfiguracao(page, {
+      dias_funcionamento: [1, 2, 3, 4, 5, 6],
+      formato_hora: '24h',
+      horario_abertura: '08:00:00',
+      horario_fechamento: '20:00:00',
+      horario_almoco_ativo: true,
+      horario_almoco_inicio: '12:00:00',
+      horario_almoco_fim: '13:00:00',
+    });
+
+    let corpoEnviado = null;
+    await page.route('**/api/configuracao', (route) => {
+      if (route.request().method() !== 'PATCH') return route.fallback();
+      corpoEnviado = route.request().postDataJSON();
+      return route.fulfill({
+        json: {
+          dias_funcionamento: [1, 2, 3, 4, 5, 6],
+          formato_hora: '24h',
+          horario_abertura: '08:00:00',
+          horario_fechamento: '20:00:00',
+          horario_almoco_ativo: false,
+          horario_almoco_inicio: null,
+          horario_almoco_fim: null,
+        },
+      });
+    });
+
+    await page.click('#config-almoco-ativo');
+    await page.click('#form-config button[type="submit"]');
+
+    await expect(page.locator('#config-msg')).toHaveText('Salvo com sucesso!');
+    expect(corpoEnviado).toMatchObject({ horarioAlmocoAtivo: false, horarioAlmocoInicio: null, horarioAlmocoFim: null });
+  });
+});

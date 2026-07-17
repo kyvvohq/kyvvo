@@ -888,6 +888,33 @@ const PAGAMENTOS_STATUS_BADGE = {
   cancelado: 'badge-status-inativo',
 };
 
+// Status de cada cobrança individual no histórico (vem direto da Asaas,
+// diferente do status da assinatura acima). PENDING = amarelo, CONFIRMED/
+// RECEIVED = verde, OVERDUE/CANCELED/REFUNDED = vermelho.
+const HISTORICO_STATUS_LABEL = {
+  PENDING: 'Pendente',
+  CONFIRMED: 'Confirmado',
+  RECEIVED: 'Confirmado',
+  OVERDUE: 'Vencido',
+  CANCELED: 'Cancelado',
+  CANCELLED: 'Cancelado',
+  REFUNDED: 'Cancelado',
+};
+const HISTORICO_STATUS_BADGE = {
+  PENDING: 'badge-pagamento-pending',
+  CONFIRMED: 'badge-pagamento-confirmado',
+  RECEIVED: 'badge-pagamento-confirmado',
+  OVERDUE: 'badge-pagamento-cancelado',
+  CANCELED: 'badge-pagamento-cancelado',
+  CANCELLED: 'badge-pagamento-cancelado',
+  REFUNDED: 'badge-pagamento-cancelado',
+};
+function renderHistoricoStatus(status) {
+  const classe = HISTORICO_STATUS_BADGE[status] || 'badge-status-inativo';
+  const label = HISTORICO_STATUS_LABEL[status] || status;
+  return `<span class="badge ${classe}">${label}</span>`;
+}
+
 function formatarDataCurtaISO(dataISO) {
   if (!dataISO) return '—';
   // dueDate/data vêm como "YYYY-MM-DD" (sem hora) tanto do banco quanto da
@@ -1041,7 +1068,7 @@ async function renderPagamentos() {
           <thead><tr><th>Data</th><th>Valor</th><th>Status</th></tr></thead>
           <tbody>
             ${dados.historico.length
-              ? dados.historico.map((h) => `<tr><td>${formatarDataCurtaISO(h.data)}</td><td>${formatarPreco(h.valor)}</td><td>${h.status}</td></tr>`).join('')
+              ? dados.historico.map((h) => `<tr><td>${formatarDataCurtaISO(h.data)}</td><td>${formatarPreco(h.valor)}</td><td>${renderHistoricoStatus(h.status)}</td></tr>`).join('')
               : '<tr><td colspan="3">Nenhuma cobrança registrada ainda.</td></tr>'}
           </tbody>
         </table>
@@ -1962,18 +1989,24 @@ async function renderConfiguracao() {
   // espera "HH:MM".
   const horarioAbertura = (configuracao.horario_abertura || '08:00').slice(0, 5);
   const horarioFechamento = (configuracao.horario_fechamento || '20:00').slice(0, 5);
+  const almocoAtivo = !!configuracao.horario_almoco_ativo;
+  const almocoInicio = (configuracao.horario_almoco_inicio || '12:00').slice(0, 5);
+  const almocoFim = (configuracao.horario_almoco_fim || '13:00').slice(0, 5);
 
-  const checkboxesDias = NOMES_DIAS.map((nome, idx) => `
-    <label class="dia-checkbox">
-      <input type="checkbox" value="${idx}" ${dias.includes(idx) ? 'checked' : ''}>
-      ${nome}
+  const toggleDias = NOMES_DIAS.map((nome, idx) => `
+    <label class="dia-toggle-cel">
+      <span class="dia-toggle-nome">${nome.slice(0, 3)}</span>
+      <span class="toggle-switch">
+        <input type="checkbox" value="${idx}" ${dias.includes(idx) ? 'checked' : ''}>
+        <span class="toggle-switch-trilho"></span>
+      </span>
     </label>
   `).join('');
 
   conteudo.innerHTML = `
     <form class="perfil-form" id="form-config">
       <label>Dias em que ${infoSegmento(configuracao.segmento).dias} funciona (aparecem na agenda)</label>
-      <div class="dias-grid">${checkboxesDias}</div>
+      <div class="dias-grid">${toggleDias}</div>
 
       <label>Formato de hora</label>
       <div class="formato-hora-opcoes">
@@ -2000,10 +2033,34 @@ async function renderConfiguracao() {
       </div>
       <div class="modal-texto">Agendamentos só podem ser feitos dentro desse intervalo.</div>
 
+      <label class="toggle-linha" style="margin-top:16px">
+        <span class="toggle-switch">
+          <input type="checkbox" id="config-almoco-ativo" ${almocoAtivo ? 'checked' : ''}>
+          <span class="toggle-switch-trilho"></span>
+        </span>
+        Habilitar horário de almoço
+      </label>
+      <div class="formato-hora-opcoes" id="config-almoco-campos" style="${almocoAtivo ? '' : 'display:none'}">
+        <div>
+          <label for="config-almoco-inicio">Início</label>
+          <input type="time" id="config-almoco-inicio" value="${almocoInicio}">
+        </div>
+        <div>
+          <label for="config-almoco-fim">Término</label>
+          <input type="time" id="config-almoco-fim" value="${almocoFim}">
+        </div>
+      </div>
+
       <button type="submit">Salvar</button>
       <div class="erro" id="config-msg"></div>
     </form>
   `;
+
+  const almocoAtivoInput = document.getElementById('config-almoco-ativo');
+  const almocoCampos = document.getElementById('config-almoco-campos');
+  almocoAtivoInput.addEventListener('change', () => {
+    almocoCampos.style.display = almocoAtivoInput.checked ? '' : 'none';
+  });
 
   document.getElementById('form-config').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -2015,10 +2072,16 @@ async function renderConfiguracao() {
     const formatoHora = document.querySelector('input[name="formato"]:checked').value;
     const horarioAbertura = document.getElementById('config-horario-abertura').value;
     const horarioFechamento = document.getElementById('config-horario-fechamento').value;
+    const horarioAlmocoAtivo = almocoAtivoInput.checked;
+    const horarioAlmocoInicio = horarioAlmocoAtivo ? document.getElementById('config-almoco-inicio').value : null;
+    const horarioAlmocoFim = horarioAlmocoAtivo ? document.getElementById('config-almoco-fim').value : null;
 
     const resultado = await api('/api/configuracao', {
       method: 'PATCH',
-      body: JSON.stringify({ diasFuncionamento, formatoHora, horarioAbertura, horarioFechamento }),
+      body: JSON.stringify({
+        diasFuncionamento, formatoHora, horarioAbertura, horarioFechamento,
+        horarioAlmocoAtivo, horarioAlmocoInicio, horarioAlmocoFim,
+      }),
     });
 
     if (resultado && !resultado.error) {

@@ -43,6 +43,12 @@ async function entrarNoPainel(page, perfil = PERFIL_BASE) {
 }
 
 test.describe('Perfil (US33)', () => {
+  test('itens de menu "Meu Perfil" e "Pagamentos" não têm emoticon', async ({ page }) => {
+    await entrarNoPainel(page);
+    await expect(page.locator('.menu-item[data-menu="perfil"]')).toHaveText('Meu Perfil');
+    await expect(page.locator('.menu-item[data-menu="pagamentos"]')).toHaveText('Pagamentos');
+  });
+
   test('pré-preenche o formulário com os dados atuais (CA02)', async ({ page }) => {
     await entrarNoPainel(page);
     await expect(page.locator('#nome_responsavel')).toHaveValue('Ana Souza');

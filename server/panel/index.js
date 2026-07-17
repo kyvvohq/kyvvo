@@ -1178,7 +1178,9 @@ async function start() {
   fastify.get('/api/configuracao', { preHandler: [fastify.authenticate] }, async (request) => {
     const { tenantId } = request.user;
     const { rows } = await pool.query(
-      'SELECT dias_funcionamento, formato_hora, horario_abertura, horario_fechamento, segmento FROM tenants WHERE id = $1',
+      `SELECT dias_funcionamento, formato_hora, horario_abertura, horario_fechamento, segmento,
+              horario_almoco_ativo, horario_almoco_inicio, horario_almoco_fim
+       FROM tenants WHERE id = $1`,
       [tenantId]
     );
     return rows[0];
@@ -1188,7 +1190,10 @@ async function start() {
 
   fastify.patch('/api/configuracao', { preHandler: [fastify.authenticate] }, async (request, reply) => {
     const { tenantId } = request.user;
-    const { diasFuncionamento, formatoHora, horarioAbertura, horarioFechamento } = request.body || {};
+    const {
+      diasFuncionamento, formatoHora, horarioAbertura, horarioFechamento,
+      horarioAlmocoAtivo, horarioAlmocoInicio, horarioAlmocoFim,
+    } = request.body || {};
 
     if (formatoHora && !['24h', '12h'].includes(formatoHora)) {
       return reply.code(400).send({ error: 'formatoHora deve ser "24h" ou "12h"' });
@@ -1202,13 +1207,22 @@ async function start() {
     if (horarioFechamento !== undefined && !HORARIO_REGEX.test(horarioFechamento)) {
       return reply.code(400).send({ error: 'horarioFechamento deve estar no formato HH:MM' });
     }
+    if (horarioAlmocoInicio !== undefined && horarioAlmocoInicio !== null && !HORARIO_REGEX.test(horarioAlmocoInicio)) {
+      return reply.code(400).send({ error: 'horarioAlmocoInicio deve estar no formato HH:MM' });
+    }
+    if (horarioAlmocoFim !== undefined && horarioAlmocoFim !== null && !HORARIO_REGEX.test(horarioAlmocoFim)) {
+      return reply.code(400).send({ error: 'horarioAlmocoFim deve estar no formato HH:MM' });
+    }
 
-    // Precisa validar abertura < fechamento contra o valor final (existente
-    // ou novo) de cada lado — não dá pra confiar só no CHECK do banco pra dar
-    // uma mensagem de erro clara em vez de estourar uma exceção de SQL.
-    if (horarioAbertura !== undefined || horarioFechamento !== undefined) {
+    // Precisa validar abertura < fechamento (e início < fim do almoço) contra
+    // o valor final (existente ou novo) de cada lado — não dá pra confiar só
+    // no CHECK do banco pra dar uma mensagem de erro clara em vez de estourar
+    // uma exceção de SQL.
+    if (horarioAbertura !== undefined || horarioFechamento !== undefined || horarioAlmocoAtivo !== undefined
+      || horarioAlmocoInicio !== undefined || horarioAlmocoFim !== undefined) {
       const { rows: atuais } = await pool.query(
-        'SELECT horario_abertura, horario_fechamento FROM tenants WHERE id = $1',
+        `SELECT horario_abertura, horario_fechamento, horario_almoco_ativo, horario_almoco_inicio, horario_almoco_fim
+         FROM tenants WHERE id = $1`,
         [tenantId]
       );
       // Normaliza pra "HH:MM" antes de comparar — o valor vindo do banco tem
@@ -1219,6 +1233,18 @@ async function start() {
       if (aberturaFinal >= fechamentoFinal) {
         return reply.code(400).send({ error: 'Horário de abertura precisa ser antes do horário de fechamento' });
       }
+
+      const almocoAtivoFinal = horarioAlmocoAtivo ?? atuais[0].horario_almoco_ativo;
+      if (almocoAtivoFinal) {
+        const almocoInicioFinal = (horarioAlmocoInicio ?? atuais[0].horario_almoco_inicio ?? '').slice(0, 5);
+        const almocoFimFinal = (horarioAlmocoFim ?? atuais[0].horario_almoco_fim ?? '').slice(0, 5);
+        if (!almocoInicioFinal || !almocoFimFinal) {
+          return reply.code(400).send({ error: 'Informe o horário de início e término do almoço.' });
+        }
+        if (almocoInicioFinal >= almocoFimFinal) {
+          return reply.code(400).send({ error: 'Horário de início do almoço precisa ser antes do horário de término.' });
+        }
+      }
     }
 
     const { rows } = await pool.query(
@@ -1226,10 +1252,17 @@ async function start() {
          dias_funcionamento = COALESCE($2, dias_funcionamento),
          formato_hora = COALESCE($3, formato_hora),
          horario_abertura = COALESCE($4, horario_abertura),
-         horario_fechamento = COALESCE($5, horario_fechamento)
+         horario_fechamento = COALESCE($5, horario_fechamento),
+         horario_almoco_ativo = COALESCE($6, horario_almoco_ativo),
+         horario_almoco_inicio = CASE WHEN $6 = false THEN null ELSE COALESCE($7, horario_almoco_inicio) END,
+         horario_almoco_fim = CASE WHEN $6 = false THEN null ELSE COALESCE($8, horario_almoco_fim) END
        WHERE id = $1
-       RETURNING dias_funcionamento, formato_hora, horario_abertura, horario_fechamento`,
-      [tenantId, diasFuncionamento ? JSON.stringify(diasFuncionamento) : null, formatoHora, horarioAbertura, horarioFechamento]
+       RETURNING dias_funcionamento, formato_hora, horario_abertura, horario_fechamento,
+                 horario_almoco_ativo, horario_almoco_inicio, horario_almoco_fim`,
+      [
+        tenantId, diasFuncionamento ? JSON.stringify(diasFuncionamento) : null, formatoHora, horarioAbertura, horarioFechamento,
+        horarioAlmocoAtivo ?? null, horarioAlmocoInicio, horarioAlmocoFim,
+      ]
     );
     return rows[0];
   });
