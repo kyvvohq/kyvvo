@@ -897,6 +897,58 @@ function formatarDataCurtaISO(dataISO) {
   return `${dia}/${mes}/${ano}`;
 }
 
+// CA01-CA06 (US36) — bloco de status do trial na aba de pagamentos: badge +
+// barra de progresso + CTA, com 3 estados (ativo / expirando ≤3 dias /
+// expirado) derivados de trial_ativo e trial_dias_restantes.
+function renderBlocoTrial(trialInfo) {
+  const diasRestantes = trialInfo.trial_dias_restantes;
+  const percentual = trialInfo.trial_percentual != null ? Math.min(100, Math.max(0, trialInfo.trial_percentual)) : 0;
+  const corBarra = percentual > 80 ? 'trial-barra-vermelha' : percentual > 50 ? 'trial-barra-amarela' : 'trial-barra-verde';
+
+  let badgeClasse = 'badge-trial-ativo';
+  let badgeTexto = 'TRIAL ATIVO';
+  let mensagem = 'Você está no período gratuito de 14 dias.';
+  let cta = trialInfo.trial_fim
+    ? `Garanta seu acesso — cadastre uma forma de pagamento agora e não pague nada até ${formatarDataCurtaISO(trialInfo.trial_fim)}.`
+    : '';
+
+  if (!trialInfo.trial_ativo) {
+    badgeClasse = 'badge-trial-expirado';
+    badgeTexto = 'TRIAL EXPIRADO';
+    mensagem = 'Seu período gratuito encerrou. Cadastre uma forma de pagamento para continuar usando o Kyvvo.';
+    cta = '';
+  } else if (diasRestantes != null && diasRestantes <= 3) {
+    badgeClasse = 'badge-trial-expirando';
+    badgeTexto = 'TRIAL EXPIRANDO';
+    mensagem = `Seu trial expira em ${diasRestantes} dia${diasRestantes === 1 ? '' : 's'}. Cadastre um pagamento para não perder o acesso.`;
+  }
+
+  const progresso = trialInfo.trial_inicio && trialInfo.trial_fim
+    ? `
+      <div class="trial-progresso">
+        <div class="trial-progresso-barra"><div class="trial-progresso-preenchido ${corBarra}" style="width:${percentual}%"></div></div>
+        <div class="trial-progresso-legenda">
+          <span>Início: ${formatarDataCurtaISO(trialInfo.trial_inicio)}</span>
+          <span>Término: ${formatarDataCurtaISO(trialInfo.trial_fim)}</span>
+        </div>
+        <div class="trial-progresso-dias">
+          <strong>${trialInfo.trial_ativo ? `${diasRestantes} dias restantes` : 'Trial encerrado'}</strong>
+          <span>${trialInfo.trial_dias_utilizados} de 14 dias utilizados</span>
+        </div>
+      </div>
+    `
+    : '';
+
+  return `
+    <div class="trial-status-bloco">
+      <span class="badge ${badgeClasse}">${badgeTexto}</span>
+      <p class="modal-texto">${mensagem}</p>
+      ${progresso}
+      ${cta ? `<p class="modal-texto">${cta}</p>` : ''}
+    </div>
+  `;
+}
+
 async function renderPagamentos() {
   conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
   const dados = await api('/api/pagamentos');
@@ -913,13 +965,16 @@ async function renderPagamentos() {
   let html = '<div class="nav-periodo"><strong>Pagamentos</strong></div>';
 
   if (dados.status === 'trial') {
+    const trialInfo = await api('/api/pagamentos/status');
+    if (!trialInfo) return;
+
     html += `
       <div class="financeiro-resumo-card" style="margin-bottom:16px">
         <div class="financeiro-resumo-label">Plano atual</div>
         <div>${dados.plano_nome || 'A definir'}${dados.valor_plano != null ? ` — ${formatarPreco(dados.valor_plano)}/mês após o trial` : ''}</div>
       </div>
-      <p class="modal-texto">Cadastre um meio de pagamento para manter o acesso ao Kyvvo quando o trial acabar.</p>
-      <button class="btn-novo-agendamento" id="btn-cadastrar-pagamento">Cadastrar forma de pagamento</button>
+      ${renderBlocoTrial(trialInfo)}
+      <button class="btn-novo-agendamento" id="btn-cadastrar-pagamento">${trialInfo.trial_ativo ? 'Cadastrar pagamento' : 'Escolher plano'}</button>
     `;
   } else if (!dados.meio_pagamento) {
     html += `

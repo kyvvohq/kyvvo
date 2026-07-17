@@ -7,7 +7,10 @@ const { test, expect } = require('@playwright/test');
 // server-side. Como nos outros specs, as chamadas de API são mockadas via
 // page.route — sem dependência de Postgres real nem de uma conta Asaas.
 
-async function entrarNoPainel(page, pagamentos) {
+// `trialStatus` mocka GET /api/pagamentos/status (US36) — só chamado pelo
+// front quando `pagamentos.status === 'trial'`; um valor padrão razoável
+// cobre os testes que nem repararem nesse endpoint (ex: cadastro de US32).
+async function entrarNoPainel(page, pagamentos, trialStatus) {
   await page.route('**/api/configuracao', (route) =>
     route.fulfill({ json: { dias_funcionamento: [1, 2, 3, 4, 5, 6], formato_hora: '24h', segmento: 'salao_beleza' } })
   );
@@ -19,6 +22,20 @@ async function entrarNoPainel(page, pagamentos) {
     if (route.request().method() !== 'GET') return route.fallback();
     return route.fulfill({ json: pagamentos });
   });
+  await page.route('**/api/pagamentos/status', (route) =>
+    route.fulfill({
+      json: trialStatus || {
+        trial_ativo: true,
+        trial_inicio: '2026-07-01',
+        trial_fim: '2026-07-15',
+        trial_dias_restantes: 7,
+        trial_dias_utilizados: 7,
+        trial_percentual: 50,
+        status_pagamento: 'trial',
+        plano: 'trial',
+      },
+    })
+  );
   await page.addInitScript(() => {
     window.localStorage.setItem('kyvvo_token', 'fake-jwt-token');
     window.localStorage.setItem('kyvvo_nome', 'Ana');
@@ -39,8 +56,8 @@ test.describe('Pagamentos (US32)', () => {
       proxima_cobranca: null,
       historico: [],
     });
-    await expect(page.locator('#btn-cadastrar-pagamento')).toHaveText('Cadastrar forma de pagamento');
-    await expect(page.locator('.modal-texto')).toContainText('meio de pagamento');
+    await expect(page.locator('#btn-cadastrar-pagamento')).toHaveText('Cadastrar pagamento');
+    await expect(page.locator('.trial-status-bloco')).toContainText('TRIAL ATIVO');
   });
 
   test('assinatura ativa — mostra plano, meio, status e histórico', async ({ page }) => {
@@ -356,5 +373,75 @@ test.describe('Pagamentos (US32)', () => {
     await page.click('#btn-salvar-pagamento');
 
     await expect(page.locator('#pagamento-erro')).toHaveText(/Não foi possível processar/);
+  });
+});
+
+test.describe('Status do trial na aba de pagamentos (US36)', () => {
+  const pagamentosTrial = {
+    status: 'trial',
+    plano: 'trial',
+    plano_nome: null,
+    valor_plano: null,
+    meio_pagamento: null,
+    cartao_final: null,
+    proxima_cobranca: null,
+    historico: [],
+  };
+
+  test('trial ativo mostra badge, datas, barra de progresso e CTA (CA01/CA02/CA03/CA04)', async ({ page }) => {
+    await entrarNoPainel(page, pagamentosTrial, {
+      trial_ativo: true,
+      trial_inicio: '2026-07-01',
+      trial_fim: '2026-07-15',
+      trial_dias_restantes: 7,
+      trial_dias_utilizados: 7,
+      trial_percentual: 50,
+      status_pagamento: 'trial',
+      plano: 'trial',
+    });
+
+    await expect(page.locator('.badge-trial-ativo')).toHaveText('TRIAL ATIVO');
+    await expect(page.locator('.trial-status-bloco')).toContainText('01/07/2026');
+    await expect(page.locator('.trial-status-bloco')).toContainText('15/07/2026');
+    await expect(page.locator('.trial-progresso-dias')).toContainText('7 dias restantes');
+    await expect(page.locator('.trial-progresso-dias')).toContainText('7 de 14 dias utilizados');
+    await expect(page.locator('.trial-progresso-preenchido')).toHaveAttribute('style', /width:50%/);
+    await expect(page.locator('.trial-status-bloco')).toContainText('não pague nada até 15/07/2026');
+    await expect(page.locator('#btn-cadastrar-pagamento')).toHaveText('Cadastrar pagamento');
+  });
+
+  test('trial expirando em até 3 dias mostra badge amarelo e mensagem de urgência (CA05)', async ({ page }) => {
+    await entrarNoPainel(page, pagamentosTrial, {
+      trial_ativo: true,
+      trial_inicio: '2026-07-01',
+      trial_fim: '2026-07-17',
+      trial_dias_restantes: 2,
+      trial_dias_utilizados: 12,
+      trial_percentual: 86,
+      status_pagamento: 'trial',
+      plano: 'trial',
+    });
+
+    await expect(page.locator('.badge-trial-expirando')).toHaveText('TRIAL EXPIRANDO');
+    await expect(page.locator('.trial-status-bloco')).toContainText('Seu trial expira em 2 dias');
+    await expect(page.locator('.trial-progresso-preenchido.trial-barra-vermelha')).toBeVisible();
+    await expect(page.locator('#btn-cadastrar-pagamento')).toHaveText('Cadastrar pagamento');
+  });
+
+  test('trial expirado mostra badge vermelho, mensagem e botão "Escolher plano" (CA06)', async ({ page }) => {
+    await entrarNoPainel(page, pagamentosTrial, {
+      trial_ativo: false,
+      trial_inicio: '2026-06-01',
+      trial_fim: '2026-06-15',
+      trial_dias_restantes: -10,
+      trial_dias_utilizados: 14,
+      trial_percentual: 100,
+      status_pagamento: 'trial',
+      plano: 'trial',
+    });
+
+    await expect(page.locator('.badge-trial-expirado')).toHaveText('TRIAL EXPIRADO');
+    await expect(page.locator('.trial-status-bloco')).toContainText('Seu período gratuito encerrou');
+    await expect(page.locator('#btn-cadastrar-pagamento')).toHaveText('Escolher plano');
   });
 });

@@ -1309,6 +1309,38 @@ async function start() {
     return montarResumoPagamentos(rows[0]);
   });
 
+  // CA01-CA07 (US36) — detalhes do trial pra aba de pagamentos do portal do
+  // tenant (extensão do indicador somente leitura da US31, que hoje só existe
+  // pro admin via calcularTrialTenant/TRIAL_DIAS). `trial_dias_utilizados`/
+  // `trial_percentual` são derivados de `trial_dias_restantes` com o mesmo
+  // critério (Math.ceil) usado no cálculo dos dias restantes, e sempre
+  // clampados entre 0 e TRIAL_DIAS mesmo com o trial já expirado.
+  fastify.get('/api/pagamentos/status', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const { tenantId } = request.user;
+    const { rows } = await pool.query('SELECT status, plano, ativado_em FROM tenants WHERE id = $1', [tenantId]);
+    const tenant = rows[0];
+    if (!tenant) {
+      return reply.code(404).send({ error: 'Tenant não encontrado' });
+    }
+
+    const trial = calcularTrialTenant(tenant);
+    const diasUtilizados = trial.trialDiasRestantes == null
+      ? null
+      : Math.min(TRIAL_DIAS, Math.max(0, TRIAL_DIAS - trial.trialDiasRestantes));
+    const trialPercentual = diasUtilizados == null ? null : Math.min(100, Math.round((diasUtilizados / TRIAL_DIAS) * 100));
+
+    return {
+      trial_ativo: trial.trialAtivo,
+      trial_inicio: trial.trialInicio ? trial.trialInicio.slice(0, 10) : null,
+      trial_fim: trial.trialFim ? trial.trialFim.slice(0, 10) : null,
+      trial_dias_restantes: trial.trialDiasRestantes,
+      trial_dias_utilizados: diasUtilizados,
+      trial_percentual: trialPercentual,
+      status_pagamento: tenant.status,
+      plano: tenant.plano,
+    };
+  });
+
   // CA04/CA05/CA09 — orquestra Customer + Subscription no Asaas. Cria na
   // primeira vez; se o tenant já tem assinatura, apenas troca o meio de
   // pagamento (CA09 — atualiza, não cancela).
