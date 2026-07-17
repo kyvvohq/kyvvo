@@ -572,6 +572,50 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 /* Indicador de trial somente leitura (US31) */
 .badge-trial-indicador { margin-left: 0; }
 
+/* Bloco de status do trial na aba de pagamentos (US36) */
+.badge-trial-expirando { background: rgba(240, 179, 84, 0.15); color: #f0b354; }
+
+.trial-status-bloco {
+  background: rgba(124, 92, 252, 0.08);
+  border: 1px solid rgba(124, 92, 252, 0.25);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.trial-progresso { margin-top: 12px; }
+
+.trial-progresso-barra {
+  background: #232847;
+  border-radius: 100px;
+  height: 8px;
+  overflow: hidden;
+}
+
+.trial-progresso-preenchido { height: 100%; border-radius: 100px; }
+.trial-barra-verde { background: #4ade80; }
+.trial-barra-amarela { background: #f0b354; }
+.trial-barra-vermelha { background: #ff6b6b; }
+
+.trial-progresso-legenda {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #a1a5c4;
+  margin-top: 6px;
+}
+
+.trial-progresso-dias {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-top: 8px;
+  font-size: 13px;
+  color: #a1a5c4;
+}
+
+.trial-progresso-dias strong { font-size: 16px; color: #f5f6fa; }
+
 .toggle-readonly {
   display: inline-block;
   position: relative;
