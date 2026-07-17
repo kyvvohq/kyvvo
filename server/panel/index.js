@@ -1261,7 +1261,12 @@ async function start() {
   // tanto pelo GET quanto pela resposta do POST /cadastrar, pra sempre
   // devolver o mesmo formato depois de qualquer mudança de estado.
   async function montarResumoPagamentos(tenant) {
-    const planoInfo = asaasService.PLANOS[tenant.plano] || null;
+    // Sem plano escolhido ainda (tenant.plano nulo ou 'trial'), o plano que
+    // efetivamente será cobrado ao cadastrar pagamento é sempre o
+    // PLANO_PADRAO (ver /api/pagamentos/cadastrar) — devolve esse valor em
+    // vez de null pra US37/CA02 poder anunciar "R$ [VALOR]" antes do trial
+    // acabar, sem duplicar o catálogo de planos no frontend.
+    const planoInfo = asaasService.PLANOS[tenant.plano] || asaasService.PLANOS[asaasService.PLANO_PADRAO];
     const subscription = await asaasService.buscarSubscription(tenant.asaas_subscription_id).catch((erro) => {
       console.error(`[pagamentos] falha ao buscar subscription ${tenant.asaas_subscription_id}: ${erro.message}`);
       return null;
@@ -1270,12 +1275,18 @@ async function start() {
       console.error(`[pagamentos] falha ao listar cobranças da subscription ${tenant.asaas_subscription_id}: ${erro.message}`);
       return [];
     });
+    // trial_ativo/trial_fim (US37/CA02) — reaproveita o mesmo cálculo do
+    // indicador somente leitura do admin (US31/calcularTrialTenant) pro
+    // frontend anunciar a data da primeira cobrança antes do cadastro.
+    const trial = calcularTrialTenant(tenant);
 
     return {
       status: tenant.status,
       plano: tenant.plano,
       plano_nome: planoInfo ? planoInfo.nome : null,
       valor_plano: planoInfo ? planoInfo.valor : null,
+      trial_ativo: trial.trialAtivo,
+      trial_fim: trial.trialFim ? trial.trialFim.slice(0, 10) : null,
       meio_pagamento: tenant.asaas_meio_pagamento,
       cartao_final: tenant.asaas_cartao_final,
       cpf_cnpj: tenant.cpf_cnpj,
@@ -1498,12 +1509,21 @@ async function start() {
       return reply.code(400).send({ error: 'Não foi possível processar o pagamento agora. Tente novamente em instantes.' });
     }
 
+    // CA04/CA05/CA07 (US37) — durante o trial, cadastrar pagamento agenda a
+    // cobrança pro fim do trial (nextDueDate acima) mas não cobra agora, então
+    // o tenant continua em 'trial' (com meio de pagamento já anexado) até a
+    // Asaas confirmar a primeira cobrança de verdade (webhook PAYMENT_CONFIRMED
+    // já vira 'ativo'); só pula direto pra 'ativo' se o trial já tiver
+    // acabado (cobrança imediata) ou se já não estava em trial (CA09/US35).
+    const trialAindaAtivo = tenant.status === 'trial' && calcularTrialTenant(tenant).trialAtivo;
+    const novoStatus = trialAindaAtivo ? 'trial' : 'ativo';
+
     const { rows: atualizado } = await pool.query(
       `UPDATE tenants SET
          asaas_customer_id = $2,
          asaas_subscription_id = $3,
          plano = $4,
-         status = 'ativo',
+         status = $15,
          asaas_meio_pagamento = $5,
          asaas_cartao_final = $6,
          cpf_cnpj = $7,
@@ -1524,6 +1544,7 @@ async function start() {
       [
         tenantId, customer.id, subscriptionId, plano, meio, meio === 'cartao' ? cartaoFinal : null, cpfCnpjLimpo,
         endereco.cep, endereco.logradouro, endereco.numero, endereco.complemento, endereco.bairro, endereco.cidade, endereco.uf,
+        novoStatus,
       ]
     );
 

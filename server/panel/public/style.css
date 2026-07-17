@@ -808,6 +808,24 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   margin-top: 8px;
 }
 
+/* Banner de cobrança futura no modal de pagamento durante o trial (US37) */
+.trial-banner-cobranca-futura {
+  background: rgba(74, 222, 128, 0.08);
+  border: 1px solid rgba(74, 222, 128, 0.25);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+}
+
+.trial-banner-cobranca-futura p {
+  color: #a1a5c4;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.trial-banner-cobranca-futura p:not(:last-child) { margin-bottom: 6px; }
+.trial-banner-cobranca-futura p:first-child { color: #4ade80; font-weight: 600; }
+
 .modal-acoes {
   display: flex;
   gap: 10px;

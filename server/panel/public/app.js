@@ -912,7 +912,31 @@ async function renderPagamentos() {
 
   let html = '<div class="nav-periodo"><strong>Pagamentos</strong></div>';
 
-  if (dados.status === 'trial') {
+  if (dados.status === 'trial' && dados.meio_pagamento) {
+    // CA05 (US37) — pagamento já cadastrado durante o trial: a cobrança está
+    // agendada pro fim do trial, mas ainda não aconteceu (por isso o tenant
+    // continua em 'trial', não 'ativo' — ver /api/pagamentos/cadastrar).
+    html += `
+      <div class="financeiro-resumo">
+        <div class="financeiro-resumo-card">
+          <div class="financeiro-resumo-label">Plano atual</div>
+          <div>${dados.plano_nome || 'A definir'}${dados.valor_plano != null ? ` — ${formatarPreco(dados.valor_plano)}` : ''}</div>
+        </div>
+        <div class="financeiro-resumo-card">
+          <div class="financeiro-resumo-label">Meio de pagamento</div>
+          <div>${meioLabel}</div>
+        </div>
+        <div class="financeiro-resumo-card">
+          <div class="financeiro-resumo-label">Status</div>
+          <div><span class="badge badge-status-ativo">Trial com pagamento agendado</span></div>
+        </div>
+      </div>
+      <p class="modal-texto">
+        Próxima cobrança: ${dados.proxima_cobranca ? `${formatarPreco(dados.proxima_cobranca.valor)} em ${formatarDataCurtaISO(dados.proxima_cobranca.data)}` : 'não disponível'}
+      </p>
+      <button class="btn-secundario" id="btn-cadastrar-pagamento" style="margin-bottom:16px">Alterar forma de pagamento</button>
+    `;
+  } else if (dados.status === 'trial') {
     html += `
       <div class="financeiro-resumo-card" style="margin-bottom:16px">
         <div class="financeiro-resumo-label">Plano atual</div>
@@ -1028,9 +1052,23 @@ function abrirModalPagamento(dadosAtuais) {
   const opcoesUF = UF_OPCOES.map((uf) => `<option value="${uf}" ${uf === dadosAtuais.endereco_uf ? 'selected' : ''}>${uf}</option>`).join('');
   const desabilitarEndereco = enderecoJaCadastrado ? 'disabled' : '';
 
+  // CA02 (US37) — durante o trial ainda ativo, avisa antes do formulário que
+  // o cadastro não cobra na hora; a cobrança só é agendada pro fim do trial
+  // (nextDueDate calculado no backend, ver proximaCobrancaRespeitandoTrial).
+  const bannerTrial = dadosAtuais.status === 'trial' && dadosAtuais.trial_ativo
+    ? `
+      <div class="trial-banner-cobranca-futura">
+        <p>✅ Você não será cobrado agora.</p>
+        <p>A primeira cobrança de ${formatarPreco(dadosAtuais.valor_plano)} será realizada em ${formatarDataCurtaISO(dadosAtuais.trial_fim)}.</p>
+        <p>Você pode cancelar a qualquer momento antes dessa data sem custo.</p>
+      </div>
+    `
+    : '';
+
   abrirModal(
     '<h3>Forma de pagamento</h3>',
     `
+      ${bannerTrial}
       <form id="form-pagamento">
         <div class="modal-erro" id="pagamento-erro"></div>
         ${cpfCnpjJaCadastrado ? '' : `
@@ -1188,7 +1226,13 @@ function abrirModalPagamento(dadosAtuais) {
 
     if (resultado && !resultado.error) {
       fecharModal();
-      mostrarToast('Pagamento cadastrado com sucesso! Sua assinatura está ativa.', 'sucesso');
+      // CA05 (US37) — se o backend manteve o tenant em 'trial' (cobrança só
+      // agendada pro fim do trial), o toast avisa disso em vez de dizer que a
+      // assinatura já está ativa (o que só é verdade quando cobra na hora).
+      const mensagem = resultado.status === 'trial'
+        ? `Pagamento cadastrado! Você será cobrado em ${formatarDataCurtaISO(resultado.trial_fim)}. Até lá, aproveite o trial!`
+        : 'Pagamento cadastrado com sucesso! Sua assinatura está ativa.';
+      mostrarToast(mensagem, 'sucesso');
       renderPagamentos();
     } else {
       erroEl.textContent = (resultado && resultado.error) || 'Erro ao cadastrar pagamento.';
