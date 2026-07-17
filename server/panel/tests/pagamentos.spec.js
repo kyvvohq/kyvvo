@@ -77,6 +77,28 @@ test.describe('Pagamentos (US32)', () => {
     await expect(page.locator('#btn-cadastrar-pagamento')).toHaveText('Alterar forma de pagamento');
   });
 
+  test('histórico de cobranças mostra o status colorido (pendente/confirmado/cancelado)', async ({ page }) => {
+    await entrarNoPainel(page, {
+      status: 'ativo',
+      plano: 'profissional',
+      plano_nome: 'Profissional',
+      valor_plano: 247,
+      meio_pagamento: 'pix',
+      cartao_final: null,
+      proxima_cobranca: { data: '2026-08-01', valor: 247 },
+      historico: [
+        { data: '2026-08-16', valor: 247, status: 'PENDING' },
+        { data: '2026-07-16', valor: 247, status: 'CONFIRMED' },
+        { data: '2026-06-16', valor: 247, status: 'OVERDUE' },
+      ],
+    });
+
+    const linhas = page.locator('.tabela-tenants tbody tr');
+    await expect(linhas.nth(0).locator('.badge-pagamento-pending')).toHaveText('Pendente');
+    await expect(linhas.nth(1).locator('.badge-pagamento-confirmado')).toHaveText('Confirmado');
+    await expect(linhas.nth(2).locator('.badge-pagamento-cancelado')).toHaveText('Vencido');
+  });
+
   test('CPF/CNPJ é obrigatório na primeira vez (CA04)', async ({ page }) => {
     await entrarNoPainel(page, {
       status: 'trial',
