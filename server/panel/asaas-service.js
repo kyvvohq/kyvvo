@@ -10,18 +10,6 @@
 const BASE_URL_SANDBOX = 'https://sandbox.asaas.com/api/v3';
 const BASE_URL_PRODUCTION = 'https://www.asaas.com/api/v3';
 
-// Catálogo de planos pagos (CA05). Todo tenant sai do trial já usando o
-// conjunto de módulos do plano Profissional (ver MODULOS_TRIAL em index.js) —
-// não existe hoje uma tela de troca de plano, então é o único plano
-// efetivamente contratável nesta etapa; os demais ficam no catálogo para o
-// dia em que a seleção de plano existir.
-const PLANOS = {
-  starter: { nome: 'Starter', valor: 147 },
-  profissional: { nome: 'Profissional', valor: 247 },
-  empresarial: { nome: 'Empresarial', valor: 447 },
-};
-const PLANO_PADRAO = 'profissional';
-
 function ambiente() {
   return process.env.ASAAS_ENV === 'production' ? 'production' : 'sandbox';
 }
@@ -98,11 +86,11 @@ async function tokenizarCartao({ customerId, holderName, number, expiryMonth, ex
 }
 
 // CA05 — cria a Subscription no Asaas (Pix ou cartão). `nextDueDate` deve
-// respeitar o trial restante (calculado pelo chamador). Em modo dev, devolve
-// um id fake e loga.
-async function criarSubscription({ customerId, billingType, plano, nextDueDate, creditCardToken, tenantId }) {
-  const valor = (PLANOS[plano] || PLANOS[PLANO_PADRAO]).valor;
-
+// respeitar o trial restante (calculado pelo chamador). `valor`/`planoNome`
+// vêm sempre do chamador (tabela `planos` no banco, US38/CA09) — este módulo
+// não guarda mais nenhum catálogo de preços hardcoded. Em modo dev, devolve um
+// id fake e loga.
+async function criarSubscription({ customerId, billingType, valor, planoNome, nextDueDate, creditCardToken, tenantId }) {
   if (modoDev()) {
     const idFake = `sub_dev_${tenantId}`;
     console.log(`[asaas-service] (dev) subscription ${billingType} para tenant ${tenantId} — id: ${idFake}, valor: ${valor}`);
@@ -115,7 +103,7 @@ async function criarSubscription({ customerId, billingType, plano, nextDueDate, 
     value: valor,
     cycle: 'MONTHLY',
     nextDueDate,
-    description: `Kyvvo — Plano ${(PLANOS[plano] || PLANOS[PLANO_PADRAO]).nome}`,
+    description: `Kyvvo — Plano ${planoNome}`,
     creditCardToken: billingType === 'CREDIT_CARD' ? creditCardToken : undefined,
   });
 }
@@ -176,8 +164,6 @@ async function buscarSubscription(subscriptionId) {
 }
 
 module.exports = {
-  PLANOS,
-  PLANO_PADRAO,
   ambiente,
   modoDev,
   criarOuRecuperarCustomer,

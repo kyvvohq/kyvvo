@@ -642,7 +642,43 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .toggle-readonly.toggle-on::after { left: 18px; }
 .toggle-readonly.toggle-off { background: #3a3f5c; }
 
+/* Variante clicável do toggle acima (US38) — o de US31 é propositalmente
+   pointer-events: none (indicador somente leitura); este reativa o clique. */
+.toggle-clicavel { pointer-events: auto; cursor: pointer; }
+
 .tabela-tenants tbody tr { cursor: pointer; background: #12162a; }
+
+/* Configurações do sistema (US38) */
+.banner-aviso {
+  background: rgba(240, 179, 84, 0.12);
+  border: 1px solid rgba(240, 179, 84, 0.35);
+  color: #f0b354;
+  border-radius: 10px;
+  padding: 12px 16px;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.btn-tabela {
+  width: auto;
+  margin: 0 0 0 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.celula-acoes-plano { white-space: nowrap; }
+.celula-acoes-plano .modal-erro { white-space: normal; max-width: 220px; }
+
+.tabela-tenants input[type="text"],
+.tabela-tenants input[type="number"],
+.tabela-tenants input[type="email"] {
+  width: 100%;
+  min-width: 100px;
+  padding: 6px 8px;
+  font-size: 13px;
+  margin: 0;
+}
 
 /* Detalhe do tenant (US28) */
 .titulo-detalhe { font-size: 22px; margin: 16px 0 20px; }
