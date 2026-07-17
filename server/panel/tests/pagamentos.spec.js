@@ -358,3 +358,108 @@ test.describe('Pagamentos (US32)', () => {
     await expect(page.locator('#pagamento-erro')).toHaveText(/Não foi possível processar/);
   });
 });
+
+test.describe('Cadastro de pagamento durante o trial (US37)', () => {
+  test('trial ativo: modal mostra o banner de cobrança futura antes do formulário (CA02)', async ({ page }) => {
+    await entrarNoPainel(page, {
+      status: 'trial',
+      plano: 'trial',
+      plano_nome: 'Profissional',
+      valor_plano: 247,
+      trial_ativo: true,
+      trial_fim: '2026-07-20',
+      meio_pagamento: null,
+      cartao_final: null,
+      cpf_cnpj: null,
+      proxima_cobranca: null,
+      historico: [],
+    });
+
+    await page.click('#btn-cadastrar-pagamento');
+
+    await expect(page.locator('.trial-banner-cobranca-futura')).toContainText('Você não será cobrado agora');
+    await expect(page.locator('.trial-banner-cobranca-futura')).toContainText('R$ 247,00');
+    await expect(page.locator('.trial-banner-cobranca-futura')).toContainText('20/07/2026');
+    await expect(page.locator('.trial-banner-cobranca-futura')).toContainText('cancelar a qualquer momento');
+  });
+
+  test('trial expirado (sem trial_ativo): modal não mostra o banner de cobrança futura', async ({ page }) => {
+    await entrarNoPainel(page, {
+      status: 'trial',
+      plano: 'trial',
+      plano_nome: 'Profissional',
+      valor_plano: 247,
+      trial_ativo: false,
+      trial_fim: '2026-06-01',
+      meio_pagamento: null,
+      cartao_final: null,
+      cpf_cnpj: null,
+      proxima_cobranca: null,
+      historico: [],
+    });
+
+    await page.click('#btn-cadastrar-pagamento');
+
+    await expect(page.locator('.trial-banner-cobranca-futura')).toHaveCount(0);
+  });
+
+  test('cadastro durante trial ativo: toast e resposta indicam cobrança agendada, não assinatura ativa (CA05)', async ({ page }) => {
+    await entrarNoPainel(page, {
+      status: 'trial',
+      plano: 'trial',
+      plano_nome: 'Profissional',
+      valor_plano: 247,
+      trial_ativo: true,
+      trial_fim: '2026-07-20',
+      meio_pagamento: null,
+      cartao_final: null,
+      cpf_cnpj: null,
+      proxima_cobranca: null,
+      historico: [],
+    });
+
+    await page.route('**/api/pagamentos/cadastrar', (route) =>
+      route.fulfill({
+        json: {
+          status: 'trial',
+          plano: 'profissional',
+          plano_nome: 'Profissional',
+          valor_plano: 247,
+          trial_ativo: true,
+          trial_fim: '2026-07-20',
+          meio_pagamento: 'pix',
+          cartao_final: null,
+          cpf_cnpj: '12345678900',
+          proxima_cobranca: { data: '2026-07-20', valor: 247 },
+          historico: [],
+        },
+      })
+    );
+
+    await page.click('#btn-cadastrar-pagamento');
+    await page.fill('#pagamento-cpf-cnpj', '123.456.789-00');
+    await page.click('#btn-salvar-pagamento');
+
+    await expect(page.locator('.toast-sucesso')).toHaveText(/cobrado em 20\/07\/2026.*aproveite o trial/);
+  });
+
+  test('trial com pagamento já agendado: aba de pagamentos mostra o badge dedicado e "Alterar forma de pagamento" (CA05)', async ({ page }) => {
+    await entrarNoPainel(page, {
+      status: 'trial',
+      plano: 'profissional',
+      plano_nome: 'Profissional',
+      valor_plano: 247,
+      trial_ativo: true,
+      trial_fim: '2026-07-20',
+      meio_pagamento: 'pix',
+      cartao_final: null,
+      cpf_cnpj: '12345678900',
+      proxima_cobranca: { data: '2026-07-20', valor: 247 },
+      historico: [],
+    });
+
+    await expect(page.locator('.badge')).toHaveText('Trial com pagamento agendado');
+    await expect(page.locator('.modal-texto')).toContainText('20/07/2026');
+    await expect(page.locator('#btn-cadastrar-pagamento')).toHaveText('Alterar forma de pagamento');
+  });
+});
