@@ -12,9 +12,22 @@ const tokenService = require('./token-service');
 const asaasService = require('./asaas-service');
 
 // ---------- Cadastro self-service (US20) ----------
-const TRIAL_DIAS = 14;
-const MAX_REENVIOS_HORA = 5;
+// `let` (não `const`) porque a US38 permite um admin da Kyvvo sobrescrever
+// esses valores em runtime via /admin/api/configuracoes/sistema, sem deploy —
+// os literais abaixo são só o valor padrão até `carregarConfiguracoesSistema`
+// rodar (e o fallback se a tabela `configuracoes_sistema` estiver vazia).
+let TRIAL_DIAS = 14;
+let MAX_REENVIOS_HORA = 5;
+// Cooldown entre pedidos de reenvio — não faz parte da lista de
+// configurações editáveis da CA06, então continua fixo no código.
 const REENVIO_COOLDOWN_SEGUNDOS = 60;
+// CA06 (US38) — configurações gerais editáveis pelo admin que ainda não têm
+// nenhum consumidor no código (não existe hoje uma tela de "fale com o
+// suporte" no portal do tenant); ficam disponíveis via
+// /admin/api/configuracoes pra quando essa tela existir.
+let CARENCIA_DIAS_INADIMPLENCIA = 3;
+let EMAIL_SUPORTE = 'suporte@kyvvo.com.br';
+let WHATSAPP_SUPORTE = '553484285182';
 // Módulos liberados durante o trial ("plano Profissional" — CA09). Todo
 // tenant novo precisa ao menos da agenda; os demais dão a experiência
 // completa enquanto o trial está ativo.
@@ -49,6 +62,47 @@ if (!ADMIN_JWT_SECRET) throw new Error('ADMIN_JWT_SECRET não configurado');
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 tokenService.init(pool);
+
+// CA06/CA09 (US38) — carrega `configuracoes_sistema` do banco pra dentro das
+// variáveis em memória usadas pelo resto do código (TRIAL_DIAS etc.), tanto no
+// boot quanto logo após um PATCH do admin — assim a mudança vale pro processo
+// já rodando, sem precisar de deploy/restart. Chaves ausentes na tabela (banco
+// vazio/erro de leitura) mantêm o valor atual em memória.
+async function carregarConfiguracoesSistema() {
+  const { rows } = await pool.query('SELECT chave, valor FROM configuracoes_sistema');
+  const valores = Object.fromEntries(rows.map((r) => [r.chave, r.valor]));
+
+  if (valores.trial_dias != null) TRIAL_DIAS = parseInt(valores.trial_dias, 10);
+  if (valores.max_tentativas_reenvio_token != null) MAX_REENVIOS_HORA = parseInt(valores.max_tentativas_reenvio_token, 10);
+  if (valores.carencia_dias_inadimplencia != null) CARENCIA_DIAS_INADIMPLENCIA = parseInt(valores.carencia_dias_inadimplencia, 10);
+  if (valores.email_suporte != null) EMAIL_SUPORTE = valores.email_suporte;
+  if (valores.whatsapp_suporte != null) WHATSAPP_SUPORTE = valores.whatsapp_suporte;
+}
+
+// CA09 (US38) — catálogo de planos (chave -> {nome, preco_mensal, ...}) lido
+// da tabela `planos`, nunca mais hardcoded. Recarregado no boot e logo após
+// qualquer PATCH de um plano, pra refletir mudança de preço/nome/descrição
+// imediatamente nas próximas assinaturas (sem afetar as já existentes, que já
+// têm o valor gravado na Subscription da Asaas).
+let PLANOS_CACHE = {};
+// Plano que um tenant sem plano escolhido (trial ou nulo) contrata ao
+// cadastrar pagamento — qual plano é o "padrão" é uma decisão de produto,
+// não uma configuração de preço, por isso continua fixo no código.
+const PLANO_PADRAO_CHAVE = 'profissional';
+
+async function carregarPlanos() {
+  const { rows } = await pool.query(
+    'SELECT chave, nome, descricao, preco_mensal, limite_disparos, ativo FROM planos'
+  );
+  PLANOS_CACHE = Object.fromEntries(rows.map((r) => [r.chave, r]));
+}
+
+// Nome de exibição do plano — usado tanto no perfil do tenant quanto no
+// detalhe do tenant na área admin, pra nunca divergir (US28/US33).
+function nomeDoPlano(chave) {
+  if (chave === 'trial') return 'Trial';
+  return (PLANOS_CACHE[chave] && PLANOS_CACHE[chave].nome) || 'Não definido';
+}
 
 // Converte um "time" do Postgres ("08:00:00" ou "08:00") em minutos desde a
 // meia-noite, pra comparar com o horário (também em minutos) de um
@@ -1029,8 +1083,8 @@ async function start() {
     const perfil = rows[0];
     if (!perfil) return perfil;
     // CA05 — rótulo amigável do plano atual, mesma fonte usada no detalhe do
-    // tenant na área admin (US28/planoAtualTenant), pra nunca divergir.
-    return { ...perfil, plano_nome: PLANOS_LABELS[perfil.plano] || 'Não definido' };
+    // tenant na área admin (US28/nomeDoPlano), pra nunca divergir.
+    return { ...perfil, plano_nome: nomeDoPlano(perfil.plano) };
   }
 
   fastify.get('/api/perfil', { preHandler: [fastify.authenticate] }, async (request) => {
@@ -1263,10 +1317,11 @@ async function start() {
   async function montarResumoPagamentos(tenant) {
     // Sem plano escolhido ainda (tenant.plano nulo ou 'trial'), o plano que
     // efetivamente será cobrado ao cadastrar pagamento é sempre o
-    // PLANO_PADRAO (ver /api/pagamentos/cadastrar) — devolve esse valor em
-    // vez de null pra US37/CA02 poder anunciar "R$ [VALOR]" antes do trial
-    // acabar, sem duplicar o catálogo de planos no frontend.
-    const planoInfo = asaasService.PLANOS[tenant.plano] || asaasService.PLANOS[asaasService.PLANO_PADRAO];
+    // PLANO_PADRAO_CHAVE (ver /api/pagamentos/cadastrar) — devolve esse valor
+    // em vez de null pra US37/CA02 poder anunciar "R$ [VALOR]" antes do
+    // trial acabar. CA09 (US38) — preço/nome sempre lidos do cache carregado
+    // da tabela `planos` (nunca mais hardcoded em asaas-service.js).
+    const planoInfo = PLANOS_CACHE[tenant.plano] || PLANOS_CACHE[PLANO_PADRAO_CHAVE] || null;
     const subscription = await asaasService.buscarSubscription(tenant.asaas_subscription_id).catch((erro) => {
       console.error(`[pagamentos] falha ao buscar subscription ${tenant.asaas_subscription_id}: ${erro.message}`);
       return null;
@@ -1284,7 +1339,7 @@ async function start() {
       status: tenant.status,
       plano: tenant.plano,
       plano_nome: planoInfo ? planoInfo.nome : null,
-      valor_plano: planoInfo ? planoInfo.valor : null,
+      valor_plano: planoInfo ? Number(planoInfo.preco_mensal) : null,
       trial_ativo: trial.trialAtivo,
       trial_fim: trial.trialFim ? trial.trialFim.slice(0, 10) : null,
       meio_pagamento: tenant.asaas_meio_pagamento,
@@ -1460,7 +1515,16 @@ async function start() {
     // Trial (ou tenant sem plano definido) ainda não escolheu um plano pago —
     // hoje só existe o Profissional (mesmo conjunto de módulos liberado no
     // trial, ver MODULOS_TRIAL); vira o plano contratado.
-    const plano = tenant.plano && tenant.plano !== 'trial' ? tenant.plano : asaasService.PLANO_PADRAO;
+    const plano = tenant.plano && tenant.plano !== 'trial' ? tenant.plano : PLANO_PADRAO_CHAVE;
+    // CA09 (US38) — preço/nome sempre lidos do cache carregado da tabela
+    // `planos`, nunca hardcoded; um plano desativado (`ativo = false`) ainda
+    // pode ser usado aqui (só novas assinaturas deixam de oferecê-lo na
+    // seleção de plano quando essa tela existir — não é o caso hoje, já que
+    // só o Profissional é contratável).
+    const planoInfo = PLANOS_CACHE[plano];
+    if (!planoInfo) {
+      return reply.code(400).send({ error: 'Plano não configurado. Contate o suporte.' });
+    }
     const billingType = meio === 'pix' ? 'PIX' : 'CREDIT_CARD';
     const cartaoFinal = meio === 'cartao' ? cartaoNumeroLimpo.slice(-4) : null;
 
@@ -1523,7 +1587,8 @@ async function start() {
         const subscription = await asaasService.criarSubscription({
           customerId: customer.id,
           billingType,
-          plano,
+          valor: Number(planoInfo.preco_mensal),
+          planoNome: planoInfo.nome,
           nextDueDate: proximaCobrancaRespeitandoTrial(tenant),
           creditCardToken,
           tenantId,
@@ -1706,15 +1771,6 @@ async function start() {
     return 'Inativo';
   }
 
-  // Rótulo de exibição do plano (US28/CA04). `plano` é texto livre — só
-  // `'trial'` é escrito hoje (cadastro self-service, US20); tenants criados
-  // manualmente pelo CRUD antigo (US16) nascem com `plano` nulo, daí o
-  // fallback.
-  const PLANOS_LABELS = { trial: 'Trial', starter: 'Starter', profissional: 'Profissional', empresarial: 'Empresarial' };
-  function planoAtualTenant(tenant) {
-    return PLANOS_LABELS[tenant.plano] || 'Não definido';
-  }
-
   fastify.post('/admin/api/auth/login', async (request, reply) => {
     const { email, senha } = request.body || {};
     if (!email || !senha) {
@@ -1855,7 +1911,7 @@ async function start() {
     return {
       ...tenant,
       status_conta: statusContaTenant(tenant),
-      plano_atual: planoAtualTenant(tenant),
+      plano_atual: nomeDoPlano(tenant.plano),
       trial_ativo: trial.trialAtivo,
       trial_inicio: trial.trialInicio,
       trial_fim: trial.trialFim,
@@ -1956,6 +2012,163 @@ async function start() {
     }
     return rows[0];
   });
+
+  // ---------- Configurações do sistema (US38) ----------
+  // Preços dos planos e configurações gerais (antes hardcoded no código) —
+  // editáveis por qualquer admin da Kyvvo autenticado, sem deploy. Chaves das
+  // configurações gerais que este endpoint reconhece (mesmas de
+  // carregarConfiguracoesSistema/migration 028) — outras chaves no corpo são
+  // ignoradas silenciosamente.
+  const CONFIGURACOES_SISTEMA_CHAVES = [
+    'trial_dias',
+    'carencia_dias_inadimplencia',
+    'max_tentativas_reenvio_token',
+    'email_suporte',
+    'whatsapp_suporte',
+  ];
+
+  fastify.get('/admin/api/configuracoes', { preHandler: [fastify.authenticateAdmin] }, async () => {
+    const { rows: planosRows } = await pool.query(
+      `SELECT chave, nome, descricao, preco_mensal, limite_disparos, ativo, atualizado_em
+       FROM planos ORDER BY preco_mensal ASC`
+    );
+    // pg devolve NUMERIC como string (evita perda de precisão) — converte pra
+    // number aqui, já que o front trata preço como valor numérico.
+    const planos = planosRows.map((p) => ({ ...p, preco_mensal: Number(p.preco_mensal) }));
+    const { rows: sistemaRows } = await pool.query('SELECT chave, valor FROM configuracoes_sistema');
+    const sistema = Object.fromEntries(sistemaRows.map((r) => [r.chave, r.valor]));
+    const { rows: log } = await pool.query(
+      `SELECT l.campo, l.valor_anterior, l.valor_novo, l.alterado_em, a.nome AS alterado_por_nome
+       FROM log_configuracoes l
+       LEFT JOIN kyvvo_admins a ON a.id = l.alterado_por
+       ORDER BY l.alterado_em DESC
+       LIMIT 20`
+    );
+    return { planos, sistema, log };
+  });
+
+  // CA03/CA05/CA09 — atualiza um plano (descrição/preço/limite/ativo). Preço
+  // mínimo de R$1 (CA03), e cada campo alterado grava uma linha própria no log
+  // de auditoria (CA05/CA07) na mesma transação da atualização.
+  fastify.patch('/admin/api/configuracoes/planos/:chave', { preHandler: [fastify.authenticateAdmin] }, async (request, reply) => {
+    const { chave } = request.params;
+    const { descricao, preco_mensal: precoMensal, limite_disparos: limiteDisparos, ativo } = request.body || {};
+
+    if (precoMensal !== undefined && !(Number(precoMensal) >= 1)) {
+      return reply.code(400).send({ error: 'Preço mensal deve ser no mínimo R$ 1,00.' });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const { rows: antesRows } = await client.query('SELECT * FROM planos WHERE chave = $1 FOR UPDATE', [chave]);
+      const anterior = antesRows[0];
+      if (!anterior) {
+        await client.query('ROLLBACK');
+        return reply.code(404).send({ error: 'Plano não encontrado' });
+      }
+
+      const { rows: atualizadoRows } = await client.query(
+        `UPDATE planos SET
+           descricao = COALESCE($2, descricao),
+           preco_mensal = COALESCE($3, preco_mensal),
+           limite_disparos = COALESCE($4, limite_disparos),
+           ativo = COALESCE($5, ativo),
+           atualizado_em = now(),
+           atualizado_por = $6
+         WHERE chave = $1
+         RETURNING chave, nome, descricao, preco_mensal, limite_disparos, ativo, atualizado_em`,
+        [chave, descricao, precoMensal, limiteDisparos, ativo, request.admin.adminId]
+      );
+      const novo = atualizadoRows[0];
+
+      const camposComparados = [
+        ['descricao', anterior.descricao, novo.descricao],
+        ['preco_mensal', anterior.preco_mensal, novo.preco_mensal],
+        ['limite_disparos', anterior.limite_disparos, novo.limite_disparos],
+        ['ativo', anterior.ativo, novo.ativo],
+      ];
+      for (const [campo, valorAnterior, valorNovo] of camposComparados) {
+        if (String(valorAnterior) !== String(valorNovo)) {
+          await client.query(
+            `INSERT INTO log_configuracoes (campo, valor_anterior, valor_novo, alterado_por)
+             VALUES ($1, $2, $3, $4)`,
+            [`planos.${chave}.${campo}`, valorAnterior == null ? null : String(valorAnterior), valorNovo == null ? null : String(valorNovo), request.admin.adminId]
+          );
+        }
+      }
+
+      await client.query('COMMIT');
+      await carregarPlanos();
+      // pg devolve NUMERIC como string — converte antes de devolver ao front.
+      return { ...novo, preco_mensal: Number(novo.preco_mensal) };
+    } catch (erro) {
+      await client.query('ROLLBACK');
+      throw erro;
+    } finally {
+      client.release();
+    }
+  });
+
+  // CA06/CA07/CA09 — atualiza uma ou mais configurações gerais de uma vez;
+  // recarrega o cache em memória (carregarConfiguracoesSistema) logo depois
+  // de persistir, pra valer no processo já rodando sem deploy/restart.
+  // Chaves numéricas alimentam constantes centrais do sistema (TRIAL_DIAS
+  // etc.) — um valor inválido aqui quebraria o cálculo de trial pra todo
+  // mundo, então valida antes de gravar.
+  const CONFIGURACOES_SISTEMA_NUMERICAS = new Set(['trial_dias', 'carencia_dias_inadimplencia', 'max_tentativas_reenvio_token']);
+
+  fastify.patch('/admin/api/configuracoes/sistema', { preHandler: [fastify.authenticateAdmin] }, async (request, reply) => {
+    const corpo = request.body || {};
+    const chavesEnviadas = CONFIGURACOES_SISTEMA_CHAVES.filter((chave) => corpo[chave] !== undefined);
+    if (!chavesEnviadas.length) {
+      return reply.code(400).send({ error: `Envie ao menos uma configuração válida: ${CONFIGURACOES_SISTEMA_CHAVES.join(', ')}` });
+    }
+    for (const chave of chavesEnviadas) {
+      if (CONFIGURACOES_SISTEMA_NUMERICAS.has(chave) && !(Number.isInteger(Number(corpo[chave])) && Number(corpo[chave]) > 0)) {
+        return reply.code(400).send({ error: `"${chave}" deve ser um número inteiro maior que zero.` });
+      }
+    }
+    if (corpo.email_suporte !== undefined && !EMAIL_REGEX.test(corpo.email_suporte)) {
+      return reply.code(400).send({ error: 'E-mail de suporte inválido.' });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (const chave of chavesEnviadas) {
+        const valorNovo = String(corpo[chave]);
+        const { rows: antesRows } = await client.query('SELECT valor FROM configuracoes_sistema WHERE chave = $1 FOR UPDATE', [chave]);
+        const valorAnterior = antesRows[0] ? antesRows[0].valor : null;
+        await client.query(
+          `UPDATE configuracoes_sistema SET valor = $2, atualizado_em = now(), atualizado_por = $3 WHERE chave = $1`,
+          [chave, valorNovo, request.admin.adminId]
+        );
+        if (valorAnterior !== valorNovo) {
+          await client.query(
+            `INSERT INTO log_configuracoes (campo, valor_anterior, valor_novo, alterado_por) VALUES ($1, $2, $3, $4)`,
+            [`sistema.${chave}`, valorAnterior, valorNovo, request.admin.adminId]
+          );
+        }
+      }
+      await client.query('COMMIT');
+    } catch (erro) {
+      await client.query('ROLLBACK');
+      throw erro;
+    } finally {
+      client.release();
+    }
+
+    await carregarConfiguracoesSistema();
+    const { rows: sistemaRows } = await pool.query('SELECT chave, valor FROM configuracoes_sistema');
+    return Object.fromEntries(sistemaRows.map((r) => [r.chave, r.valor]));
+  });
+
+  // CA09 — carrega os valores configuráveis do banco antes de aceitar
+  // requisições, pra nunca servir com os literais hardcoded quando já existe
+  // uma configuração diferente salva.
+  await carregarConfiguracoesSistema();
+  await carregarPlanos();
 
   await fastify.listen({ port: PORT, host: '0.0.0.0' });
   console.log(`Painel Kyvvo rodando na porta ${PORT}`);
