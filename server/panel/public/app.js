@@ -927,6 +927,12 @@ async function renderPagamentos() {
       <button class="btn-novo-agendamento" id="btn-cadastrar-pagamento">Cadastrar forma de pagamento</button>
     `;
   } else {
+    // CA01/CA04/CA06 (US35) — cancelado é um estado à parte: some o botão de
+    // "Alterar forma de pagamento" (não há mais assinatura ativa pra alterar)
+    // e mostra "Reativar assinatura" no lugar; "Cancelar assinatura" só
+    // aparece com status 'ativo' (trial/suspenso/inadimplente não veem).
+    const cancelado = dados.status === 'cancelado';
+    const ativo = dados.status === 'ativo';
     html += `
       <div class="financeiro-resumo">
         <div class="financeiro-resumo-card">
@@ -942,10 +948,15 @@ async function renderPagamentos() {
           <div>${statusBadge}</div>
         </div>
       </div>
-      <p class="modal-texto">
-        Próxima cobrança: ${dados.proxima_cobranca ? `${formatarPreco(dados.proxima_cobranca.valor)} em ${formatarDataCurtaISO(dados.proxima_cobranca.data)}` : 'não disponível'}
-      </p>
-      <button class="btn-secundario" id="btn-cadastrar-pagamento" style="margin-bottom:16px">Alterar forma de pagamento</button>
+      ${cancelado
+        ? `<p class="modal-texto">Seu acesso está ativo até ${formatarDataCurtaISO(dados.acesso_ate)}. Após essa data, o sistema será suspenso.</p>`
+        : `<p class="modal-texto">
+            Próxima cobrança: ${dados.proxima_cobranca ? `${formatarPreco(dados.proxima_cobranca.valor)} em ${formatarDataCurtaISO(dados.proxima_cobranca.data)}` : 'não disponível'}
+          </p>`}
+      ${cancelado
+        ? '<button class="btn-novo-agendamento" id="btn-reativar-pagamento" style="margin-bottom:16px">Reativar assinatura</button>'
+        : '<button class="btn-secundario" id="btn-cadastrar-pagamento" style="margin-bottom:16px">Alterar forma de pagamento</button>'}
+      ${ativo ? '<button class="btn-secundario" id="btn-cancelar-assinatura" style="margin-bottom:16px; margin-left:8px">Cancelar assinatura</button>' : ''}
       <div class="tabela-wrapper">
         <table class="tabela-tenants">
           <thead><tr><th>Data</th><th>Valor</th><th>Status</th></tr></thead>
@@ -960,7 +971,50 @@ async function renderPagamentos() {
   }
 
   conteudo.innerHTML = html;
-  document.getElementById('btn-cadastrar-pagamento').addEventListener('click', () => abrirModalPagamento(dados));
+  const btnCadastrar = document.getElementById('btn-cadastrar-pagamento');
+  if (btnCadastrar) btnCadastrar.addEventListener('click', () => abrirModalPagamento(dados));
+  const btnReativar = document.getElementById('btn-reativar-pagamento');
+  if (btnReativar) btnReativar.addEventListener('click', () => abrirModalPagamento(dados));
+  const btnCancelar = document.getElementById('btn-cancelar-assinatura');
+  if (btnCancelar) btnCancelar.addEventListener('click', () => abrirModalCancelarAssinatura(dados));
+}
+
+// CA02/CA03/CA04 (US35) — modal de confirmação de cancelamento de assinatura,
+// no mesmo padrão de abrirModalExcluirServico/abrirModalCancelar.
+function abrirModalCancelarAssinatura(dados) {
+  const dataAcesso = dados.proxima_cobranca ? formatarDataCurtaISO(dados.proxima_cobranca.data) : 'o fim do período já pago';
+
+  abrirModal(
+    '<h3>Tem certeza que deseja cancelar?</h3>',
+    `
+      <p class="modal-texto">Sua assinatura será encerrada. Você continuará com acesso até ${dataAcesso}. Após essa data, seu acesso será suspenso.</p>
+      <div class="modal-erro" id="cancelar-assinatura-erro"></div>
+      <div class="modal-acoes">
+        <button class="btn-primario" id="btn-manter-assinatura">Manter assinatura</button>
+        <button class="btn-perigo" id="btn-confirmar-cancelamento">Confirmar cancelamento</button>
+      </div>
+    `
+  );
+
+  document.getElementById('btn-manter-assinatura').addEventListener('click', fecharModal);
+  document.getElementById('btn-confirmar-cancelamento').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-confirmar-cancelamento');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    const resultado = await api('/api/pagamentos/assinatura', { method: 'DELETE' });
+
+    if (resultado && !resultado.error) {
+      fecharModal();
+      const dataFinal = resultado.acesso_ate ? formatarDataCurtaISO(resultado.acesso_ate) : dataAcesso;
+      mostrarToast(`Assinatura cancelada. Seu acesso continua até ${dataFinal}.`, 'sucesso');
+      renderPagamentos();
+    } else {
+      document.getElementById('cancelar-assinatura-erro').textContent = (resultado && resultado.error) || 'Erro ao cancelar assinatura.';
+      btn.disabled = false;
+      btn.textContent = 'Confirmar cancelamento';
+    }
+  });
 }
 
 function abrirModalPagamento(dadosAtuais) {
