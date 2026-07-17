@@ -134,6 +134,17 @@ async function atualizarSubscription({ subscriptionId, billingType, creditCardTo
   });
 }
 
+// CA03 (US35) — cancela a Subscription no Asaas (self-service, pelo próprio
+// tenant). Em modo dev, só loga (não há assinatura real pra cancelar).
+async function cancelarSubscription({ subscriptionId, tenantId }) {
+  if (modoDev()) {
+    console.log(`[asaas-service] (dev) cancela subscription ${subscriptionId} do tenant ${tenantId}`);
+    return { deleted: true };
+  }
+
+  return chamar('DELETE', `/subscriptions/${subscriptionId}`);
+}
+
 // CA08 (US33) — sincroniza nome/telefone com o Customer já existente no
 // Asaas quando o usuário edita o perfil. Em modo dev, só loga.
 async function atualizarCustomer({ customerId, nome, whatsapp }) {
@@ -173,6 +184,7 @@ module.exports = {
   tokenizarCartao,
   criarSubscription,
   atualizarSubscription,
+  cancelarSubscription,
   atualizarCustomer,
   buscarSubscription,
   listarUltimasCobrancas,

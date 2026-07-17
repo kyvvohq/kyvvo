@@ -1286,6 +1286,8 @@ async function start() {
       endereco_bairro: tenant.endereco_bairro,
       endereco_cidade: tenant.endereco_cidade,
       endereco_uf: tenant.endereco_uf,
+      cancelado_em: tenant.cancelado_em,
+      acesso_ate: tenant.acesso_ate,
       proxima_cobranca: subscription ? { data: subscription.nextDueDate, valor: subscription.value } : null,
       historico: historico.map((p) => ({
         data: p.dueDate,
@@ -1300,7 +1302,7 @@ async function start() {
     const { tenantId } = request.user;
     const { rows } = await pool.query(
       `SELECT plano, status, ativado_em, asaas_customer_id, asaas_subscription_id,
-              asaas_meio_pagamento, asaas_cartao_final, cpf_cnpj,
+              asaas_meio_pagamento, asaas_cartao_final, cpf_cnpj, cancelado_em, acesso_ate,
               endereco_cep, endereco_logradouro, endereco_numero,
               endereco_complemento, endereco_bairro, endereco_cidade, endereco_uf
        FROM tenants WHERE id = $1`,
@@ -1352,7 +1354,7 @@ async function start() {
     }
 
     const { rows } = await pool.query(
-      `SELECT nome, whatsapp, telefone, plano, ativado_em, asaas_customer_id, asaas_subscription_id, cpf_cnpj,
+      `SELECT nome, whatsapp, telefone, plano, status, ativado_em, asaas_customer_id, asaas_subscription_id, cpf_cnpj,
               endereco_cep, endereco_logradouro, endereco_numero,
               endereco_complemento, endereco_bairro, endereco_cidade, endereco_uf
        FROM tenants WHERE id = $1`,
@@ -1463,7 +1465,10 @@ async function start() {
         creditCardToken = tokenizado.creditCardToken;
       }
 
-      if (tenant.asaas_subscription_id) {
+      // CA06 (US35) — uma assinatura cancelada já foi encerrada na Asaas, então
+      // reativar sempre cria uma nova (nunca reaproveita/atualiza o id antigo,
+      // que a Asaas rejeitaria por já estar cancelado).
+      if (tenant.asaas_subscription_id && tenant.status !== 'cancelado') {
         await asaasService.atualizarSubscription({
           subscriptionId: tenant.asaas_subscription_id,
           billingType,
@@ -1508,10 +1513,12 @@ async function start() {
          endereco_complemento = $11,
          endereco_bairro = $12,
          endereco_cidade = $13,
-         endereco_uf = $14
+         endereco_uf = $14,
+         cancelado_em = null,
+         acesso_ate = null
        WHERE id = $1
        RETURNING plano, status, ativado_em, asaas_customer_id, asaas_subscription_id,
-                 asaas_meio_pagamento, asaas_cartao_final, cpf_cnpj,
+                 asaas_meio_pagamento, asaas_cartao_final, cpf_cnpj, cancelado_em, acesso_ate,
                  endereco_cep, endereco_logradouro, endereco_numero,
                  endereco_complemento, endereco_bairro, endereco_cidade, endereco_uf`,
       [
@@ -1523,6 +1530,52 @@ async function start() {
     return montarResumoPagamentos(atualizado[0]);
   });
 
+  // CA01/CA03/CA07 (US35) — cancela a assinatura do tenant logado. Encerra a
+  // cobrança recorrente na Asaas mas mantém o acesso até o fim do período já
+  // pago (`acesso_ate`, CA05). Só o próprio tenant autenticado pode cancelar
+  // a própria assinatura — nunca aceita um id de tenant vindo do corpo.
+  fastify.delete('/api/pagamentos/assinatura', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const { tenantId } = request.user;
+    const { rows } = await pool.query(
+      `SELECT status, asaas_subscription_id FROM tenants WHERE id = $1`,
+      [tenantId]
+    );
+    const tenant = rows[0];
+    if (!tenant) {
+      return reply.code(404).send({ error: 'Tenant não encontrado' });
+    }
+    if (tenant.status !== 'ativo') {
+      return reply.code(400).send({ error: 'Só é possível cancelar uma assinatura ativa.' });
+    }
+    if (!tenant.asaas_subscription_id) {
+      return reply.code(400).send({ error: 'Nenhuma assinatura encontrada para cancelar.' });
+    }
+
+    let acessoAte;
+    try {
+      // Consulta o nextDueDate antes de cancelar — depois de cancelada, a
+      // Asaas pode não devolver mais essa data (e em modo dev nunca devolve),
+      // então guardamos o valor agora pra sempre poder exibir até quando o
+      // acesso pago continua (CA04).
+      const subscription = await asaasService.buscarSubscription(tenant.asaas_subscription_id);
+      acessoAte = subscription ? subscription.nextDueDate : null;
+      await asaasService.cancelarSubscription({ subscriptionId: tenant.asaas_subscription_id, tenantId });
+    } catch (erro) {
+      console.error(`[pagamentos] falha ao cancelar assinatura na Asaas para tenant ${tenantId}: ${erro.message}`);
+      // 400, não 502/504 — mesmo motivo do /cadastrar: a Cloudflare intercepta
+      // esses códigos e substitui o corpo da resposta pela própria página de
+      // erro genérica, mesmo quando é a origem que respondeu de propósito.
+      return reply.code(400).send({ error: 'Não foi possível cancelar a assinatura agora. Tente novamente em instantes.' });
+    }
+
+    await pool.query(
+      `UPDATE tenants SET status = 'cancelado', cancelado_em = NOW(), acesso_ate = $2 WHERE id = $1`,
+      [tenantId, acessoAte]
+    );
+
+    return { cancelado: true, acesso_ate: acessoAte };
+  });
+
   // CA10 — webhook da Asaas: atualiza o status do tenant conforme o evento da
   // cobrança/assinatura. Sem fastify.authenticate — quem chama é a Asaas, não
   // um usuário logado; a validação é pelo token no header (CA12).
@@ -1531,7 +1584,11 @@ async function start() {
     PAYMENT_RECEIVED: 'ativo',
     PAYMENT_OVERDUE: 'inadimplente',
     PAYMENT_DELETED: 'suspenso',
-    SUBSCRIPTION_CANCELLED: 'suspenso',
+    // CA05 (US35) — confirma um cancelamento que já foi feito por aqui (rota
+    // acima) ou cancelado direto no painel da Asaas; 'cancelado' (não mais
+    // 'suspenso') pra não sobrescrever o estado que a US35 já deixa
+    // consistente do lado de cá.
+    SUBSCRIPTION_CANCELLED: 'cancelado',
   };
 
   fastify.post('/webhooks/asaas', async (request, reply) => {

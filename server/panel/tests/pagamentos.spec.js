@@ -358,3 +358,175 @@ test.describe('Pagamentos (US32)', () => {
     await expect(page.locator('#pagamento-erro')).toHaveText(/Não foi possível processar/);
   });
 });
+
+test.describe('Cancelamento de assinatura (US35)', () => {
+  test('assinatura ativa mostra o botão de cancelar (CA01)', async ({ page }) => {
+    await entrarNoPainel(page, {
+      status: 'ativo',
+      plano: 'profissional',
+      plano_nome: 'Profissional',
+      valor_plano: 247,
+      meio_pagamento: 'pix',
+      cartao_final: null,
+      proxima_cobranca: { data: '2026-08-01', valor: 247 },
+      historico: [],
+    });
+
+    await expect(page.locator('#btn-cancelar-assinatura')).toHaveText('Cancelar assinatura');
+  });
+
+  for (const status of ['trial', 'suspenso', 'inadimplente']) {
+    test(`status "${status}" não mostra o botão de cancelar (CA01)`, async ({ page }) => {
+      await entrarNoPainel(page, {
+        status,
+        plano: 'profissional',
+        plano_nome: 'Profissional',
+        valor_plano: 247,
+        meio_pagamento: status === 'trial' ? null : 'pix',
+        cartao_final: null,
+        proxima_cobranca: status === 'trial' ? null : { data: '2026-08-01', valor: 247 },
+        historico: [],
+      });
+
+      await expect(page.locator('#btn-cancelar-assinatura')).toHaveCount(0);
+    });
+  }
+
+  test('modal de confirmação e cancelamento com sucesso (CA02/CA03/CA04)', async ({ page }) => {
+    await entrarNoPainel(page, {
+      status: 'ativo',
+      plano: 'profissional',
+      plano_nome: 'Profissional',
+      valor_plano: 247,
+      meio_pagamento: 'pix',
+      cartao_final: null,
+      proxima_cobranca: { data: '2026-08-01', valor: 247 },
+      historico: [],
+    });
+
+    let metodoRecebido = null;
+    await page.route('**/api/pagamentos/assinatura', (route) => {
+      metodoRecebido = route.request().method();
+      return route.fulfill({ json: { cancelado: true, acesso_ate: '2026-08-01' } });
+    });
+
+    await page.click('#btn-cancelar-assinatura');
+    await expect(page.locator('.modal-card h3')).toHaveText('Tem certeza que deseja cancelar?');
+    await expect(page.locator('.modal-card .modal-texto')).toContainText('01/08/2026');
+
+    await page.click('#btn-confirmar-cancelamento');
+
+    expect(metodoRecebido).toBe('DELETE');
+    await expect(page.locator('.toast-sucesso')).toHaveText(/01\/08\/2026/);
+  });
+
+  test('"Manter assinatura" fecha o modal sem chamar a API', async ({ page }) => {
+    await entrarNoPainel(page, {
+      status: 'ativo',
+      plano: 'profissional',
+      plano_nome: 'Profissional',
+      valor_plano: 247,
+      meio_pagamento: 'pix',
+      cartao_final: null,
+      proxima_cobranca: { data: '2026-08-01', valor: 247 },
+      historico: [],
+    });
+
+    let chamou = false;
+    await page.route('**/api/pagamentos/assinatura', (route) => {
+      chamou = true;
+      return route.fulfill({ json: { cancelado: true, acesso_ate: '2026-08-01' } });
+    });
+
+    await page.click('#btn-cancelar-assinatura');
+    await page.click('#btn-manter-assinatura');
+
+    await expect(page.locator('#modal-overlay')).toHaveCount(0);
+    expect(chamou).toBe(false);
+  });
+
+  test('erro ao cancelar aparece no modal', async ({ page }) => {
+    await entrarNoPainel(page, {
+      status: 'ativo',
+      plano: 'profissional',
+      plano_nome: 'Profissional',
+      valor_plano: 247,
+      meio_pagamento: 'pix',
+      cartao_final: null,
+      proxima_cobranca: { data: '2026-08-01', valor: 247 },
+      historico: [],
+    });
+
+    await page.route('**/api/pagamentos/assinatura', (route) =>
+      route.fulfill({ status: 400, json: { error: 'Não foi possível cancelar a assinatura agora. Tente novamente em instantes.' } })
+    );
+
+    await page.click('#btn-cancelar-assinatura');
+    await page.click('#btn-confirmar-cancelamento');
+
+    await expect(page.locator('#cancelar-assinatura-erro')).toHaveText(/Não foi possível cancelar/);
+  });
+
+  test('status cancelado mostra info de acesso e botão de reativar, sem botão de alterar/cancelar (CA04/CA06)', async ({ page }) => {
+    await entrarNoPainel(page, {
+      status: 'cancelado',
+      plano: 'profissional',
+      plano_nome: 'Profissional',
+      valor_plano: 247,
+      meio_pagamento: 'pix',
+      cartao_final: null,
+      cpf_cnpj: '12345678900',
+      cancelado_em: '2026-07-10T12:00:00Z',
+      acesso_ate: '2026-08-01',
+      proxima_cobranca: null,
+      historico: [],
+    });
+
+    await expect(page.locator('.badge')).toHaveText('Cancelado');
+    await expect(page.locator('.modal-texto')).toContainText('01/08/2026');
+    await expect(page.locator('#btn-reativar-pagamento')).toHaveText('Reativar assinatura');
+    await expect(page.locator('#btn-cadastrar-pagamento')).toHaveCount(0);
+    await expect(page.locator('#btn-cancelar-assinatura')).toHaveCount(0);
+  });
+
+  test('reativar assinatura abre o fluxo de cadastro de pagamento (CA06)', async ({ page }) => {
+    await entrarNoPainel(page, {
+      status: 'cancelado',
+      plano: 'profissional',
+      plano_nome: 'Profissional',
+      valor_plano: 247,
+      meio_pagamento: 'pix',
+      cartao_final: null,
+      cpf_cnpj: '12345678900',
+      cancelado_em: '2026-07-10T12:00:00Z',
+      acesso_ate: '2026-08-01',
+      proxima_cobranca: null,
+      historico: [],
+    });
+
+    await page.route('**/api/pagamentos/cadastrar', (route) =>
+      route.fulfill({
+        json: {
+          status: 'ativo',
+          plano: 'profissional',
+          plano_nome: 'Profissional',
+          valor_plano: 247,
+          meio_pagamento: 'pix',
+          cartao_final: null,
+          cpf_cnpj: '12345678900',
+          cancelado_em: null,
+          acesso_ate: null,
+          proxima_cobranca: { data: '2026-08-02', valor: 247 },
+          historico: [],
+        },
+      })
+    );
+
+    await page.click('#btn-reativar-pagamento');
+    await expect(page.locator('#form-pagamento')).toBeVisible();
+    await expect(page.locator('#pagamento-cpf-cnpj')).toHaveCount(0);
+
+    await page.click('#btn-salvar-pagamento');
+    await expect(page.locator('.toast-sucesso')).toHaveText(/assinatura está ativa/);
+  });
+});
