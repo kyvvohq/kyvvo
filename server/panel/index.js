@@ -134,6 +134,46 @@ function minutosNoDia(dataISO) {
   return ((minutosUtc - OFFSET_BRASILIA_MINUTOS) % 1440 + 1440) % 1440;
 }
 
+// Dia da semana (0=domingo..6=sábado) de um timestamp de agendamento, já
+// ajustado pro dia civil de Brasília (mesmo raciocínio de offset fixo de
+// minutosNoDia — ver comentário acima sobre o bug histórico de fuso).
+function diaDaSemanaBrasilia(dataISO) {
+  return new Date(new Date(dataISO).getTime() - OFFSET_BRASILIA_MINUTOS * 60000).getUTCDay();
+}
+
+// Valida um agendamento (dia da semana + intervalo abertura/fechamento +
+// intervalo de almoço, se ativo) contra a configuração de horário do tenant.
+// `duracaoMinutos` (padrão 0) deixa o fim do agendamento também respeitar o
+// fechamento/almoço, não só o início — usado tanto pra validar POST/PATCH de
+// agendamentos quanto pra filtrar slots de disponibilidade.
+function dentroDoHorarioFuncionamento(tenant, dataHoraISO, duracaoMinutos = 0) {
+  const diasFuncionamento = tenant.dias_funcionamento || [1, 2, 3, 4, 5, 6];
+  if (!diasFuncionamento.includes(diaDaSemanaBrasilia(dataHoraISO))) {
+    return { valido: false, motivo: 'O estabelecimento não abre nesse dia.' };
+  }
+
+  const inicioMinutos = minutosNoDia(dataHoraISO);
+  const fimMinutos = inicioMinutos + duracaoMinutos;
+  const aberturaMinutos = horarioParaMinutos(tenant.horario_abertura);
+  const fechamentoMinutos = horarioParaMinutos(tenant.horario_fechamento);
+  if (inicioMinutos < aberturaMinutos || fimMinutos > fechamentoMinutos) {
+    return {
+      valido: false,
+      motivo: `Horário fora do funcionamento do salão (${tenant.horario_abertura.slice(0, 5)}–${tenant.horario_fechamento.slice(0, 5)}).`,
+    };
+  }
+
+  if (tenant.horario_almoco_ativo) {
+    const almocoInicioMinutos = horarioParaMinutos(tenant.horario_almoco_inicio);
+    const almocoFimMinutos = horarioParaMinutos(tenant.horario_almoco_fim);
+    if (inicioMinutos < almocoFimMinutos && almocoInicioMinutos < fimMinutos) {
+      return { valido: false, motivo: 'Esse horário cai no intervalo de almoço.' };
+    }
+  }
+
+  return { valido: true };
+}
+
 // Data (YYYY-MM-DD) de "agora" em horário de Brasília — usada como fallback
 // quando a view de agenda é consultada sem o parâmetro "data" explícito.
 function dataAtualBrasilia() {
@@ -613,19 +653,16 @@ async function start() {
 
     if (dataHora !== undefined) {
       // Reagendar também precisa respeitar o horário de funcionamento do
-      // salão, igual ao POST /agendamentos.
+      // salão (dias/abertura/fechamento/almoço), igual ao POST /agendamentos.
       const { rows: tenantRows } = await pool.query(
-        'SELECT horario_abertura, horario_fechamento FROM tenants WHERE id = $1',
+        `SELECT dias_funcionamento, horario_abertura, horario_fechamento,
+                horario_almoco_ativo, horario_almoco_inicio, horario_almoco_fim
+         FROM tenants WHERE id = $1`,
         [tenantId]
       );
-      const horarioAberturaMinutos = horarioParaMinutos(tenantRows[0].horario_abertura);
-      const horarioFechamentoMinutos = horarioParaMinutos(tenantRows[0].horario_fechamento);
-      const inicioMinutos = minutosNoDia(dataHora);
-      const fimMinutos = inicioMinutos + atual.duracao_minutos;
-      if (inicioMinutos < horarioAberturaMinutos || fimMinutos > horarioFechamentoMinutos) {
-        return reply.code(400).send({
-          error: `Horário fora do funcionamento do salão (${tenantRows[0].horario_abertura.slice(0, 5)}–${tenantRows[0].horario_fechamento.slice(0, 5)}).`,
-        });
+      const validacao = dentroDoHorarioFuncionamento(tenantRows[0], dataHora, atual.duracao_minutos);
+      if (!validacao.valido) {
+        return reply.code(400).send({ error: validacao.motivo });
       }
 
       const { rows: conflitos } = await pool.query(
@@ -691,11 +728,26 @@ async function start() {
     }
 
     const { rows: tenantRows } = await pool.query(
-      'SELECT horario_abertura, horario_fechamento FROM tenants WHERE id = $1',
+      `SELECT dias_funcionamento, horario_abertura, horario_fechamento,
+              horario_almoco_ativo, horario_almoco_inicio, horario_almoco_fim
+       FROM tenants WHERE id = $1`,
       [tenantId]
     );
-    const horarioAberturaMinutos = horarioParaMinutos(tenantRows[0].horario_abertura);
-    const horarioFechamentoMinutos = horarioParaMinutos(tenantRows[0].horario_fechamento);
+    const tenant = tenantRows[0];
+    const diasFuncionamento = tenant.dias_funcionamento || [1, 2, 3, 4, 5, 6];
+    // Dia fechado: nenhum slot possível, sem precisar gerar/filtrar nada — o
+    // dia da semana é lido a partir do meio-dia local (evita qualquer
+    // ambiguidade de fuso na virada do dia que afetaria só a hora, não a
+    // data em si, já que `data` já vem como "YYYY-MM-DD").
+    if (!diasFuncionamento.includes(diaDaSemanaBrasilia(`${data}T12:00:00-03:00`))) {
+      return { data, profissional, servico, duracaoMinutos: servicoInfo.duracao_minutos, slots: [] };
+    }
+
+    const horarioAberturaMinutos = horarioParaMinutos(tenant.horario_abertura);
+    const horarioFechamentoMinutos = horarioParaMinutos(tenant.horario_fechamento);
+    const almocoAtivo = tenant.horario_almoco_ativo;
+    const almocoInicioMinutos = almocoAtivo ? horarioParaMinutos(tenant.horario_almoco_inicio) : null;
+    const almocoFimMinutos = almocoAtivo ? horarioParaMinutos(tenant.horario_almoco_fim) : null;
 
     const { rows: ocupados } = await pool.query(
       `SELECT a.data_hora, s.duracao_minutos
@@ -714,6 +766,14 @@ async function start() {
       minutos + duracaoMinutos <= horarioFechamentoMinutos;
       minutos += SLOT_INTERVALO_MINUTOS
     ) {
+      // Slot (do início ao fim do serviço) cai total ou parcialmente dentro
+      // do intervalo de almoço — nem oferece como opção (diferente de
+      // "ocupado": almoço não é um horário reservável de jeito nenhum).
+      const fimSlotMinutos = minutos + duracaoMinutos;
+      if (almocoAtivo && minutos < almocoFimMinutos && almocoInicioMinutos < fimSlotMinutos) {
+        continue;
+      }
+
       // "T00:00:00-03:00" ancora explicitamente em meia-noite de Brasília,
       // independente do fuso do processo Node (que roda em UTC no container).
       // setUTCMinutes (não setMinutes) evita reintroduzir a mesma confusão de
@@ -986,21 +1046,18 @@ async function start() {
       return reply.code(404).send({ error: 'Profissional não encontrado' });
     }
 
-    // Horário de funcionamento do salão (CA da configuração de horário) — vale
-    // pra qualquer agendamento, inclusive encaixe: a exceção do encaixe é
+    // Horário de funcionamento do salão (dias/abertura/fechamento/almoço) —
+    // vale pra qualquer agendamento, inclusive encaixe: a exceção do encaixe é
     // sobrepor um horário já ocupado, não funcionar fora do expediente.
     const { rows: tenantRows } = await pool.query(
-      'SELECT horario_abertura, horario_fechamento FROM tenants WHERE id = $1',
+      `SELECT dias_funcionamento, horario_abertura, horario_fechamento,
+              horario_almoco_ativo, horario_almoco_inicio, horario_almoco_fim
+       FROM tenants WHERE id = $1`,
       [tenantId]
     );
-    const horarioAberturaMinutos = horarioParaMinutos(tenantRows[0].horario_abertura);
-    const horarioFechamentoMinutos = horarioParaMinutos(tenantRows[0].horario_fechamento);
-    const inicioMinutos = minutosNoDia(dataHora);
-    const fimMinutos = inicioMinutos + servicoInfo.duracao_minutos;
-    if (inicioMinutos < horarioAberturaMinutos || fimMinutos > horarioFechamentoMinutos) {
-      return reply.code(400).send({
-        error: `Horário fora do funcionamento do salão (${tenantRows[0].horario_abertura.slice(0, 5)}–${tenantRows[0].horario_fechamento.slice(0, 5)}).`,
-      });
+    const validacaoHorario = dentroDoHorarioFuncionamento(tenantRows[0], dataHora, servicoInfo.duracao_minutos);
+    if (!validacaoHorario.valido) {
+      return reply.code(400).send({ error: validacaoHorario.motivo });
     }
 
     // Encaixe é uma exceção manual feita pela dona do salão: sobrepor um
