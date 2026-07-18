@@ -283,6 +283,39 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   margin-top: 4px;
 }
 
+/* Serviços (PR4) — cartão com labels sempre visíveis (Serviço/Duração/
+   Valor/Profissional preferencial) e botões de ação sempre visíveis, sem
+   o menu kebab que o resto da agenda usa. */
+.servico-item {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.servico-info .agendamento-detalhe:first-child { margin-top: 0; }
+.servico-desabilitado { opacity: 0.6; }
+
+.servico-acoes {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.servico-acoes button {
+  width: auto;
+  margin: 0;
+  padding: 6px 14px;
+  font-size: 13px;
+}
+
+.servico-acoes button.acao-perigo {
+  background: transparent;
+  border: 1px solid rgba(255, 107, 107, 0.4);
+  color: #ff6b6b;
+}
+
+.servico-acoes button.acao-perigo:hover { background: rgba(255, 107, 107, 0.1); }
+
 /* Grade de horários (Dia — PR2, e cada coluna da Semana — PR3): uma linha
    por horário do intervalo abertura→fechamento (menos almoço), com o(s)
    agendamento(s) daquele horário dentro, ou "Disponível" se vazia. */

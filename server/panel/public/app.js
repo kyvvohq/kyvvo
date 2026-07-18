@@ -342,14 +342,19 @@ function abrirModalNovoAgendamento(prefill) {
   });
 
   // Popula serviços (reutiliza GET /api/servicos, como no encaixe da ST08.6).
+  // Serviços desabilitados (PR4/US17) continuam existindo mas não são
+  // oferecidos pra novos agendamentos.
+  let servicosCarregados = [];
   api('/api/servicos').then((resultado) => {
     const select = document.getElementById('novo-ag-servico');
     if (!resultado || !resultado.servicos) {
       select.innerHTML = '<option value="">Erro ao carregar serviços</option>';
       return;
     }
+    servicosCarregados = resultado.servicos;
+    const disponiveis = servicosCarregados.filter((s) => s.ativo !== false);
     select.innerHTML = '<option value="">Selecione...</option>' +
-      resultado.servicos.map((s) => `<option value="${s.id}">${s.nome} (${s.duracao_minutos}min)</option>`).join('');
+      disponiveis.map((s) => `<option value="${s.id}">${s.nome} (${s.duracao_minutos}min)</option>`).join('');
   });
 
   // Popula profissionais (GET /api/profissionais).
@@ -361,6 +366,19 @@ function abrirModalNovoAgendamento(prefill) {
     }
     select.innerHTML = '<option value="">Selecione...</option>' +
       resultado.profissionais.map((p) => `<option value="${p.id}">${p.nome}</option>`).join('');
+  });
+
+  // Profissional preferencial (PR4/US17): escolher um serviço que tenha um
+  // marcado pré-seleciona ele no campo Profissional — o usuário ainda pode
+  // trocar manualmente depois. Registrado antes do listener de
+  // carregarSlotsNovoAgendamento (abaixo) pra já valer na mesma mudança.
+  document.getElementById('novo-ag-servico').addEventListener('change', () => {
+    const servico = servicosCarregados.find((s) => s.id === document.getElementById('novo-ag-servico').value);
+    if (!servico || !servico.profissional_preferencial_id) return;
+    const profissionalSelect = document.getElementById('novo-ag-profissional');
+    if ([...profissionalSelect.options].some((o) => o.value === servico.profissional_preferencial_id)) {
+      profissionalSelect.value = servico.profissional_preferencial_id;
+    }
   });
 
   // ST09.3 — Carrega os slots reais de GET /agendamentos/disponibilidade sempre
@@ -770,6 +788,9 @@ conteudo.addEventListener('click', (e) => {
     if (!servico) return;
     if (acaoServicoBtn.dataset.acaoServico === 'editar') abrirModalServico(servico);
     if (acaoServicoBtn.dataset.acaoServico === 'excluir') abrirModalExcluirServico(servico);
+    if (acaoServicoBtn.dataset.acaoServico === 'desabilitar' || acaoServicoBtn.dataset.acaoServico === 'habilitar') {
+      alternarAtivoServico(servico);
+    }
   }
 
   const acaoProfissionalBtn = e.target.closest('[data-acao-profissional]');
@@ -1423,29 +1444,47 @@ function formatarPreco(preco) {
   return preco != null ? `R$ ${Number(preco).toFixed(2).replace('.', ',')}` : 'sem preço definido';
 }
 
-function renderServicoItem(s) {
+// `nomeProfissionalPreferencial` já vem resolvido de renderServicos (evita
+// cada card refazer a mesma busca em profissionaisAtuais).
+function renderServicoItem(s, nomeProfissionalPreferencial) {
+  const desabilitado = s.ativo === false;
   return `
-    <div class="agendamento-item" data-id="${s.id}">
-      <div class="agendamento-linha-principal" data-acoes-toggle="${s.id}">
-        <div>
-          <div class="agendamento-hora">${s.nome}</div>
-          <div class="agendamento-detalhe">${s.duracao_minutos}min · ${formatarPreco(s.preco)}</div>
-        </div>
-        <button class="btn-acoes" aria-label="Ações">⋮</button>
+    <div class="agendamento-item servico-item${desabilitado ? ' servico-desabilitado' : ''}" data-id="${s.id}">
+      <div class="servico-info">
+        <div class="agendamento-detalhe">Serviço: <strong>${s.nome}</strong></div>
+        <div class="agendamento-detalhe">Duração: ${s.duracao_minutos} min</div>
+        <div class="agendamento-detalhe">Valor: ${formatarPreco(s.preco)}</div>
+        ${nomeProfissionalPreferencial ? `<div class="agendamento-detalhe">Profissional preferencial: ${nomeProfissionalPreferencial}</div>` : ''}
+        ${desabilitado ? '<span class="badge badge-status-inativo">Desabilitado</span>' : ''}
       </div>
-      <div class="menu-acoes" id="menu-acoes-${s.id}">
-        <button data-acao-servico="editar" data-id="${s.id}">Editar</button>
-        <button data-acao-servico="excluir" data-id="${s.id}" class="acao-perigo">Excluir</button>
+      <div class="servico-acoes">
+        <button class="btn-secundario" data-acao-servico="editar" data-id="${s.id}">Editar</button>
+        <button class="btn-secundario" data-acao-servico="${desabilitado ? 'habilitar' : 'desabilitar'}" data-id="${s.id}">${desabilitado ? 'Habilitar' : 'Desabilitar'}</button>
+        <button class="btn-secundario acao-perigo" data-acao-servico="excluir" data-id="${s.id}">Excluir</button>
       </div>
     </div>
   `;
 }
 
+async function alternarAtivoServico(servico) {
+  const resultado = await api(`/api/servicos/${servico.id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ ativo: !servico.ativo }),
+  });
+  if (resultado && !resultado.error) {
+    mostrarToast(resultado.ativo ? 'Serviço habilitado.' : 'Serviço desabilitado.', 'sucesso');
+    renderServicos();
+  } else {
+    mostrarToast((resultado && resultado.error) || 'Erro ao atualizar serviço.', 'erro');
+  }
+}
+
 async function renderServicos() {
   conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
-  const data = await api('/api/servicos');
-  if (!data) return;
-  servicosAtuais = data.servicos;
+  const [dataServicos, dataProfissionais] = await Promise.all([api('/api/servicos'), api('/api/profissionais')]);
+  if (!dataServicos) return;
+  servicosAtuais = dataServicos.servicos;
+  const profissionaisPorId = new Map((dataProfissionais?.profissionais || []).map((p) => [p.id, p.nome]));
 
   let html = `
     <div class="nav-periodo">
@@ -1454,7 +1493,7 @@ async function renderServicos() {
     </div>
   `;
   html += servicosAtuais.length
-    ? servicosAtuais.map(renderServicoItem).join('')
+    ? servicosAtuais.map((s) => renderServicoItem(s, profissionaisPorId.get(s.profissional_preferencial_id))).join('')
     : '<div class="vazio">Nenhum serviço cadastrado ainda.</div>';
 
   conteudo.innerHTML = html;
@@ -1474,6 +1513,8 @@ function abrirModalServico(servico) {
         <input type="number" id="servico-duracao" data-obrigatorio min="1" value="${editando ? servico.duracao_minutos : ''}">
         <label for="servico-preco">Preço em R$ (opcional)</label>
         <input type="number" id="servico-preco" min="0" step="0.01" value="${editando && servico.preco != null ? servico.preco : ''}">
+        <label for="servico-profissional-preferencial">Profissional preferencial (opcional)</label>
+        <select id="servico-profissional-preferencial"><option value="">Carregando profissionais...</option></select>
         <div class="modal-acoes">
           <button type="button" class="btn-secundario" id="btn-cancelar-servico">Cancelar</button>
           <button type="submit" class="btn-primario" id="btn-salvar-servico">${editando ? 'Salvar' : 'Criar'}</button>
@@ -1483,6 +1524,17 @@ function abrirModalServico(servico) {
   );
 
   document.getElementById('btn-cancelar-servico').addEventListener('click', fecharModal);
+
+  api('/api/profissionais').then((resultado) => {
+    const select = document.getElementById('servico-profissional-preferencial');
+    if (!resultado || !resultado.profissionais) {
+      select.innerHTML = '<option value="">Erro ao carregar profissionais</option>';
+      return;
+    }
+    select.innerHTML = '<option value="">Nenhum</option>' +
+      resultado.profissionais.map((p) => `<option value="${p.id}">${p.nome}</option>`).join('');
+    if (editando && servico.profissional_preferencial_id) select.value = servico.profissional_preferencial_id;
+  });
 
   const form = document.getElementById('form-servico');
   form.querySelectorAll('[data-obrigatorio]').forEach((campo) => {
@@ -1509,6 +1561,7 @@ function abrirModalServico(servico) {
       nome: document.getElementById('servico-nome').value.trim(),
       duracao_minutos: parseInt(document.getElementById('servico-duracao').value, 10),
       preco: precoValor ? parseFloat(precoValor) : null,
+      profissional_preferencial_id: document.getElementById('servico-profissional-preferencial').value || null,
     };
 
     const resultado = await api(editando ? `/api/servicos/${servico.id}` : '/api/servicos', {
@@ -1532,11 +1585,11 @@ function abrirModalExcluirServico(servico) {
   abrirModal(
     '<h3>Excluir serviço</h3>',
     `
-      <p class="modal-texto">Tem certeza que deseja excluir o serviço <strong>${servico.nome}</strong>? Essa ação não pode ser desfeita.</p>
+      <p class="modal-texto">Ao confirmar essa exclusão, este serviço não estará mais disponível para novos agendamentos. Deseja excluir mesmo assim?</p>
       <div class="modal-erro" id="excluir-servico-erro"></div>
       <div class="modal-acoes">
-        <button class="btn-secundario" id="btn-voltar-excluir-servico">Voltar</button>
-        <button class="btn-perigo" id="btn-confirmar-excluir-servico">Excluir</button>
+        <button class="btn-secundario" id="btn-voltar-excluir-servico">Cancelar</button>
+        <button class="btn-perigo" id="btn-confirmar-excluir-servico">Confirmar</button>
       </div>
     `
   );
@@ -1556,7 +1609,7 @@ function abrirModalExcluirServico(servico) {
     } else {
       document.getElementById('excluir-servico-erro').textContent = (resultado && resultado.error) || 'Erro ao excluir serviço.';
       btn.disabled = false;
-      btn.textContent = 'Excluir';
+      btn.textContent = 'Confirmar';
     }
   });
 }
