@@ -392,11 +392,64 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   .grade-linha-add { width: 22px; height: 22px; font-size: 14px; right: 6px; }
 }
 
-.dia-header {
-  color: #a1a5c4;
+/* Semana (PR3) — uma coluna por dia aberto, lado a lado, cada uma com a
+   mesma grade de horários da view Dia (.grade-horarios). */
+.semana-colunas {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+
+.semana-coluna {
+  flex: 1 1 240px;
+  min-width: 240px;
+}
+
+.semana-coluna-cabecalho {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.semana-coluna-cabecalho strong {
+  display: block;
   font-size: 13px;
-  text-transform: uppercase;
-  margin: 20px 0 8px;
+  text-transform: capitalize;
+}
+
+.semana-coluna-cabecalho span {
+  font-size: 12px;
+  color: #a1a5c4;
+}
+
+.semana-coluna-add {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 15px;
+  line-height: 1;
+  padding: 0;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.semana-coluna:hover .semana-coluna-add { opacity: 1; }
+
+/* Colunas mais estreitas que a grade cheia do Dia — encolhe fonte/padding
+   pra caber os cards sem quebrar o layout. */
+.semana-coluna .grade-linha-hora { flex-basis: 48px; font-size: 11px; padding: 8px 4px; }
+.semana-coluna .grade-linha-conteudo { padding: 6px 30px 6px 6px; }
+.semana-coluna .grade-ag-grupo { grid-template-columns: 1fr !important; gap: 4px; }
+.semana-coluna .grade-ag-card { padding: 6px 8px; }
+.semana-coluna .grade-linha-add { width: 20px; height: 20px; font-size: 13px; right: 4px; }
+
+@media (max-width: 900px) {
+  .semana-colunas { flex-direction: column; overflow-x: visible; }
+  .semana-coluna { min-width: 0; }
 }
 
 .vazio {
