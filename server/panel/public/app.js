@@ -140,8 +140,16 @@ async function api(path, options = {}) {
   return res.json();
 }
 
+// BUG HISTÓRICO (achado testando o "+" da grade de horários em produção):
+// toISOString() sempre converte pra UTC, então "vira o dia" 3h antes da
+// meia-noite real de Brasília (21h) — de 21h às 23h59, formatarDataISO(new
+// Date()) devolvia a data de AMANHÃ, e como esse valor alimenta direto a
+// query de GET /api/agendamentos?data=..., a agenda de Dia/Semana/Mês
+// buscava o dia errado nesse intervalo todo santo dia. toLocaleDateString
+// com locale sv-SE (formato ISO 8601 nativo do sueco) e timeZone explícito
+// resolve isso sem depender do fuso do sistema operacional do navegador.
 function formatarDataISO(d) {
-  return d.toISOString().slice(0, 10);
+  return d.toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
 }
 
 function formatarHora(dataHoraISO) {
