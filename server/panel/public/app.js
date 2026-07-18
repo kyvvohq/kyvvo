@@ -156,6 +156,55 @@ function nomeDiaSemana(d) {
   return d.toLocaleDateString('pt-BR', { weekday: 'long', timeZone: 'America/Sao_Paulo' });
 }
 
+// "HH:MM" em 24h de um data_hora ISO, sempre nesse formato independente da
+// preferência de exibição (formatarHora acima) — usado só pra bater um
+// agendamento com a linha certa da grade de horários (Dia/Semana), nunca
+// pra exibir na tela.
+function horaChave24h(dataHoraISO) {
+  return new Date(dataHoraISO).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Sao_Paulo' });
+}
+
+function horarioParaMinutosFrontend(horario) {
+  const [h, m] = horario.slice(0, 5).split(':').map(Number);
+  return h * 60 + m;
+}
+
+// Mesma granularidade de 30min usada pelo backend em /agendamentos/
+// disponibilidade — gera só os RÓTULOS "HH:MM" do intervalo abertura→
+// fechamento configurado, excluindo o horário de almoço se ativo. Não
+// depende de serviço/profissional (ao contrário da disponibilidade real),
+// então dá pra montar a grade inteira só com o que já está em `configuracao`.
+const SLOT_INTERVALO_MINUTOS = 30;
+function gerarHorariosGrade() {
+  const aberturaMin = horarioParaMinutosFrontend(configuracao.horario_abertura || '08:00');
+  const fechamentoMin = horarioParaMinutosFrontend(configuracao.horario_fechamento || '20:00');
+  const almocoAtivo = configuracao.horario_almoco_ativo;
+  const almocoInicioMin = almocoAtivo ? horarioParaMinutosFrontend(configuracao.horario_almoco_inicio) : null;
+  const almocoFimMin = almocoAtivo ? horarioParaMinutosFrontend(configuracao.horario_almoco_fim) : null;
+
+  const horarios = [];
+  for (let m = aberturaMin; m < fechamentoMin; m += SLOT_INTERVALO_MINUTOS) {
+    if (almocoAtivo && m >= almocoInicioMin && m < almocoFimMin) continue;
+    horarios.push(`${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`);
+  }
+  return horarios;
+}
+
+// Anterior/Próximo na view Dia nunca param num dia fora de
+// configuracao.dias_funcionamento — pula direto pro próximo dia aberto na
+// direção da navegação (+1/-1). Limite de 14 tentativas é só uma trava de
+// segurança contra loop infinito se dias_funcionamento vier vazio.
+function proximoDiaAberto(base, direcao) {
+  const diasFuncionamento = configuracao.dias_funcionamento || [1, 2, 3, 4, 5, 6];
+  const d = new Date(base);
+  let tentativas = 0;
+  while (!diasFuncionamento.includes(d.getDay()) && tentativas < 14) {
+    d.setDate(d.getDate() + direcao);
+    tentativas++;
+  }
+  return d;
+}
+
 function formatarDataCurta(dataHoraISO) {
   return new Date(dataHoraISO).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Sao_Paulo' });
 }
@@ -232,7 +281,8 @@ function validarObrigatorios(form) {
   return primeiroInvalido;
 }
 
-function abrirModalNovoAgendamento() {
+function abrirModalNovoAgendamento(prefill) {
+  const { data: dataPrefill, hora: horaPrefill } = prefill || {};
   const hoje = formatarDataISO(new Date());
   abrirModal(
     '<h3>Novo agendamento</h3>',
@@ -253,7 +303,7 @@ function abrirModalNovoAgendamento() {
         <select id="novo-ag-profissional" data-obrigatorio><option value="">Carregando profissionais...</option></select>
 
         <label for="novo-ag-data">Data *</label>
-        <input type="date" id="novo-ag-data" min="${hoje}" data-obrigatorio>
+        <input type="date" id="novo-ag-data" min="${hoje}" value="${dataPrefill || ''}" data-obrigatorio>
 
         <label for="novo-ag-horario">Horário *</label>
         <select id="novo-ag-horario" data-obrigatorio><option value="">Selecione serviço, profissional e data</option></select>
@@ -362,6 +412,13 @@ function abrirModalNovoAgendamento() {
     }
 
     popularSelectHorarios(select, disponibilidade.slots);
+    // Hover "+" na grade de Dia/Semana (PR2/PR3) pode pré-preencher um
+    // horário específico — prefere esse horário se ele seguir disponível,
+    // em vez do primeiro disponível que popularSelectHorarios já selecionou.
+    if (horaPrefill) {
+      const alvo = disponibilidade.slots.find((s) => s.disponivel && horaChave24h(s.hora) === horaPrefill);
+      if (alvo) select.value = alvo.hora;
+    }
     // O valor é definido programaticamente (não dispara "change"), então limpa
     // o destaque de erro manualmente caso a validação já o tivesse marcado.
     select.classList.remove('campo-invalido');
@@ -415,7 +472,7 @@ function abrirModalNovoAgendamento() {
   });
 }
 
-document.getElementById('btn-novo-agendamento').addEventListener('click', abrirModalNovoAgendamento);
+document.getElementById('btn-novo-agendamento').addEventListener('click', () => abrirModalNovoAgendamento());
 
 // ---------- Modal: cancelamento (ST08.4) ----------
 function abrirModalCancelar(ag) {
@@ -662,6 +719,19 @@ function renderAgendamentoItem(ag) {
 }
 
 conteudo.addEventListener('click', (e) => {
+  // "+" ao passar o mouse numa linha de horário (Dia/Semana) ou numa
+  // célula de dia (Semana/Mês) — abre Novo agendamento pré-preenchido.
+  const addHorarioBtn = e.target.closest('[data-add-horario]');
+  if (addHorarioBtn) {
+    abrirModalNovoAgendamento({ data: addHorarioBtn.dataset.data, hora: addHorarioBtn.dataset.addHorario });
+    return;
+  }
+  const addDiaBtn = e.target.closest('[data-add-dia]');
+  if (addDiaBtn) {
+    abrirModalNovoAgendamento({ data: addDiaBtn.dataset.addDia });
+    return;
+  }
+
   const toggleEl = e.target.closest('[data-acoes-toggle]');
   if (toggleEl) {
     const id = toggleEl.dataset.acoesToggle;
@@ -1643,7 +1713,81 @@ function renderModuloEmBreve() {
   conteudo.innerHTML = '<div class="vazio">🚧 Em breve — este módulo ainda está em desenvolvimento.</div>';
 }
 
+// Card de um agendamento dentro de uma linha da grade de horários (Dia e,
+// no PR3, Semana) — mesmo conteúdo/ações de renderAgendamentoItem (kebab
+// com Reagendar/Encaixar/Cancelar), só que compacto o bastante pra caber
+// dividido em sub-colunas quando há mais de um profissional no mesmo
+// horário (CA da grade: "dividir a coluna ou dois componentes").
+function renderAgendamentoGradeCard(ag) {
+  const cancelado = ag.status === 'cancelado';
+  return `
+    <div class="grade-ag-card${cancelado ? ' agendamento-cancelado' : ''}" data-id="${ag.id}">
+      <div class="grade-ag-linha-principal" ${cancelado ? '' : `data-acoes-toggle="${ag.id}"`}>
+        <div>
+          <div class="grade-ag-servico">${ag.servico}</div>
+          <div class="grade-ag-cliente">${ag.cliente || ag.cliente_telefone}</div>
+          <div class="grade-ag-meta">
+            ${ag.duracao_minutos}min · ${formatarPreco(ag.preco)} · ${ag.profissional}
+            ${ag.encaixe ? '<span class="badge badge-encaixe">Encaixe</span>' : ''}
+            ${cancelado ? '<span class="badge badge-cancelado">Cancelado</span>' : ''}
+          </div>
+        </div>
+        ${cancelado ? '' : '<button class="btn-acoes" aria-label="Ações">⋮</button>'}
+      </div>
+      ${cancelado ? '' : `
+        <div class="menu-acoes" id="menu-acoes-${ag.id}">
+          <button data-acao="reagendar" data-id="${ag.id}">Reagendar</button>
+          <button data-acao="encaixar" data-id="${ag.id}">Encaixar</button>
+          <button data-acao="cancelar" data-id="${ag.id}" class="acao-perigo">Cancelar</button>
+        </div>
+      `}
+    </div>
+  `;
+}
+
+// Grade de horários (abertura→fechamento, menos almoço) de um único dia —
+// reaproveitada pela view Dia aqui e pela view Semana (PR3), uma coluna por
+// dia. `agendamentos` já deve vir filtrado pro dia em questão.
+function renderGradeHorariosDoDia(dataISO, agendamentos) {
+  const porHorario = {};
+  for (const ag of agendamentos) {
+    const chave = horaChave24h(ag.data_hora);
+    if (!porHorario[chave]) porHorario[chave] = [];
+    porHorario[chave].push(ag);
+  }
+
+  const horarios = gerarHorariosGrade();
+  if (horarios.length === 0) {
+    return '<div class="vazio">Nenhum horário configurado (confira Abertura/Fechamento em Configuração).</div>';
+  }
+
+  return `
+    <div class="grade-horarios">
+      ${horarios
+        .map((hora) => {
+          const agsDoHorario = porHorario[hora] || [];
+          const conteudoLinha = agsDoHorario.length
+            ? `<div class="grade-ag-grupo" style="grid-template-columns:repeat(${agsDoHorario.length},1fr)">${agsDoHorario.map(renderAgendamentoGradeCard).join('')}</div>`
+            : '<div class="grade-linha-vazia">Disponível</div>';
+          return `
+            <div class="grade-linha">
+              <div class="grade-linha-hora">${hora}</div>
+              <div class="grade-linha-conteudo">${conteudoLinha}</div>
+              <button class="grade-linha-add" data-add-horario="${hora}" data-data="${dataISO}" aria-label="Novo agendamento às ${hora}">+</button>
+            </div>
+          `;
+        })
+        .join('')}
+    </div>
+  `;
+}
+
 async function renderDia() {
+  // Anterior/Próximo (e a primeira carga da aba) nunca param num dia fora
+  // do horário de funcionamento configurado — pula direto pro próximo dia
+  // aberto. Sem direção explícita (primeira carga), pula pra frente.
+  dataRef = proximoDiaAberto(dataRef, 1);
+
   const iso = formatarDataISO(dataRef);
   conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
   const data = await api(`/api/agendamentos?view=dia&data=${iso}`);
@@ -1665,22 +1809,17 @@ async function renderDia() {
   `;
 
   agendamentosAtuais = data.agendamentos;
-
-  if (data.agendamentos.length === 0) {
-    html += '<div class="vazio">Nenhum agendamento nesse dia.</div>';
-  } else {
-    for (const ag of data.agendamentos) {
-      html += renderAgendamentoItem(ag);
-    }
-  }
+  html += renderGradeHorariosDoDia(iso, data.agendamentos);
 
   conteudo.innerHTML = html;
   conteudo.querySelector('[data-nav="-1"]').addEventListener('click', () => {
     dataRef.setDate(dataRef.getDate() - 1);
+    dataRef = proximoDiaAberto(dataRef, -1);
     renderDia();
   });
   conteudo.querySelector('[data-nav="1"]').addEventListener('click', () => {
     dataRef.setDate(dataRef.getDate() + 1);
+    dataRef = proximoDiaAberto(dataRef, 1);
     renderDia();
   });
 }
@@ -1764,6 +1903,9 @@ async function renderMes() {
       <strong>${mesLabel}</strong>
       <button data-nav="1">Próximo mês →</button>
     </div>
+    <div class="calendario-cabecalho">
+      ${NOMES_DIAS.map((nome) => `<div class="calendario-cabecalho-dia">${nome.slice(0, 3)}</div>`).join('')}
+    </div>
     <div class="calendario">
   `;
 
@@ -1788,6 +1930,7 @@ async function renderMes() {
       <div class="dia-cel${fechado ? ' dia-cel-fechado' : ''}">
         <div class="num">${dia}</div>
         ${listaAgendamentos}
+        ${fechado ? '' : `<button class="dia-cel-add" data-add-dia="${diaISO}" aria-label="Novo agendamento em ${dia}">+</button>`}
       </div>
     `;
   }

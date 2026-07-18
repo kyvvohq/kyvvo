@@ -576,7 +576,7 @@ async function start() {
       const dataRef = data || dataAtualBrasilia();
       const { rows } = await pool.query(
         `SELECT a.id, a.data_hora, a.status, a.encaixe, c.nome AS cliente, c.telefone AS cliente_telefone,
-                a.profissional_id, p.nome AS profissional, a.servico_id, s.nome AS servico, s.duracao_minutos
+                a.profissional_id, p.nome AS profissional, a.servico_id, s.nome AS servico, s.duracao_minutos, s.preco
          FROM agendamentos a
          JOIN clientes c ON c.id = a.cliente_id
          JOIN profissionais p ON p.id = a.profissional_id
@@ -592,7 +592,7 @@ async function start() {
       const dataRef = data || dataAtualBrasilia();
       const { rows } = await pool.query(
         `SELECT a.id, a.data_hora, a.status, a.encaixe, c.nome AS cliente,
-                a.profissional_id, p.nome AS profissional, a.servico_id, s.nome AS servico, s.duracao_minutos
+                a.profissional_id, p.nome AS profissional, a.servico_id, s.nome AS servico, s.duracao_minutos, s.preco
          FROM agendamentos a
          JOIN clientes c ON c.id = a.cliente_id
          JOIN profissionais p ON p.id = a.profissional_id
