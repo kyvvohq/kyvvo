@@ -545,6 +545,61 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .financeiro-entrada { color: #4ade80; }
 .financeiro-saida { color: #ff6b6b; }
 
+/* Cards de 3 linhas na aba Pagamento (PR5): label / valor principal /
+   subtítulo — substitui o texto corrido de antes ("Nome — R$ valor" numa
+   linha só). */
+.financeiro-resumo-card-3linhas { text-align: left; }
+.financeiro-resumo-card-3linhas .financeiro-resumo-linha2 {
+  font-size: 15px;
+  font-weight: 700;
+  color: #f2f2f7;
+}
+.financeiro-resumo-card-3linhas .financeiro-resumo-linha3 {
+  font-size: 12px;
+  font-weight: 400;
+  color: #a1a5c4;
+  margin-top: 2px;
+}
+
+/* Card de Status sólido (PR5) — fundo claro + texto escuro e maior, ao
+   contrário do resto do painel (tema escuro): pedido explícito pra chamar
+   mais atenção pro status da assinatura. */
+.status-card-ativo { background: #bbf7d0; border-color: #86efac; }
+.status-card-ativo .financeiro-resumo-label { color: #14532d; }
+.status-card-ativo .financeiro-resumo-linha2 { color: #14532d; font-size: 20px; font-weight: 800; }
+
+.status-card-inativo { background: #fecaca; border-color: #fca5a5; }
+.status-card-inativo .financeiro-resumo-label { color: #7f1d1d; }
+.status-card-inativo .financeiro-resumo-linha2 { color: #7f1d1d; font-size: 20px; font-weight: 800; }
+
+.status-card-pendente { background: #fef08a; border-color: #fde047; }
+.status-card-pendente .financeiro-resumo-label { color: #713f12; }
+.status-card-pendente .financeiro-resumo-linha2 { color: #713f12; font-size: 20px; font-weight: 800; }
+
+/* Collapse "Detalhes" (PR5) — substitui o antigo botão "Alterar forma de
+   pagamento" fora de um modal; reaproveita o mesmo formulário (Pix/Cartão)
+   por dentro, com "Cancelar assinatura" logo abaixo. */
+.pagamento-detalhes { margin-bottom: 16px; }
+.pagamento-detalhes-toggle {
+  width: auto;
+  background: transparent;
+  border: 1px solid #2a2f52;
+  color: #a688ff;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.pagamento-detalhes-toggle:hover { background: #171b34; }
+.pagamento-detalhes-conteudo {
+  margin-top: 12px;
+  padding: 16px;
+  background: #12162a;
+  border: 1px solid #232847;
+  border-radius: 10px;
+}
+.pagamento-detalhes-conteudo h4 { margin: 0 0 12px; font-size: 14px; }
+.pagamento-historico-titulo { margin: 20px 0 10px; font-size: 14px; }
+
 .dia-cel {
   position: relative;
   min-height: 96px;
@@ -779,7 +834,22 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   color: #f2f2f7;
 }
 
-.perfil-form label { margin-top: 20px; }
+.perfil-form label { margin-top: 14px; }
+
+/* Asterisco de campo obrigatório (PR5) */
+.obrigatorio { color: #ff6b6b; }
+
+/* Nome do Responsável + Nome do [segmento] lado a lado (PR5) — encurta a
+   altura total do formulário. */
+.perfil-grid-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.perfil-grid-2col > div > label { margin-top: 0; }
+@media (max-width: 640px) {
+  .perfil-grid-2col { grid-template-columns: 1fr; }
+}
 
 /* Endereço composto (US33/CA04) */
 .endereco-grid {

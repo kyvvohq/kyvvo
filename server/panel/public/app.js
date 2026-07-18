@@ -815,12 +815,12 @@ const NOMES_DIAS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta',
 // de funcionamento" na Configuração, sem mudar comportamento. Mesma lista
 // fixa validada no backend.
 const SEGMENTOS = {
-  salao_beleza: { dias: 'o salão' },
-  petshop: { dias: 'o petshop' },
-  psicologia: { dias: 'o consultório' },
-  fisioterapia: { dias: 'a clínica' },
-  pilates: { dias: 'o studio' },
-  outro: { dias: 'o negócio' },
+  salao_beleza: { dias: 'o salão', nomeCampo: 'Nome do salão' },
+  petshop: { dias: 'o petshop', nomeCampo: 'Nome do petshop' },
+  psicologia: { dias: 'o consultório', nomeCampo: 'Nome do consultório' },
+  fisioterapia: { dias: 'a clínica', nomeCampo: 'Nome da clínica' },
+  pilates: { dias: 'o studio', nomeCampo: 'Nome do studio' },
+  outro: { dias: 'o negócio', nomeCampo: 'Nome do negócio' },
 };
 function infoSegmento(segmento) {
   return SEGMENTOS[segmento] || SEGMENTOS.outro;
@@ -1075,6 +1075,20 @@ function renderBlocoTrial(trialInfo) {
   `;
 }
 
+const PAGAMENTOS_STATUS_CARD_CLASSE = {
+  ativo: 'status-card-ativo',
+  inadimplente: 'status-card-pendente',
+  suspenso: 'status-card-inativo',
+  cancelado: 'status-card-inativo',
+  expirado: 'status-card-inativo',
+};
+
+function formatarMeioHistorico(meio) {
+  if (meio === 'PIX') return 'Pix';
+  if (meio === 'CREDIT_CARD') return 'Cartão de crédito';
+  return meio || '—';
+}
+
 async function renderPagamentos() {
   conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
   const dados = await api('/api/pagamentos');
@@ -1086,9 +1100,7 @@ async function renderPagamentos() {
       ? 'Pix recorrente'
       : 'Não cadastrado';
 
-  const statusBadge = `<span class="badge ${PAGAMENTOS_STATUS_BADGE[dados.status] || 'badge-status-inativo'}">${PAGAMENTOS_STATUS_LABEL[dados.status] || dados.status}</span>`;
-
-  let html = '<div class="nav-periodo"><strong>Pagamentos</strong></div>';
+  let html = '<div class="nav-periodo"><strong>Pagamento</strong></div>';
 
   if (dados.status === 'trial' && dados.meio_pagamento) {
     // CA05 (US37) — pagamento já cadastrado durante o trial: a cobrança está
@@ -1096,17 +1108,19 @@ async function renderPagamentos() {
     // continua em 'trial', não 'ativo' — ver /api/pagamentos/cadastrar).
     html += `
       <div class="financeiro-resumo">
-        <div class="financeiro-resumo-card">
-          <div class="financeiro-resumo-label">Plano atual</div>
-          <div>${dados.plano_nome || 'A definir'}${dados.valor_plano != null ? ` — ${formatarPreco(dados.valor_plano)}` : ''}</div>
+        <div class="financeiro-resumo-card financeiro-resumo-card-3linhas">
+          <div class="financeiro-resumo-label">Plano Atual</div>
+          <div class="financeiro-resumo-linha2">${dados.plano_nome || 'A definir'}</div>
+          <div class="financeiro-resumo-linha3">${dados.valor_plano != null ? formatarPreco(dados.valor_plano) : '—'}</div>
         </div>
-        <div class="financeiro-resumo-card">
+        <div class="financeiro-resumo-card financeiro-resumo-card-3linhas">
           <div class="financeiro-resumo-label">Meio de pagamento</div>
-          <div>${meioLabel}</div>
+          <div class="financeiro-resumo-linha2">${meioLabel}</div>
+          <div class="financeiro-resumo-linha3">—</div>
         </div>
-        <div class="financeiro-resumo-card">
+        <div class="financeiro-resumo-card financeiro-resumo-card-3linhas status-card-pendente">
           <div class="financeiro-resumo-label">Status</div>
-          <div><span class="badge badge-status-ativo">Trial com pagamento agendado</span></div>
+          <div class="financeiro-resumo-linha2">Trial com pagamento agendado</div>
         </div>
       </div>
       <p class="modal-texto">
@@ -1134,23 +1148,30 @@ async function renderPagamentos() {
   } else {
     // CA01/CA04/CA06 (US35) — cancelado é um estado à parte: some o botão de
     // "Alterar forma de pagamento" (não há mais assinatura ativa pra alterar)
-    // e mostra "Reativar assinatura" no lugar; "Cancelar assinatura" só
-    // aparece com status 'ativo' (trial/suspenso/inadimplente não veem).
+    // e mostra "Reativar assinatura" no lugar; o collapse "Detalhes" (com
+    // "Cancelar assinatura" dentro) só aparece com status 'ativo'/
+    // inadimplente/suspenso — quem já cancelou não tem mais assinatura pra
+    // alterar/cancelar de novo.
     const cancelado = dados.status === 'cancelado';
     const ativo = dados.status === 'ativo';
+    const statusCardClasse = PAGAMENTOS_STATUS_CARD_CLASSE[dados.status] || 'status-card-inativo';
+    const dataAlteracaoMeio = dados.meio_pagamento_alterado_em ? formatarDataCurtaISO(dados.meio_pagamento_alterado_em) : '—';
+
     html += `
       <div class="financeiro-resumo">
-        <div class="financeiro-resumo-card">
-          <div class="financeiro-resumo-label">Plano atual</div>
-          <div>${dados.plano_nome || '—'}${dados.valor_plano != null ? ` — ${formatarPreco(dados.valor_plano)}` : ''}</div>
+        <div class="financeiro-resumo-card financeiro-resumo-card-3linhas">
+          <div class="financeiro-resumo-label">Plano Atual</div>
+          <div class="financeiro-resumo-linha2">${dados.plano_nome || '—'}</div>
+          <div class="financeiro-resumo-linha3">${dados.valor_plano != null ? formatarPreco(dados.valor_plano) : '—'}</div>
         </div>
-        <div class="financeiro-resumo-card">
+        <div class="financeiro-resumo-card financeiro-resumo-card-3linhas">
           <div class="financeiro-resumo-label">Meio de pagamento</div>
-          <div>${meioLabel}</div>
+          <div class="financeiro-resumo-linha2">${meioLabel}</div>
+          <div class="financeiro-resumo-linha3">${dados.meio_pagamento ? `Alterado em ${dataAlteracaoMeio}` : '—'}</div>
         </div>
-        <div class="financeiro-resumo-card">
+        <div class="financeiro-resumo-card financeiro-resumo-card-3linhas ${statusCardClasse}">
           <div class="financeiro-resumo-label">Status</div>
-          <div>${statusBadge}</div>
+          <div class="financeiro-resumo-linha2">${PAGAMENTOS_STATUS_LABEL[dados.status] || dados.status}</div>
         </div>
       </div>
       ${cancelado
@@ -1160,15 +1181,24 @@ async function renderPagamentos() {
           </p>`}
       ${cancelado
         ? '<button class="btn-novo-agendamento" id="btn-reativar-pagamento" style="margin-bottom:16px">Reativar assinatura</button>'
-        : '<button class="btn-secundario" id="btn-cadastrar-pagamento" style="margin-bottom:16px">Alterar forma de pagamento</button>'}
-      ${ativo ? '<button class="btn-secundario" id="btn-cancelar-assinatura" style="margin-bottom:16px; margin-left:8px">Cancelar assinatura</button>' : ''}
+        : `
+          <div class="pagamento-detalhes">
+            <button type="button" class="pagamento-detalhes-toggle" id="btn-toggle-detalhes" aria-expanded="false">Detalhes ▾</button>
+            <div class="pagamento-detalhes-conteudo" id="pagamento-detalhes-conteudo" hidden>
+              <h4>Alterar forma de pagamento</h4>
+              ${htmlFormPagamento(dados, { comBotaoCancelar: false })}
+              ${ativo ? '<button type="button" class="btn-secundario acao-perigo" id="btn-cancelar-assinatura" style="margin-top:12px">Cancelar assinatura</button>' : ''}
+            </div>
+          </div>
+        `}
+      <h4 class="pagamento-historico-titulo">Histórico pagamentos</h4>
       <div class="tabela-wrapper">
         <table class="tabela-tenants">
-          <thead><tr><th>Data</th><th>Valor</th><th>Status</th></tr></thead>
+          <thead><tr><th>Data</th><th>Valor</th><th>Status</th><th>Meio de pagamento</th></tr></thead>
           <tbody>
             ${dados.historico.length
-              ? dados.historico.map((h) => `<tr><td>${formatarDataCurtaISO(h.data)}</td><td>${formatarPreco(h.valor)}</td><td>${renderHistoricoStatus(h.status)}</td></tr>`).join('')
-              : '<tr><td colspan="3">Nenhuma cobrança registrada ainda.</td></tr>'}
+              ? dados.historico.map((h) => `<tr><td>${formatarDataCurtaISO(h.data)}</td><td>${formatarPreco(h.valor)}</td><td>${renderHistoricoStatus(h.status)}</td><td>${formatarMeioHistorico(h.meio)}</td></tr>`).join('')
+              : '<tr><td colspan="4">Nenhuma cobrança registrada ainda.</td></tr>'}
           </tbody>
         </table>
       </div>
@@ -1180,23 +1210,36 @@ async function renderPagamentos() {
   if (btnCadastrar) btnCadastrar.addEventListener('click', () => abrirModalPagamento(dados));
   const btnReativar = document.getElementById('btn-reativar-pagamento');
   if (btnReativar) btnReativar.addEventListener('click', () => abrirModalPagamento(dados));
-  const btnCancelar = document.getElementById('btn-cancelar-assinatura');
-  if (btnCancelar) btnCancelar.addEventListener('click', () => abrirModalCancelarAssinatura(dados));
+
+  // Collapse "Detalhes" (US35 redesign) — substitui o antigo botão "Alterar
+  // forma de pagamento" pra assinatura já ativa: o próprio formulário
+  // (htmlFormPagamento) já foi renderizado (oculto) dentro do conteúdo
+  // acima, só falta ligar o toggle e o wiring do formulário/cancelamento.
+  const btnToggleDetalhes = document.getElementById('btn-toggle-detalhes');
+  if (btnToggleDetalhes) {
+    btnToggleDetalhes.addEventListener('click', () => {
+      const painel = document.getElementById('pagamento-detalhes-conteudo');
+      const vaiAbrir = painel.hidden;
+      painel.hidden = !vaiAbrir;
+      btnToggleDetalhes.setAttribute('aria-expanded', String(vaiAbrir));
+    });
+    wireFormPagamento(dados, { onSucesso: () => renderPagamentos() });
+    const btnCancelarAssinatura = document.getElementById('btn-cancelar-assinatura');
+    if (btnCancelarAssinatura) btnCancelarAssinatura.addEventListener('click', () => abrirModalCancelarAssinatura(dados));
+  }
 }
 
 // CA02/CA03/CA04 (US35) — modal de confirmação de cancelamento de assinatura,
 // no mesmo padrão de abrirModalExcluirServico/abrirModalCancelar.
 function abrirModalCancelarAssinatura(dados) {
-  const dataAcesso = dados.proxima_cobranca ? formatarDataCurtaISO(dados.proxima_cobranca.data) : 'o fim do período já pago';
-
   abrirModal(
-    '<h3>Tem certeza que deseja cancelar?</h3>',
+    '<h3>Cancelar assinatura</h3>',
     `
-      <p class="modal-texto">Sua assinatura será encerrada. Você continuará com acesso até ${dataAcesso}. Após essa data, seu acesso será suspenso.</p>
+      <p class="modal-texto">Ao cancelar todos os serviços Kyvvo ficarão inoperantes após a data da próxima cobrança. Deseja cancelar?</p>
       <div class="modal-erro" id="cancelar-assinatura-erro"></div>
       <div class="modal-acoes">
-        <button class="btn-primario" id="btn-manter-assinatura">Manter assinatura</button>
-        <button class="btn-perigo" id="btn-confirmar-cancelamento">Confirmar cancelamento</button>
+        <button class="btn-secundario" id="btn-manter-assinatura">Sair</button>
+        <button class="btn-perigo" id="btn-confirmar-cancelamento">Confirmo</button>
       </div>
     `
   );
@@ -1211,24 +1254,25 @@ function abrirModalCancelarAssinatura(dados) {
 
     if (resultado && !resultado.error) {
       fecharModal();
+      const dataAcesso = dados.proxima_cobranca ? formatarDataCurtaISO(dados.proxima_cobranca.data) : 'o fim do período já pago';
       const dataFinal = resultado.acesso_ate ? formatarDataCurtaISO(resultado.acesso_ate) : dataAcesso;
       mostrarToast(`Assinatura cancelada. Seu acesso continua até ${dataFinal}.`, 'sucesso');
       renderPagamentos();
     } else {
       document.getElementById('cancelar-assinatura-erro').textContent = (resultado && resultado.error) || 'Erro ao cancelar assinatura.';
       btn.disabled = false;
-      btn.textContent = 'Confirmar cancelamento';
+      btn.textContent = 'Confirmo';
     }
   });
 }
 
-function abrirModalPagamento(dadosAtuais) {
-  // A Asaas exige CPF/CNPJ do Customer pra emitir cobrança — só pedimos na
-  // primeira vez (CA04); se o tenant já tem um cadastrado, não perguntamos
-  // de novo ao trocar de meio de pagamento (CA09).
+// Formulário de forma de pagamento (US32/US37) — HTML puro reaproveitado
+// tanto no modal de "Cadastrar/Alterar forma de pagamento" (trial, primeira
+// vez, reativação) quanto no collapse "Detalhes" da assinatura já ativa
+// (US35 redesign). `comBotaoCancelar` só existe no uso em modal (fechar sem
+// salvar); o collapse não precisa, já que "fechar" é só recolher de novo.
+function htmlFormPagamento(dadosAtuais, { comBotaoCancelar = true } = {}) {
   const cpfCnpjJaCadastrado = !!dadosAtuais.cpf_cnpj;
-  // Endereço do titular (exigido só pra cartão, CA04): se já tiver, mostra
-  // somente leitura com opção de atualizar; senão, pede no ato.
   const enderecoJaCadastrado = !!(dadosAtuais.endereco_cep && dadosAtuais.endereco_numero);
   const opcoesUF = UF_OPCOES.map((uf) => `<option value="${uf}" ${uf === dadosAtuais.endereco_uf ? 'selected' : ''}>${uf}</option>`).join('');
   const desabilitarEndereco = enderecoJaCadastrado ? 'disabled' : '';
@@ -1246,90 +1290,96 @@ function abrirModalPagamento(dadosAtuais) {
     `
     : '';
 
-  abrirModal(
-    '<h3>Forma de pagamento</h3>',
-    `
-      ${bannerTrial}
-      <form id="form-pagamento">
-        <div class="modal-erro" id="pagamento-erro"></div>
-        ${cpfCnpjJaCadastrado ? '' : `
-          <label for="pagamento-cpf-cnpj">CPF ou CNPJ *</label>
-          <input type="text" id="pagamento-cpf-cnpj" inputmode="numeric" placeholder="Somente números">
-        `}
+  return `
+    ${bannerTrial}
+    <form id="form-pagamento">
+      <div class="modal-erro" id="pagamento-erro"></div>
+      ${cpfCnpjJaCadastrado ? '' : `
+        <label for="pagamento-cpf-cnpj">CPF ou CNPJ *</label>
+        <input type="text" id="pagamento-cpf-cnpj" inputmode="numeric" placeholder="Somente números">
+      `}
 
-        <label for="pagamento-meio">Forma de pagamento</label>
-        <select id="pagamento-meio">
-          <option value="pix">Pix recorrente</option>
-          <option value="cartao">Cartão de crédito</option>
-        </select>
+      <label for="pagamento-meio">Forma de pagamento</label>
+      <select id="pagamento-meio">
+        <option value="pix">Pix recorrente</option>
+        <option value="cartao">Cartão de crédito</option>
+      </select>
 
-        <div id="campos-cartao" hidden>
-          <div class="pagamento-grid-2col">
-            <div>
-              <label for="cartao-numero">Número do cartão *</label>
-              <input type="text" id="cartao-numero" inputmode="numeric" autocomplete="cc-number" placeholder="0000 0000 0000 0000">
-            </div>
-            <div>
-              <label for="cartao-nome">Nome impresso *</label>
-              <input type="text" id="cartao-nome" autocomplete="cc-name">
-            </div>
-            <div>
-              <label for="cartao-validade">Validade (MM/AAAA) *</label>
-              <input type="text" id="cartao-validade" autocomplete="cc-exp" placeholder="MM/AAAA">
-            </div>
-            <div>
-              <label for="cartao-cvv">CVV *</label>
-              <input type="text" id="cartao-cvv" autocomplete="cc-csc" placeholder="123">
-            </div>
+      <div id="campos-cartao" hidden>
+        <div class="pagamento-grid-2col">
+          <div>
+            <label for="cartao-numero">Número do cartão *</label>
+            <input type="text" id="cartao-numero" inputmode="numeric" autocomplete="cc-number" placeholder="0000 0000 0000 0000">
           </div>
-
-          ${enderecoJaCadastrado ? `
-            <label class="pagamento-checkbox">
-              <input type="checkbox" id="pagamento-atualizar-endereco"> Atualizar endereço de cobrança
-            </label>
-          ` : ''}
-          <div class="pagamento-grid-3col pagamento-secao-endereco" id="campos-endereco">
-            <div class="pagamento-span-3">
-              <label for="pagamento-logradouro">Logradouro *</label>
-              <input type="text" id="pagamento-logradouro" value="${dadosAtuais.endereco_logradouro || ''}" ${desabilitarEndereco}>
-            </div>
-            <div>
-              <label for="pagamento-cep">CEP *</label>
-              <input type="text" id="pagamento-cep" inputmode="numeric" placeholder="00000-000" value="${dadosAtuais.endereco_cep || ''}" ${desabilitarEndereco}>
-            </div>
-            <div>
-              <label for="pagamento-numero">Número *</label>
-              <input type="text" id="pagamento-numero" value="${dadosAtuais.endereco_numero || ''}" ${desabilitarEndereco}>
-            </div>
-            <div>
-              <label for="pagamento-complemento">Complemento</label>
-              <input type="text" id="pagamento-complemento" value="${dadosAtuais.endereco_complemento || ''}" ${desabilitarEndereco}>
-            </div>
-            <div>
-              <label for="pagamento-bairro">Bairro *</label>
-              <input type="text" id="pagamento-bairro" value="${dadosAtuais.endereco_bairro || ''}" ${desabilitarEndereco}>
-            </div>
-            <div>
-              <label for="pagamento-cidade">Cidade *</label>
-              <input type="text" id="pagamento-cidade" value="${dadosAtuais.endereco_cidade || ''}" ${desabilitarEndereco}>
-            </div>
-            <div>
-              <label for="pagamento-uf">Estado *</label>
-              <select id="pagamento-uf" ${desabilitarEndereco}>${opcoesUF}</select>
-            </div>
+          <div>
+            <label for="cartao-nome">Nome impresso *</label>
+            <input type="text" id="cartao-nome" autocomplete="cc-name">
+          </div>
+          <div>
+            <label for="cartao-validade">Validade (MM/AAAA) *</label>
+            <input type="text" id="cartao-validade" autocomplete="cc-exp" placeholder="MM/AAAA">
+          </div>
+          <div>
+            <label for="cartao-cvv">CVV *</label>
+            <input type="text" id="cartao-cvv" autocomplete="cc-csc" placeholder="123">
           </div>
         </div>
 
-        <div class="modal-acoes">
-          <button type="button" class="btn-secundario" id="btn-cancelar-pagamento">Cancelar</button>
-          <button type="submit" class="btn-primario" id="btn-salvar-pagamento">Confirmar</button>
+        ${enderecoJaCadastrado ? `
+          <label class="pagamento-checkbox">
+            <input type="checkbox" id="pagamento-atualizar-endereco"> Atualizar endereço de cobrança
+          </label>
+        ` : ''}
+        <div class="pagamento-grid-3col pagamento-secao-endereco" id="campos-endereco">
+          <div class="pagamento-span-3">
+            <label for="pagamento-logradouro">Logradouro *</label>
+            <input type="text" id="pagamento-logradouro" value="${dadosAtuais.endereco_logradouro || ''}" ${desabilitarEndereco}>
+          </div>
+          <div>
+            <label for="pagamento-cep">CEP *</label>
+            <input type="text" id="pagamento-cep" inputmode="numeric" placeholder="00000-000" value="${dadosAtuais.endereco_cep || ''}" ${desabilitarEndereco}>
+          </div>
+          <div>
+            <label for="pagamento-numero">Número *</label>
+            <input type="text" id="pagamento-numero" value="${dadosAtuais.endereco_numero || ''}" ${desabilitarEndereco}>
+          </div>
+          <div>
+            <label for="pagamento-complemento">Complemento</label>
+            <input type="text" id="pagamento-complemento" value="${dadosAtuais.endereco_complemento || ''}" ${desabilitarEndereco}>
+          </div>
+          <div>
+            <label for="pagamento-bairro">Bairro *</label>
+            <input type="text" id="pagamento-bairro" value="${dadosAtuais.endereco_bairro || ''}" ${desabilitarEndereco}>
+          </div>
+          <div>
+            <label for="pagamento-cidade">Cidade *</label>
+            <input type="text" id="pagamento-cidade" value="${dadosAtuais.endereco_cidade || ''}" ${desabilitarEndereco}>
+          </div>
+          <div>
+            <label for="pagamento-uf">Estado *</label>
+            <select id="pagamento-uf" ${desabilitarEndereco}>${opcoesUF}</select>
+          </div>
         </div>
-      </form>
-    `,
-    'modal-card-pagamento'
-  );
+      </div>
 
-  document.getElementById('btn-cancelar-pagamento').addEventListener('click', fecharModal);
+      <div class="modal-acoes">
+        ${comBotaoCancelar ? '<button type="button" class="btn-secundario" id="btn-cancelar-pagamento">Cancelar</button>' : ''}
+        <button type="submit" class="btn-primario" id="btn-salvar-pagamento">Confirmar</button>
+      </div>
+    </form>
+  `;
+}
+
+// Liga os listeners do formulário construído por htmlFormPagamento — usado
+// tanto pro modal (abrirModalPagamento) quanto pro collapse inline
+// (renderPagamentos). `onFechar` roda ao clicar Cancelar (só existe no
+// modal); `onSucesso(resultado)` roda depois de um cadastro bem-sucedido, no
+// lugar do comportamento padrão (mostrar toast e re-renderizar a aba).
+function wireFormPagamento(dadosAtuais, { onFechar, onSucesso } = {}) {
+  const enderecoJaCadastrado = !!(dadosAtuais.endereco_cep && dadosAtuais.endereco_numero);
+
+  const btnCancelar = document.getElementById('btn-cancelar-pagamento');
+  if (btnCancelar && onFechar) btnCancelar.addEventListener('click', onFechar);
 
   const camposCartao = document.getElementById('campos-cartao');
   document.getElementById('pagamento-meio').addEventListener('change', (e) => {
@@ -1406,7 +1456,6 @@ function abrirModalPagamento(dadosAtuais) {
     });
 
     if (resultado && !resultado.error) {
-      fecharModal();
       // CA05 (US37) — se o backend manteve o tenant em 'trial' (cobrança só
       // agendada pro fim do trial), o toast avisa disso em vez de dizer que a
       // assinatura já está ativa (o que só é verdade quando cobra na hora).
@@ -1414,12 +1463,23 @@ function abrirModalPagamento(dadosAtuais) {
         ? `Pagamento cadastrado! Você será cobrado em ${formatarDataCurtaISO(resultado.trial_fim)}. Até lá, aproveite o trial!`
         : 'Pagamento cadastrado com sucesso! Sua assinatura está ativa.';
       mostrarToast(mensagem, 'sucesso');
-      renderPagamentos();
+      if (onSucesso) onSucesso(resultado);
     } else {
       erroEl.textContent = (resultado && resultado.error) || 'Erro ao cadastrar pagamento.';
       btn.disabled = false;
       btn.textContent = 'Confirmar';
     }
+  });
+}
+
+function abrirModalPagamento(dadosAtuais) {
+  abrirModal('<h3>Forma de pagamento</h3>', htmlFormPagamento(dadosAtuais), 'modal-card-pagamento');
+  wireFormPagamento(dadosAtuais, {
+    onFechar: fecharModal,
+    onSucesso: () => {
+      fecharModal();
+      renderPagamentos();
+    },
   });
 }
 
@@ -2067,77 +2127,104 @@ function formatarTelefoneMascara(valor) {
   return `(${ddd}) ${resto.slice(0, 5)}-${resto.slice(5)}`;
 }
 
+function formatarCepMascara(valor) {
+  const digitos = (valor || '').replace(/\D/g, '').slice(0, 8);
+  return digitos.length > 5 ? `${digitos.slice(0, 5)}-${digitos.slice(5)}` : digitos;
+}
+
 async function renderPerfil() {
   conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
   const perfil = await api('/api/perfil');
   if (!perfil) return;
 
   const opcoesUF = UF_OPCOES.map((uf) => `<option value="${uf}" ${uf === perfil.endereco_uf ? 'selected' : ''}>${uf}</option>`).join('');
+  const nomeCampoSegmento = infoSegmento(perfil.segmento).nomeCampo;
+  // Telefone/WhatsApp continuam sendo colunas separadas no banco (ver PATCH
+  // /api/perfil) — o checkbox só reflete se elas já batem, pra não obrigar o
+  // dono a digitar o número duas vezes quando são o mesmo.
+  const telefoneEhWhatsapp = !!perfil.whatsapp && perfil.whatsapp === perfil.telefone;
 
   conteudo.innerHTML = `
     <form class="perfil-form" id="form-perfil" novalidate>
-      <label for="nome_responsavel">Nome do Responsável</label>
-      <input type="text" id="nome_responsavel" value="${perfil.nome_responsavel || ''}">
-      <div class="field-error" id="erro-nome_responsavel"></div>
+      <div class="perfil-grid-2col">
+        <div>
+          <label for="nome_responsavel">Nome do Responsável <span class="obrigatorio">*</span></label>
+          <input type="text" id="nome_responsavel" value="${perfil.nome_responsavel || ''}">
+          <div class="field-error" id="erro-nome_responsavel"></div>
+        </div>
+        <div>
+          <label for="nome_segmento">${nomeCampoSegmento} <span class="obrigatorio">*</span></label>
+          <input type="text" id="nome_segmento" value="${perfil.nome_segmento || ''}">
+          <div class="field-error" id="erro-nome_segmento"></div>
+        </div>
+      </div>
 
-      <label for="nome_segmento">Nome do Segmento</label>
-      <input type="text" id="nome_segmento" value="${perfil.nome_segmento || ''}">
-      <div class="field-error" id="erro-nome_segmento"></div>
-
-      <label for="telefone">Telefone</label>
+      <label for="telefone">Telefone <span class="obrigatorio">*</span></label>
       <input type="tel" id="telefone" placeholder="(11) 99999-9999" value="${formatarTelefoneMascara(perfil.telefone)}">
+      <label class="toggle-linha" style="margin-top:8px">
+        <span class="toggle-switch">
+          <input type="checkbox" id="telefone-e-whatsapp" ${telefoneEhWhatsapp ? 'checked' : ''}>
+          <span class="toggle-switch-trilho"></span>
+        </span>
+        Este número também é o WhatsApp
+      </label>
       <div class="field-error" id="erro-telefone"></div>
 
       <label>Endereço</label>
       <div class="endereco-grid">
         <div>
-          <label for="endereco-cep" class="endereco-sublabel">CEP</label>
-          <input type="text" id="endereco-cep" placeholder="00000-000" value="${perfil.endereco_cep || ''}">
+          <label for="endereco-cep" class="endereco-sublabel">CEP <span class="obrigatorio">*</span></label>
+          <input type="text" id="endereco-cep" placeholder="00000-000" value="${formatarCepMascara(perfil.endereco_cep)}">
         </div>
         <div>
-          <label for="endereco-numero" class="endereco-sublabel">Número</label>
+          <label for="endereco-numero" class="endereco-sublabel">Número <span class="obrigatorio">*</span></label>
           <input type="text" id="endereco-numero" value="${perfil.endereco_numero || ''}">
         </div>
       </div>
-      <label for="endereco-logradouro" class="endereco-sublabel">Rua / Logradouro</label>
+      <label for="endereco-logradouro" class="endereco-sublabel">Rua / Logradouro <span class="obrigatorio">*</span></label>
       <input type="text" id="endereco-logradouro" value="${perfil.endereco_logradouro || ''}">
-      <label for="endereco-complemento" class="endereco-sublabel">Complemento (opcional)</label>
-      <input type="text" id="endereco-complemento" value="${perfil.endereco_complemento || ''}">
-      <label for="endereco-bairro" class="endereco-sublabel">Bairro</label>
-      <input type="text" id="endereco-bairro" value="${perfil.endereco_bairro || ''}">
-      <label for="endereco-cidade" class="endereco-sublabel">Cidade</label>
-      <input type="text" id="endereco-cidade" value="${perfil.endereco_cidade || ''}">
-      <label for="endereco-uf" class="endereco-sublabel">Estado</label>
-      <select id="endereco-uf">${opcoesUF}</select>
+      <div class="endereco-grid">
+        <div>
+          <label for="endereco-complemento" class="endereco-sublabel">Complemento (opcional)</label>
+          <input type="text" id="endereco-complemento" value="${perfil.endereco_complemento || ''}">
+        </div>
+        <div>
+          <label for="endereco-bairro" class="endereco-sublabel">Bairro <span class="obrigatorio">*</span></label>
+          <input type="text" id="endereco-bairro" value="${perfil.endereco_bairro || ''}">
+        </div>
+      </div>
+      <div class="endereco-grid">
+        <div>
+          <label for="endereco-cidade" class="endereco-sublabel">Cidade <span class="obrigatorio">*</span></label>
+          <input type="text" id="endereco-cidade" value="${perfil.endereco_cidade || ''}">
+        </div>
+        <div>
+          <label for="endereco-uf" class="endereco-sublabel">Estado <span class="obrigatorio">*</span></label>
+          <select id="endereco-uf">${opcoesUF}</select>
+        </div>
+      </div>
       <div class="field-error" id="erro-endereco"></div>
 
       <label>E-mail</label>
       <input type="text" value="${perfil.email || ''}" disabled>
-      <label>WhatsApp</label>
-      <input type="text" value="${formatarTelefoneMascara(perfil.whatsapp)}" disabled>
-      <label>Plano atual</label>
-      <div class="modal-texto">${perfil.plano_nome} — <a href="#" id="link-perfil-pagamentos">ver aba de Pagamentos</a></div>
 
       <button type="submit" id="btn-salvar-perfil">Salvar alterações</button>
     </form>
   `;
-
-  document.getElementById('link-perfil-pagamentos').addEventListener('click', (e) => {
-    e.preventDefault();
-    // A aba de Pagamentos (US32) pode ainda não existir nesta versão do
-    // portal — não navega (em vez de quebrar) se o item de menu não existir.
-    const itemPagamentos = document.querySelector('.menu-item[data-menu="pagamentos"]');
-    if (itemPagamentos) ativarMenuItem(itemPagamentos);
-  });
 
   const telefoneInput = document.getElementById('telefone');
   telefoneInput.addEventListener('input', () => {
     telefoneInput.value = formatarTelefoneMascara(telefoneInput.value);
   });
 
+  const cepInput = document.getElementById('endereco-cep');
+  cepInput.addEventListener('input', () => {
+    cepInput.value = formatarCepMascara(cepInput.value);
+  });
+
   // CA04 — ao sair do campo CEP, autopreenche o resto do endereço via ViaCEP.
-  document.getElementById('endereco-cep').addEventListener('blur', async () => {
-    const cep = document.getElementById('endereco-cep').value.replace(/\D/g, '');
+  cepInput.addEventListener('blur', async () => {
+    const cep = cepInput.value.replace(/\D/g, '');
     if (cep.length !== 8) return;
     try {
       const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
@@ -2208,6 +2295,7 @@ async function renderPerfil() {
         nome_responsavel: nomeResponsavel,
         nome_segmento: nomeSegmento,
         telefone,
+        telefone_e_whatsapp: document.getElementById('telefone-e-whatsapp').checked,
         endereco: { cep, logradouro, numero, complemento, bairro, cidade, uf },
       }),
     });

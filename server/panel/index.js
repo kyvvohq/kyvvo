@@ -1131,7 +1131,7 @@ async function start() {
   async function buscarPerfil(userId) {
     const { rows } = await pool.query(
       `SELECT u.nome AS nome_responsavel, u.email,
-              t.nome AS nome_segmento, t.telefone, t.whatsapp, t.plano,
+              t.nome AS nome_segmento, t.telefone, t.whatsapp, t.plano, t.segmento,
               t.endereco_cep, t.endereco_logradouro, t.endereco_numero,
               t.endereco_complemento, t.endereco_bairro, t.endereco_cidade, t.endereco_uf
        FROM usuarios u JOIN tenants t ON t.id = u.tenant_id
@@ -1157,6 +1157,7 @@ async function start() {
       nome_responsavel: nomeResponsavelBruto,
       nome_segmento: nomeSegmentoBruto,
       telefone: telefoneBruto,
+      telefone_e_whatsapp: telefoneEWhatsapp,
       endereco,
     } = request.body || {};
 
@@ -1191,9 +1192,15 @@ async function start() {
     try {
       await client.query('BEGIN');
       await client.query('UPDATE usuarios SET nome = $2 WHERE id = $1', [userId, nomeResponsavel]);
+      // Checkbox "Este número também é o WhatsApp" (Meu Perfil) — evita o
+      // dono ter que digitar o mesmo número duas vezes; telefone e whatsapp
+      // continuam sendo colunas separadas (whatsapp é chave única, usada no
+      // cadastro self-service/reenvio de verificação/admin), então só
+      // espelha telefone → whatsapp quando o tenant marca a opção.
       const { rows: tenantAtualizado } = await client.query(
         `UPDATE tenants SET
            nome = $2, telefone = $3,
+           whatsapp = CASE WHEN $11 THEN $3 ELSE whatsapp END,
            endereco_cep = $4, endereco_logradouro = $5, endereco_numero = $6,
            endereco_complemento = $7, endereco_bairro = $8, endereco_cidade = $9, endereco_uf = $10
          WHERE id = $1
@@ -1209,12 +1216,16 @@ async function start() {
           bairro.trim(),
           cidade.trim(),
           String(uf).toUpperCase(),
+          !!telefoneEWhatsapp,
         ]
       );
       asaasCustomerId = tenantAtualizado[0].asaas_customer_id;
       await client.query('COMMIT');
     } catch (erro) {
       await client.query('ROLLBACK');
+      if (erro.code === '23505' && /whatsapp/i.test(erro.constraint || '')) {
+        return reply.code(409).send({ error: 'Este número já está cadastrado como WhatsApp de outra conta.' });
+      }
       throw erro;
     } finally {
       client.release();
@@ -1434,6 +1445,7 @@ async function start() {
       trial_ativo: trial.trialAtivo,
       trial_fim: trial.trialFim ? trial.trialFim.slice(0, 10) : null,
       meio_pagamento: tenant.asaas_meio_pagamento,
+      meio_pagamento_alterado_em: tenant.asaas_meio_pagamento_alterado_em,
       cartao_final: tenant.asaas_cartao_final,
       cpf_cnpj: tenant.cpf_cnpj,
       endereco_cep: tenant.endereco_cep,
@@ -1446,10 +1458,14 @@ async function start() {
       cancelado_em: tenant.cancelado_em,
       acesso_ate: tenant.acesso_ate,
       proxima_cobranca: subscription ? { data: subscription.nextDueDate, valor: subscription.value } : null,
+      // `meio` (PR5) — a Asaas já devolve billingType (PIX/CREDIT_CARD) em
+      // cada cobrança do histórico; não precisa de coluna nova nem de nova
+      // integração, só repassar o campo que já vinha no payload bruto.
       historico: historico.map((p) => ({
         data: p.dueDate,
         valor: p.value,
         status: p.status,
+        meio: p.billingType,
       })),
     };
   }
@@ -1459,7 +1475,7 @@ async function start() {
     const { tenantId } = request.user;
     const { rows } = await pool.query(
       `SELECT plano, status, ativado_em, asaas_customer_id, asaas_subscription_id,
-              asaas_meio_pagamento, asaas_cartao_final, cpf_cnpj, cancelado_em, acesso_ate,
+              asaas_meio_pagamento, asaas_meio_pagamento_alterado_em, asaas_cartao_final, cpf_cnpj, cancelado_em, acesso_ate,
               endereco_cep, endereco_logradouro, endereco_numero,
               endereco_complemento, endereco_bairro, endereco_cidade, endereco_uf
        FROM tenants WHERE id = $1`,
@@ -1713,6 +1729,7 @@ async function start() {
          plano = $4,
          status = $15,
          asaas_meio_pagamento = $5,
+         asaas_meio_pagamento_alterado_em = now(),
          asaas_cartao_final = $6,
          cpf_cnpj = $7,
          endereco_cep = $8,
@@ -1726,7 +1743,7 @@ async function start() {
          acesso_ate = null
        WHERE id = $1
        RETURNING plano, status, ativado_em, asaas_customer_id, asaas_subscription_id,
-                 asaas_meio_pagamento, asaas_cartao_final, cpf_cnpj, cancelado_em, acesso_ate,
+                 asaas_meio_pagamento, asaas_meio_pagamento_alterado_em, asaas_cartao_final, cpf_cnpj, cancelado_em, acesso_ate,
                  endereco_cep, endereco_logradouro, endereco_numero,
                  endereco_complemento, endereco_bairro, endereco_cidade, endereco_uf`,
       [
