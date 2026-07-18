@@ -42,6 +42,32 @@ test.describe('View Dia — nome do dia da semana (US02.5)', () => {
   });
 });
 
+test.describe('formatarDataISO — fuso de Brasília, não UTC', () => {
+  test('perto da meia-noite UTC (21h-23h59 em Brasília) a agenda busca o dia certo, não o de amanhã', async ({ page }) => {
+    // 23h30 em Brasília (17/07) = 02h30 UTC do dia 18/07 — cenário exato do
+    // bug: toISOString() sozinho devolveria "2026-07-18".
+    await page.clock.install({ time: new Date('2026-07-17T23:30:00-03:00') });
+
+    let dataRequisitada = null;
+    await page.route('**/api/configuracao', (route) =>
+      route.fulfill({ json: { dias_funcionamento: [1, 2, 3, 4, 5, 6], formato_hora: '24h', horario_abertura: '08:00:00', horario_fechamento: '20:00:00' } })
+    );
+    await page.route('**/api/agendamentos**', (route) => {
+      const url = new URL(route.request().url());
+      if (url.searchParams.get('view') === 'dia') dataRequisitada = url.searchParams.get('data');
+      return route.fulfill({ json: { view: 'dia', data: url.searchParams.get('data'), agendamentos: [] } });
+    });
+    await page.addInitScript(() => {
+      window.localStorage.setItem('kyvvo_token', 'fake-jwt-token');
+      window.localStorage.setItem('kyvvo_nome', 'Ana');
+    });
+    await page.goto('/painel.html');
+
+    await expect(page.locator('.nav-periodo-data strong')).toContainText('17 de julho de 2026');
+    expect(dataRequisitada).toBe('2026-07-17');
+  });
+});
+
 test.describe('View Dia — grade de horários (PR2)', () => {
   test('mostra uma linha por horário do intervalo configurado', async ({ page }) => {
     await entrarNoPainel(page, {
