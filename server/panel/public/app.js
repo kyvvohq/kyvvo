@@ -1832,6 +1832,24 @@ async function renderDia() {
   });
 }
 
+// Segunda-feira (início da semana pro backend — GET /agendamentos?view=semana
+// usa date_trunc('week', ...), que no Postgres começa na segunda) da semana
+// que contém `dataRef`. Ancora ao meio-dia LOCAL da data já convertida pra
+// Brasília via formatarDataISO — nunca usa a instância real de `dataRef`
+// direto (mesmo bug do histórico de formatarDataISO: perto da virada do dia
+// em UTC, dar setDate/getDay numa instância "de verdade" pode cair no dia
+// errado dependendo do fuso do navegador). Meio-dia local nunca cruza a
+// virada de dia ao formatar de volta pra Brasília (formatarDataISO/
+// nomeDiaSemana), então é seguro reusar essas funções no resto da view.
+function inicioDaSemana(dataRef) {
+  const [ano, mes, dia] = formatarDataISO(dataRef).split('-').map(Number);
+  const d = new Date(ano, mes - 1, dia, 12);
+  const diaSemana = d.getDay();
+  const diff = diaSemana === 0 ? -6 : 1 - diaSemana;
+  d.setDate(d.getDate() + diff);
+  return d;
+}
+
 async function renderSemana() {
   const iso = formatarDataISO(dataRef);
   conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
@@ -1855,20 +1873,41 @@ async function renderSemana() {
     </div>
   `;
 
-const diasFuncionamento = configuracao.dias_funcionamento || [1, 2, 3, 4, 5, 6];
-  const diasOrdenados = Object.keys(porDia)
-    .filter((diaISO) => diasFuncionamento.includes(new Date(diaISO + 'T12:00:00').getDay()))
-    .sort();
-  if (diasOrdenados.length === 0) {
-    html += '<div class="vazio">Nenhum agendamento nos dias de funcionamento dessa semana.</div>';
+  // Uma coluna por dia da semana (segunda→domingo) que o negócio funciona —
+  // dias fechados nem aparecem (diferente do Mês, que mostra desabilitado).
+  // Ao contrário da versão antiga (só listava dias que já tinham
+  // agendamento), toda semana aberta mostra as 7 (ou menos) colunas, cada
+  // uma com a grade de horários completa, igual à view Dia.
+  const diasFuncionamento = configuracao.dias_funcionamento || [1, 2, 3, 4, 5, 6];
+  const segunda = inicioDaSemana(dataRef);
+  const diasAbertos = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(segunda);
+    d.setDate(d.getDate() + i);
+    if (diasFuncionamento.includes(d.getDay())) diasAbertos.push(d);
+  }
+
+  if (diasAbertos.length === 0) {
+    html += '<div class="vazio">Nenhum dia de funcionamento configurado nessa semana.</div>';
   } else {
-    for (const diaISO of diasOrdenados) {
-      const d = new Date(diaISO + 'T12:00:00');
-      html += `<div class="dia-header">${nomeDiaSemana(d)}, ${d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' })}</div>`;
-      for (const ag of porDia[diaISO]) {
-        html += renderAgendamentoItem(ag);
-      }
+    html += '<div class="semana-colunas">';
+    for (const d of diasAbertos) {
+      const diaISO = formatarDataISO(d);
+      const dataLabel = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' });
+      html += `
+        <div class="semana-coluna">
+          <div class="semana-coluna-cabecalho">
+            <div>
+              <strong>${nomeDiaSemana(d)}</strong>
+              <span>${dataLabel}</span>
+            </div>
+            <button class="semana-coluna-add" data-add-dia="${diaISO}" aria-label="Novo agendamento em ${dataLabel}">+</button>
+          </div>
+          ${renderGradeHorariosDoDia(diaISO, porDia[diaISO] || [])}
+        </div>
+      `;
     }
+    html += '</div>';
   }
 
   conteudo.innerHTML = html;
