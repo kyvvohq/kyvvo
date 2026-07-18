@@ -797,7 +797,8 @@ async function start() {
   fastify.get('/api/servicos', { preHandler: [fastify.authenticate] }, async (request) => {
     const { tenantId } = request.user;
     const { rows } = await pool.query(
-      'SELECT id, nome, duracao_minutos, preco FROM servicos WHERE tenant_id = $1 ORDER BY nome',
+      `SELECT id, nome, duracao_minutos, preco, ativo, profissional_preferencial_id
+       FROM servicos WHERE tenant_id = $1 AND excluido_em IS NULL ORDER BY nome`,
       [tenantId]
     );
     return { servicos: rows };
@@ -806,7 +807,7 @@ async function start() {
   // ---------- CRUD de serviços (US17/ST17.1) ----------
   fastify.post('/api/servicos', { preHandler: [fastify.authenticate] }, async (request, reply) => {
     const { tenantId } = request.user;
-    const { nome, duracao_minutos: duracaoMinutos, preco } = request.body || {};
+    const { nome, duracao_minutos: duracaoMinutos, preco, profissional_preferencial_id: profissionalPreferencialId } = request.body || {};
 
     if (!nome || !nome.trim()) {
       return reply.code(400).send({ error: 'Campo "nome" é obrigatório' });
@@ -819,10 +820,10 @@ async function start() {
     }
 
     const { rows } = await pool.query(
-      `INSERT INTO servicos (tenant_id, nome, duracao_minutos, preco)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, nome, duracao_minutos, preco`,
-      [tenantId, nome.trim(), duracaoMinutos, preco ?? null]
+      `INSERT INTO servicos (tenant_id, nome, duracao_minutos, preco, profissional_preferencial_id)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, nome, duracao_minutos, preco, ativo, profissional_preferencial_id`,
+      [tenantId, nome.trim(), duracaoMinutos, preco ?? null, profissionalPreferencialId || null]
     );
     reply.code(201);
     return rows[0];
@@ -831,7 +832,7 @@ async function start() {
   fastify.patch('/api/servicos/:id', { preHandler: [fastify.authenticate] }, async (request, reply) => {
     const { tenantId } = request.user;
     const { id } = request.params;
-    const { nome, duracao_minutos: duracaoMinutos, preco } = request.body || {};
+    const { nome, duracao_minutos: duracaoMinutos, preco, ativo, profissional_preferencial_id: profissionalPreferencialId } = request.body || {};
 
     if (nome !== undefined && !nome.trim()) {
       return reply.code(400).send({ error: 'Campo "nome" não pode ficar vazio' });
@@ -847,10 +848,15 @@ async function start() {
       `UPDATE servicos SET
          nome = COALESCE($3, nome),
          duracao_minutos = COALESCE($4, duracao_minutos),
-         preco = CASE WHEN $5 THEN $6 ELSE preco END
-       WHERE id = $1 AND tenant_id = $2
-       RETURNING id, nome, duracao_minutos, preco`,
-      [id, tenantId, nome ? nome.trim() : null, duracaoMinutos ?? null, preco !== undefined, preco ?? null]
+         preco = CASE WHEN $5 THEN $6 ELSE preco END,
+         ativo = COALESCE($7, ativo),
+         profissional_preferencial_id = CASE WHEN $8 THEN $9 ELSE profissional_preferencial_id END
+       WHERE id = $1 AND tenant_id = $2 AND excluido_em IS NULL
+       RETURNING id, nome, duracao_minutos, preco, ativo, profissional_preferencial_id`,
+      [
+        id, tenantId, nome ? nome.trim() : null, duracaoMinutos ?? null, preco !== undefined, preco ?? null,
+        ativo ?? null, profissionalPreferencialId !== undefined, profissionalPreferencialId || null,
+      ]
     );
     if (!rows[0]) {
       return reply.code(404).send({ error: 'Serviço não encontrado' });
@@ -858,24 +864,19 @@ async function start() {
     return rows[0];
   });
 
+  // CA da exclusão (redesenho do menu Serviços): soft delete, não mais um
+  // DELETE de verdade — servico_id tem ON DELETE CASCADE em agendamentos, e
+  // um hard delete apagaria o histórico de agendamentos antigos que usam
+  // esse serviço. "Excluir" só marca excluido_em (some da listagem e de
+  // novos agendamentos); os agendamentos já feitos continuam intactos.
   fastify.delete('/api/servicos/:id', { preHandler: [fastify.authenticate] }, async (request, reply) => {
     const { tenantId } = request.user;
     const { id } = request.params;
 
-    // ST17.5 — não deixa excluir um serviço com agendamento futuro vinculado
-    // (o agendamento ficaria com uma referência quebrada).
-    const { rows: futuros } = await pool.query(
-      `SELECT COUNT(*)::int AS total FROM agendamentos
-       WHERE tenant_id = $1 AND servico_id = $2 AND status = 'confirmado' AND data_hora > now()`,
-      [tenantId, id]
+    const { rowCount } = await pool.query(
+      'UPDATE servicos SET excluido_em = now() WHERE id = $1 AND tenant_id = $2 AND excluido_em IS NULL',
+      [id, tenantId]
     );
-    if (futuros[0].total > 0) {
-      return reply.code(409).send({
-        error: `Não é possível excluir: há ${futuros[0].total} agendamento(s) futuro(s) usando este serviço.`,
-      });
-    }
-
-    const { rowCount } = await pool.query('DELETE FROM servicos WHERE id = $1 AND tenant_id = $2', [id, tenantId]);
     if (!rowCount) {
       return reply.code(404).send({ error: 'Serviço não encontrado' });
     }
