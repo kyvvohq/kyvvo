@@ -1,15 +1,17 @@
 const { test, expect } = require('@playwright/test');
 
-// Cobre US33: edição de perfil no portal (Nome do Responsável, Nome do
-// Segmento, Telefone e Endereço estruturado com autopreenchimento via
-// ViaCEP), mais os campos somente leitura (E-mail, WhatsApp, Plano atual).
-// As chamadas de API são mockadas via page.route — sem dependência de
-// Postgres real nem da API pública do ViaCEP (também mockada).
+// Cobre US33/PR5: edição de perfil no portal (Nome do Responsável, Nome do
+// [segmento] com label dinâmico, Telefone + checkbox "é WhatsApp" e Endereço
+// estruturado com máscara de CEP e autopreenchimento via ViaCEP), mais o
+// campo somente leitura (E-mail). As chamadas de API são mockadas via
+// page.route — sem dependência de Postgres real nem da API pública do
+// ViaCEP (também mockada).
 
 const PERFIL_BASE = {
   nome_responsavel: 'Ana Souza',
   email: 'ana@exemplo.com',
   nome_segmento: 'Salão da Ana',
+  segmento: 'salao_beleza',
   telefone: '34999998888',
   whatsapp: '34988887777',
   plano: 'profissional',
@@ -43,43 +45,48 @@ async function entrarNoPainel(page, perfil = PERFIL_BASE) {
 }
 
 test.describe('Perfil (US33)', () => {
-  test('itens de menu "Meu Perfil" e "Pagamentos" não têm emoticon', async ({ page }) => {
+  test('itens de menu "Meu Perfil" e "Pagamento" não têm emoticon', async ({ page }) => {
     await entrarNoPainel(page);
     await expect(page.locator('.menu-item[data-menu="perfil"]')).toHaveText('Meu Perfil');
-    await expect(page.locator('.menu-item[data-menu="pagamentos"]')).toHaveText('Pagamentos');
+    await expect(page.locator('.menu-item[data-menu="pagamentos"]')).toHaveText('Pagamento');
   });
 
-  test('pré-preenche o formulário com os dados atuais (CA02)', async ({ page }) => {
+  test('pré-preenche o formulário com os dados atuais, CEP já mascarado (CA02)', async ({ page }) => {
     await entrarNoPainel(page);
     await expect(page.locator('#nome_responsavel')).toHaveValue('Ana Souza');
     await expect(page.locator('#nome_segmento')).toHaveValue('Salão da Ana');
     await expect(page.locator('#telefone')).toHaveValue('(34) 99999-8888');
-    await expect(page.locator('#endereco-cep')).toHaveValue('38400000');
+    await expect(page.locator('#endereco-cep')).toHaveValue('38400-000');
     await expect(page.locator('#endereco-logradouro')).toHaveValue('Rua das Flores');
     await expect(page.locator('#endereco-uf')).toHaveValue('MG');
   });
 
-  test('E-mail, WhatsApp e Plano atual aparecem como somente leitura (CA05)', async ({ page }) => {
+  test('E-mail aparece como somente leitura (CA05)', async ({ page }) => {
     await entrarNoPainel(page);
     await expect(page.locator('input[value="ana@exemplo.com"]')).toBeDisabled();
-    await expect(page.locator('input[value="(34) 98888-7777"]')).toBeDisabled();
-    await expect(page.locator('.perfil-form')).toContainText('Profissional');
   });
 
-  // A aba de Pagamentos (US32) já existe no menu — o link navega até ela.
-  test('link "ver aba de Pagamentos" leva até a aba de Pagamentos', async ({ page }) => {
-    await page.route('**/api/pagamentos', (route) => {
-      if (route.request().method() !== 'GET') return route.fallback();
-      return route.fulfill({
-        json: {
-          status: 'ativo', plano: 'profissional', plano_nome: 'Profissional', valor_plano: 247,
-          meio_pagamento: 'pix', cartao_final: null, proxima_cobranca: null, historico: [], asaas_js_url: null,
-        },
-      });
-    });
+  test('label do Nome do [segmento] é dinâmico conforme o segmento do tenant', async ({ page }) => {
+    await entrarNoPainel(page, { ...PERFIL_BASE, segmento: 'petshop' });
+    await expect(page.locator('label[for="nome_segmento"]')).toContainText('Nome do petshop');
+  });
+
+  test('campos obrigatórios mostram asterisco vermelho, Complemento não', async ({ page }) => {
     await entrarNoPainel(page);
-    await page.click('#link-perfil-pagamentos');
-    await expect(page.locator('.menu-item[data-menu="pagamentos"]')).toHaveClass(/active/);
+    await expect(page.locator('label[for="nome_responsavel"] .obrigatorio')).toHaveText('*');
+    await expect(page.locator('label[for="telefone"] .obrigatorio')).toHaveText('*');
+    await expect(page.locator('label[for="endereco-cep"] .obrigatorio')).toHaveText('*');
+    await expect(page.locator('label[for="endereco-complemento"] .obrigatorio')).toHaveCount(0);
+  });
+
+  test('checkbox "é WhatsApp" vem marcado quando telefone e whatsapp já são o mesmo número', async ({ page }) => {
+    await entrarNoPainel(page, { ...PERFIL_BASE, whatsapp: PERFIL_BASE.telefone });
+    await expect(page.locator('#telefone-e-whatsapp')).toBeChecked();
+  });
+
+  test('checkbox "é WhatsApp" vem desmarcado quando são números diferentes', async ({ page }) => {
+    await entrarNoPainel(page);
+    await expect(page.locator('#telefone-e-whatsapp')).not.toBeChecked();
   });
 
   test('campos obrigatórios em branco ficam destacados com mensagem específica (CA03)', async ({ page }) => {
@@ -136,8 +143,37 @@ test.describe('Perfil (US33)', () => {
     await page.click('#btn-salvar-perfil');
 
     await expect(page.locator('.toast-sucesso')).toHaveText(/Perfil atualizado com sucesso/);
-    expect(corpoEnviado).toMatchObject({ nome_responsavel: 'Ana Souza Silva', nome_segmento: 'Salão da Ana' });
-    expect(corpoEnviado.endereco).toMatchObject({ cep: '38400000', cidade: 'Uberlândia', uf: 'MG' });
+    expect(corpoEnviado).toMatchObject({ nome_responsavel: 'Ana Souza Silva', nome_segmento: 'Salão da Ana', telefone_e_whatsapp: false });
+    expect(corpoEnviado.endereco).toMatchObject({ cep: '38400-000', cidade: 'Uberlândia', uf: 'MG' });
+  });
+
+  test('marcar "é WhatsApp" envia telefone_e_whatsapp: true', async ({ page }) => {
+    await entrarNoPainel(page);
+    let corpoEnviado = null;
+    await page.route('**/api/perfil', (route) => {
+      if (route.request().method() !== 'PATCH') return route.fallback();
+      corpoEnviado = route.request().postDataJSON();
+      return route.fulfill({ json: PERFIL_BASE });
+    });
+
+    await page.check('#telefone-e-whatsapp');
+    await page.click('#btn-salvar-perfil');
+
+    await expect(page.locator('.toast-sucesso')).toHaveText(/Perfil atualizado com sucesso/);
+    expect(corpoEnviado).toMatchObject({ telefone_e_whatsapp: true });
+  });
+
+  test('conflito de WhatsApp já cadastrado mostra o erro do backend', async ({ page }) => {
+    await entrarNoPainel(page);
+    await page.route('**/api/perfil', (route) => {
+      if (route.request().method() !== 'PATCH') return route.fallback();
+      return route.fulfill({ status: 409, json: { error: 'Este número já está cadastrado como WhatsApp de outra conta.' } });
+    });
+
+    await page.check('#telefone-e-whatsapp');
+    await page.click('#btn-salvar-perfil');
+
+    await expect(page.locator('.toast-erro')).toHaveText(/já está cadastrado como WhatsApp/);
   });
 
   test('erro de rede ao salvar mostra toast de erro (CA06)', async ({ page }) => {
