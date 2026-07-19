@@ -601,17 +601,28 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 /* Cards de 3 linhas na aba Pagamento (PR5): label / valor principal /
    subtítulo — substitui o texto corrido de antes ("Nome — R$ valor" numa
    linha só). */
-.financeiro-resumo-card-3linhas { text-align: left; }
+/* Texto centralizado vertical e horizontalmente nos 3 cards da Fatura
+   (PR7) — sobrepõe o text-align:center herdado de .financeiro-resumo-card
+   com display:flex pra também centralizar no eixo vertical (os 3 cards têm
+   a mesma altura, então sem isso o texto ficava colado no topo). */
+.financeiro-resumo-card-3linhas {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
 .financeiro-resumo-card-3linhas .financeiro-resumo-linha2 {
   font-size: 15px;
   font-weight: 700;
   color: #f2f2f7;
 }
 .financeiro-resumo-card-3linhas .financeiro-resumo-linha3 {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 400;
   color: #a1a5c4;
   margin-top: 2px;
+  white-space: nowrap;
 }
 
 /* Card de Status sólido (PR5) — fundo claro + texto escuro e maior, ao
@@ -902,6 +913,15 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .perfil-grid-2col > div > label { margin-top: 0; }
 @media (max-width: 640px) {
   .perfil-grid-2col { grid-template-columns: 1fr; }
+}
+
+/* Toggle "Também é WhatsApp?" na frente do campo Telefone, em vez de numa
+   linha própria abaixo (PR7). */
+.campo-com-toggle { display: flex; align-items: center; gap: 12px; }
+.campo-com-toggle input { flex: 1; min-width: 0; }
+.campo-com-toggle .toggle-linha { flex-shrink: 0; white-space: nowrap; }
+@media (max-width: 480px) {
+  .campo-com-toggle { flex-wrap: wrap; }
 }
 
 /* Endereço composto (US33/CA04) */
