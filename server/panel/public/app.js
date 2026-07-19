@@ -2189,14 +2189,16 @@ async function renderPerfil() {
       </div>
 
       <label for="telefone">Telefone <span class="obrigatorio">*</span></label>
-      <input type="tel" id="telefone" placeholder="(11) 99999-9999" value="${formatarTelefoneMascara(perfil.telefone)}">
-      <label class="toggle-linha" style="margin-top:8px">
-        <span class="toggle-switch">
-          <input type="checkbox" id="telefone-e-whatsapp" ${telefoneEhWhatsapp ? 'checked' : ''}>
-          <span class="toggle-switch-trilho"></span>
-        </span>
-        Este número também é o WhatsApp
-      </label>
+      <div class="campo-com-toggle">
+        <input type="tel" id="telefone" placeholder="(11) 99999-9999" value="${formatarTelefoneMascara(perfil.telefone)}">
+        <label class="toggle-linha">
+          <span class="toggle-switch">
+            <input type="checkbox" id="telefone-e-whatsapp" ${telefoneEhWhatsapp ? 'checked' : ''}>
+            <span class="toggle-switch-trilho"></span>
+          </span>
+          Também é WhatsApp?
+        </label>
+      </div>
       <div class="field-error" id="erro-telefone"></div>
 
       <label>Endereço</label>
