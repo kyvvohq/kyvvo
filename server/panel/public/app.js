@@ -2364,6 +2364,31 @@ async function renderPerfil() {
   });
 }
 
+// Confirmação antes de desabilitar um dia de funcionamento que estava
+// marcado — o próprio PATCH /api/configuracao já move (sem checar colisão,
+// decisão confirmada) os agendamentos futuros confirmados desse dia pro
+// próximo dia que continua aberto, então essa confirmação só avisa a
+// consequência antes de disparar o salvamento em si (mesmo padrão visual
+// dos outros popups de confirmação desta sessão).
+function abrirModalConfirmarDiasFechados(onContinuar) {
+  abrirModal(
+    '<h3>Desabilitar dia de funcionamento</h3>',
+    `
+      <p class="modal-texto">Se houver algum agendamento marcado nesse(s) dia(s), ele será movido automaticamente para o próximo dia útil disponível. Deseja continuar?</p>
+      <div class="modal-acoes">
+        <button class="btn-secundario" id="btn-cancelar-dias-fechados">Cancelar</button>
+        <button class="btn-primario" id="btn-continuar-dias-fechados">Continuar</button>
+      </div>
+    `
+  );
+
+  document.getElementById('btn-cancelar-dias-fechados').addEventListener('click', fecharModal);
+  document.getElementById('btn-continuar-dias-fechados').addEventListener('click', () => {
+    fecharModal();
+    onContinuar();
+  });
+}
+
 async function renderConfiguracao() {
   conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
   await carregarConfiguracao();
@@ -2446,11 +2471,27 @@ async function renderConfiguracao() {
     almocoCampos.style.display = almocoAtivoInput.checked ? '' : 'none';
   });
 
-  document.getElementById('form-config').addEventListener('submit', async (e) => {
-    e.preventDefault();
+  async function salvarConfiguracao(payload) {
     const msg = document.getElementById('config-msg');
     msg.style.color = '';
     msg.textContent = 'Salvando...';
+
+    const resultado = await api('/api/configuracao', { method: 'PATCH', body: JSON.stringify(payload) });
+
+    if (resultado && !resultado.error) {
+      configuracao = resultado;
+      msg.style.color = '#4ade80';
+      msg.textContent = resultado.agendamentos_movidos > 0
+        ? `Salvo com sucesso! ${resultado.agendamentos_movidos} agendamento(s) movido(s) para o próximo dia disponível.`
+        : 'Salvo com sucesso!';
+    } else {
+      msg.style.color = '#ff6b6b';
+      msg.textContent = (resultado && resultado.error) || 'Erro ao salvar configuração.';
+    }
+  }
+
+  document.getElementById('form-config').addEventListener('submit', (e) => {
+    e.preventDefault();
 
     const diasFuncionamento = Array.from(document.querySelectorAll('.dias-grid input:checked')).map((el) => parseInt(el.value, 10));
     const formatoHora = document.querySelector('input[name="formato"]:checked').value;
@@ -2460,21 +2501,21 @@ async function renderConfiguracao() {
     const horarioAlmocoInicio = horarioAlmocoAtivo ? document.getElementById('config-almoco-inicio').value : null;
     const horarioAlmocoFim = horarioAlmocoAtivo ? document.getElementById('config-almoco-fim').value : null;
 
-    const resultado = await api('/api/configuracao', {
-      method: 'PATCH',
-      body: JSON.stringify({
-        diasFuncionamento, formatoHora, horarioAbertura, horarioFechamento,
-        horarioAlmocoAtivo, horarioAlmocoInicio, horarioAlmocoFim,
-      }),
-    });
+    const payload = {
+      diasFuncionamento, formatoHora, horarioAbertura, horarioFechamento,
+      horarioAlmocoAtivo, horarioAlmocoInicio, horarioAlmocoFim,
+    };
 
-    if (resultado && !resultado.error) {
-      configuracao = resultado;
-      msg.style.color = '#4ade80';
-      msg.textContent = 'Salvo com sucesso!';
+    // Só avisa/confirma quando algum dia que ANTES estava marcado foi
+    // desmarcado agora — adicionar dia ou salvar sem mexer nos dias segue
+    // direto pro salvamento, sem popup.
+    const diasAtuais = configuracao.dias_funcionamento || [1, 2, 3, 4, 5, 6];
+    const desmarcouAlgumDia = diasAtuais.some((d) => !diasFuncionamento.includes(d));
+
+    if (desmarcouAlgumDia) {
+      abrirModalConfirmarDiasFechados(() => salvarConfiguracao(payload));
     } else {
-      msg.style.color = '#ff6b6b';
-      msg.textContent = (resultado && resultado.error) || 'Erro ao salvar configuração.';
+      salvarConfiguracao(payload);
     }
   });
 }

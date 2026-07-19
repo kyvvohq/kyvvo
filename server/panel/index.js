@@ -1286,11 +1286,14 @@ async function start() {
     // Precisa validar abertura < fechamento (e início < fim do almoço) contra
     // o valor final (existente ou novo) de cada lado — não dá pra confiar só
     // no CHECK do banco pra dar uma mensagem de erro clara em vez de estourar
-    // uma exceção de SQL.
+    // uma exceção de SQL. Também busca dias_funcionamento sempre que
+    // diasFuncionamento vier no body, pra descobrir quais dias estão sendo
+    // desabilitados (ver reagendamento em cascata abaixo).
+    let diasRemovidos = [];
     if (horarioAbertura !== undefined || horarioFechamento !== undefined || horarioAlmocoAtivo !== undefined
-      || horarioAlmocoInicio !== undefined || horarioAlmocoFim !== undefined) {
+      || horarioAlmocoInicio !== undefined || horarioAlmocoFim !== undefined || diasFuncionamento !== undefined) {
       const { rows: atuais } = await pool.query(
-        `SELECT horario_abertura, horario_fechamento, horario_almoco_ativo, horario_almoco_inicio, horario_almoco_fim
+        `SELECT dias_funcionamento, horario_abertura, horario_fechamento, horario_almoco_ativo, horario_almoco_inicio, horario_almoco_fim
          FROM tenants WHERE id = $1`,
         [tenantId]
       );
@@ -1314,26 +1317,73 @@ async function start() {
           return reply.code(400).send({ error: 'Horário de início do almoço precisa ser antes do horário de término.' });
         }
       }
+
+      if (diasFuncionamento) {
+        const diasAtuais = atuais[0].dias_funcionamento || [1, 2, 3, 4, 5, 6];
+        diasRemovidos = diasAtuais.filter((d) => !diasFuncionamento.includes(d));
+      }
     }
 
-    const { rows } = await pool.query(
-      `UPDATE tenants SET
-         dias_funcionamento = COALESCE($2, dias_funcionamento),
-         formato_hora = COALESCE($3, formato_hora),
-         horario_abertura = COALESCE($4, horario_abertura),
-         horario_fechamento = COALESCE($5, horario_fechamento),
-         horario_almoco_ativo = COALESCE($6, horario_almoco_ativo),
-         horario_almoco_inicio = CASE WHEN $6 = false THEN null ELSE COALESCE($7, horario_almoco_inicio) END,
-         horario_almoco_fim = CASE WHEN $6 = false THEN null ELSE COALESCE($8, horario_almoco_fim) END
-       WHERE id = $1
-       RETURNING dias_funcionamento, formato_hora, horario_abertura, horario_fechamento,
-                 horario_almoco_ativo, horario_almoco_inicio, horario_almoco_fim`,
-      [
-        tenantId, diasFuncionamento ? JSON.stringify(diasFuncionamento) : null, formatoHora, horarioAbertura, horarioFechamento,
-        horarioAlmocoAtivo ?? null, horarioAlmocoInicio, horarioAlmocoFim,
-      ]
-    );
-    return rows[0];
+    // Reagendamento em cascata (US "desabilitar dia move agendamentos"): só
+    // agendamentos futuros e confirmados nos dias que estão sendo
+    // desabilitados são movidos, pro mesmo horário no próximo dia que
+    // continua aberto — sem checar colisão com outros agendamentos já
+    // existentes nesse dia (decisão confirmada com o Bruno: comportamento
+    // simples, equivalente a um reagendamento manual apressado). O usuário
+    // já confirmou essa consequência num popup no frontend antes de chamar
+    // esse PATCH.
+    let agendamentosMovidos = 0;
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      if (diasRemovidos.length > 0) {
+        const { rows: futuros } = await client.query(
+          `SELECT id, data_hora FROM agendamentos WHERE tenant_id = $1 AND status = 'confirmado' AND data_hora > now()`,
+          [tenantId]
+        );
+        for (const ag of futuros) {
+          if (!diasRemovidos.includes(diaDaSemanaBrasilia(ag.data_hora))) continue;
+          // Soma dias inteiros em ms (seguro porque o offset de Brasília é
+          // fixo, sem horário de verão — preserva o horário local) até cair
+          // num dia presente no diasFuncionamento novo. Mesmo limite de 14
+          // tentativas usado no equivalente do frontend (proximoDiaAberto).
+          let novaData = ag.data_hora;
+          let tentativas = 0;
+          while (!diasFuncionamento.includes(diaDaSemanaBrasilia(novaData)) && tentativas < 14) {
+            novaData = new Date(novaData.getTime() + 86400000);
+            tentativas++;
+          }
+          await client.query('UPDATE agendamentos SET data_hora = $1 WHERE id = $2', [novaData, ag.id]);
+          agendamentosMovidos++;
+        }
+      }
+
+      const { rows } = await client.query(
+        `UPDATE tenants SET
+           dias_funcionamento = COALESCE($2, dias_funcionamento),
+           formato_hora = COALESCE($3, formato_hora),
+           horario_abertura = COALESCE($4, horario_abertura),
+           horario_fechamento = COALESCE($5, horario_fechamento),
+           horario_almoco_ativo = COALESCE($6, horario_almoco_ativo),
+           horario_almoco_inicio = CASE WHEN $6 = false THEN null ELSE COALESCE($7, horario_almoco_inicio) END,
+           horario_almoco_fim = CASE WHEN $6 = false THEN null ELSE COALESCE($8, horario_almoco_fim) END
+         WHERE id = $1
+         RETURNING dias_funcionamento, formato_hora, horario_abertura, horario_fechamento,
+                   horario_almoco_ativo, horario_almoco_inicio, horario_almoco_fim`,
+        [
+          tenantId, diasFuncionamento ? JSON.stringify(diasFuncionamento) : null, formatoHora, horarioAbertura, horarioFechamento,
+          horarioAlmocoAtivo ?? null, horarioAlmocoInicio, horarioAlmocoFim,
+        ]
+      );
+      await client.query('COMMIT');
+      return { ...rows[0], agendamentos_movidos: agendamentosMovidos };
+    } catch (erro) {
+      await client.query('ROLLBACK');
+      throw erro;
+    } finally {
+      client.release();
+    }
   });
 
   // ---------- Módulos ----------
