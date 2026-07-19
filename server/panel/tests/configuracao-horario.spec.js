@@ -247,3 +247,120 @@ test.describe('Configuração — horário de almoço', () => {
     expect(corpoEnviado).toMatchObject({ horarioAlmocoAtivo: false, horarioAlmocoInicio: null, horarioAlmocoFim: null });
   });
 });
+
+// PR9 — desmarcar um dia que estava habilitado avisa que agendamentos
+// futuros nesse dia serão movidos automaticamente pro próximo dia aberto
+// (o PATCH real faz esse reagendamento em cascata no backend, dentro de uma
+// transação — não é coberto aqui porque este repo só tem testes E2E com API
+// mockada, sem Postgres real; a lógica do backend foi verificada
+// funcionalmente em produção após o deploy).
+test.describe('Configuração — confirmação ao desabilitar dia de funcionamento (PR9)', () => {
+  test('desmarcar um dia antes marcado mostra o popup de confirmação', async ({ page }) => {
+    await entrarNaConfiguracao(page, {
+      dias_funcionamento: [1, 2, 3, 4, 5, 6],
+      formato_hora: '24h',
+      horario_abertura: '08:00:00',
+      horario_fechamento: '20:00:00',
+    });
+
+    await page.click('.dias-grid input[value="6"]'); // desmarca sábado
+    await page.click('#form-config button[type="submit"]');
+
+    await expect(page.locator('.modal-overlay h3')).toHaveText('Desabilitar dia de funcionamento');
+    await expect(page.locator('.modal-overlay .modal-texto')).toContainText('movido automaticamente para o próximo dia útil disponível');
+  });
+
+  test('só marcar dias novos (sem desmarcar nenhum) salva direto, sem popup', async ({ page }) => {
+    await entrarNaConfiguracao(page, {
+      dias_funcionamento: [1, 2, 3, 4, 5],
+      formato_hora: '24h',
+      horario_abertura: '08:00:00',
+      horario_fechamento: '20:00:00',
+    });
+    await page.route('**/api/configuracao', (route) => {
+      if (route.request().method() !== 'PATCH') return route.fallback();
+      return route.fulfill({ json: { dias_funcionamento: [0, 1, 2, 3, 4, 5], formato_hora: '24h', horario_abertura: '08:00:00', horario_fechamento: '20:00:00' } });
+    });
+
+    await page.click('.dias-grid input[value="0"]'); // marca domingo (não desmarca nada)
+    await page.click('#form-config button[type="submit"]');
+
+    await expect(page.locator('#config-msg')).toHaveText('Salvo com sucesso!');
+    await expect(page.locator('.modal-overlay')).toHaveCount(0);
+  });
+
+  test('Cancelar no popup fecha sem chamar a API', async ({ page }) => {
+    await entrarNaConfiguracao(page, {
+      dias_funcionamento: [1, 2, 3, 4, 5, 6],
+      formato_hora: '24h',
+      horario_abertura: '08:00:00',
+      horario_fechamento: '20:00:00',
+    });
+    let patchChamado = false;
+    await page.route('**/api/configuracao', (route) => {
+      if (route.request().method() !== 'PATCH') return route.fallback();
+      patchChamado = true;
+      return route.fulfill({ json: {} });
+    });
+
+    await page.click('.dias-grid input[value="6"]');
+    await page.click('#form-config button[type="submit"]');
+    await expect(page.locator('.modal-overlay')).toBeVisible();
+    await page.click('#btn-cancelar-dias-fechados');
+
+    await expect(page.locator('.modal-overlay')).toHaveCount(0);
+    expect(patchChamado).toBe(false);
+    await expect(page.locator('#config-msg')).toHaveText('');
+  });
+
+  test('Continuar no popup salva e mostra quantos agendamentos foram movidos', async ({ page }) => {
+    await entrarNaConfiguracao(page, {
+      dias_funcionamento: [1, 2, 3, 4, 5, 6],
+      formato_hora: '24h',
+      horario_abertura: '08:00:00',
+      horario_fechamento: '20:00:00',
+    });
+    let corpoEnviado = null;
+    await page.route('**/api/configuracao', (route) => {
+      if (route.request().method() !== 'PATCH') return route.fallback();
+      corpoEnviado = route.request().postDataJSON();
+      return route.fulfill({
+        json: {
+          dias_funcionamento: [1, 2, 3, 4, 5], formato_hora: '24h', horario_abertura: '08:00:00', horario_fechamento: '20:00:00',
+          agendamentos_movidos: 2,
+        },
+      });
+    });
+
+    await page.click('.dias-grid input[value="6"]');
+    await page.click('#form-config button[type="submit"]');
+    await page.click('#btn-continuar-dias-fechados');
+
+    await expect(page.locator('#config-msg')).toHaveText('Salvo com sucesso! 2 agendamento(s) movido(s) para o próximo dia disponível.');
+    expect(corpoEnviado.diasFuncionamento.sort()).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  test('salvar sem agendamentos movidos (agendamentos_movidos: 0) mostra a mensagem simples', async ({ page }) => {
+    await entrarNaConfiguracao(page, {
+      dias_funcionamento: [1, 2, 3, 4, 5, 6],
+      formato_hora: '24h',
+      horario_abertura: '08:00:00',
+      horario_fechamento: '20:00:00',
+    });
+    await page.route('**/api/configuracao', (route) => {
+      if (route.request().method() !== 'PATCH') return route.fallback();
+      return route.fulfill({
+        json: {
+          dias_funcionamento: [1, 2, 3, 4, 5], formato_hora: '24h', horario_abertura: '08:00:00', horario_fechamento: '20:00:00',
+          agendamentos_movidos: 0,
+        },
+      });
+    });
+
+    await page.click('.dias-grid input[value="6"]');
+    await page.click('#form-config button[type="submit"]');
+    await page.click('#btn-continuar-dias-fechados');
+
+    await expect(page.locator('#config-msg')).toHaveText('Salvo com sucesso!');
+  });
+});
