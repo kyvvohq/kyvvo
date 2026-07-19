@@ -1,11 +1,11 @@
 const { test, expect } = require('@playwright/test');
 
-// Cobre US33/PR5: edição de perfil no portal (Nome do Responsável, Nome do
-// [segmento] com label dinâmico, Telefone + checkbox "é WhatsApp" e Endereço
-// estruturado com máscara de CEP e autopreenchimento via ViaCEP), mais o
-// campo somente leitura (E-mail). As chamadas de API são mockadas via
-// page.route — sem dependência de Postgres real nem da API pública do
-// ViaCEP (também mockada).
+// Cobre US33/PR12: edição de Meu Perfil (só dados pessoais) no portal —
+// Nome do Responsável, Telefone + checkbox "é WhatsApp" e o campo somente
+// leitura (E-mail). Nome do negócio/Endereço saíram pra "Minha Empresa" (ver
+// minha-empresa.spec.js) — as duas telas salvam via PATCH /api/perfil, cada
+// uma enviando só o grupo de campo que lhe cabe. As chamadas de API são
+// mockadas via page.route — sem dependência de Postgres real.
 
 const PERFIL_BASE = {
   nome_responsavel: 'Ana Souza',
@@ -14,15 +14,6 @@ const PERFIL_BASE = {
   segmento: 'salao_beleza',
   telefone: '34999998888',
   whatsapp: '34988887777',
-  plano: 'profissional',
-  plano_nome: 'Profissional',
-  endereco_cep: '38400000',
-  endereco_logradouro: 'Rua das Flores',
-  endereco_numero: '100',
-  endereco_complemento: null,
-  endereco_bairro: 'Centro',
-  endereco_cidade: 'Uberlândia',
-  endereco_uf: 'MG',
 };
 
 async function entrarNoPainel(page, perfil = PERFIL_BASE) {
@@ -45,18 +36,17 @@ async function entrarNoPainel(page, perfil = PERFIL_BASE) {
   await page.click('.user-menu-item[data-menu="perfil"]');
 }
 
-test.describe('Perfil (US33)', () => {
-  // Os labels/textos do user menu (Meu Perfil/Minha Empresa/Cobrança/
-  // Preferências/Ajuda/Sair) são cobertos em tests/user-menu.spec.js (PR11).
-
-  test('pré-preenche o formulário com os dados atuais, CEP já mascarado (CA02)', async ({ page }) => {
+test.describe('Meu Perfil (US33/PR12)', () => {
+  test('pré-preenche o formulário com os dados atuais', async ({ page }) => {
     await entrarNoPainel(page);
     await expect(page.locator('#nome_responsavel')).toHaveValue('Ana Souza');
-    await expect(page.locator('#nome_segmento')).toHaveValue('Salão da Ana');
     await expect(page.locator('#telefone')).toHaveValue('(34) 99999-8888');
-    await expect(page.locator('#endereco-cep')).toHaveValue('38400-000');
-    await expect(page.locator('#endereco-logradouro')).toHaveValue('Rua das Flores');
-    await expect(page.locator('#endereco-uf')).toHaveValue('MG');
+  });
+
+  test('não mostra mais os campos de negócio (Nome do Segmento/Endereço, agora em Minha Empresa)', async ({ page }) => {
+    await entrarNoPainel(page);
+    await expect(page.locator('#nome_segmento')).toHaveCount(0);
+    await expect(page.locator('#endereco-cep')).toHaveCount(0);
   });
 
   test('E-mail aparece como somente leitura (CA05)', async ({ page }) => {
@@ -64,17 +54,10 @@ test.describe('Perfil (US33)', () => {
     await expect(page.locator('input[value="ana@exemplo.com"]')).toBeDisabled();
   });
 
-  test('label do Nome do [segmento] é dinâmico conforme o segmento do tenant', async ({ page }) => {
-    await entrarNoPainel(page, { ...PERFIL_BASE, segmento: 'petshop' });
-    await expect(page.locator('label[for="nome_segmento"]')).toContainText('Nome do petshop');
-  });
-
-  test('campos obrigatórios mostram asterisco vermelho, Complemento não', async ({ page }) => {
+  test('campos obrigatórios mostram asterisco vermelho', async ({ page }) => {
     await entrarNoPainel(page);
     await expect(page.locator('label[for="nome_responsavel"] .obrigatorio')).toHaveText('*');
     await expect(page.locator('label[for="telefone"] .obrigatorio')).toHaveText('*');
-    await expect(page.locator('label[for="endereco-cep"] .obrigatorio')).toHaveText('*');
-    await expect(page.locator('label[for="endereco-complemento"] .obrigatorio')).toHaveCount(0);
   });
 
   test('checkbox "é WhatsApp" vem marcado quando telefone e whatsapp já são o mesmo número', async ({ page }) => {
@@ -95,40 +78,7 @@ test.describe('Perfil (US33)', () => {
     await expect(page.locator('#nome_responsavel')).toHaveClass(/invalid/);
   });
 
-  test('endereço incompleto mostra mensagem única de erro (CA03/CA04)', async ({ page }) => {
-    await entrarNoPainel(page, { ...PERFIL_BASE, endereco_bairro: '' });
-    await page.click('#btn-salvar-perfil');
-    await expect(page.locator('#erro-endereco')).toHaveText('Preencha todos os campos do endereço.');
-  });
-
-  test('CEP preenchido autocompleta o endereço via ViaCEP (CA04)', async ({ page }) => {
-    await page.route('https://viacep.com.br/**', (route) =>
-      route.fulfill({
-        json: { logradouro: 'Avenida Central', bairro: 'Bairro Novo', localidade: 'Uberaba', uf: 'MG' },
-      })
-    );
-    await entrarNoPainel(page, { ...PERFIL_BASE, endereco_cep: '', endereco_logradouro: '', endereco_bairro: '', endereco_cidade: '', endereco_uf: '' });
-
-    await page.fill('#endereco-cep', '38010000');
-    await page.locator('#endereco-cep').blur();
-
-    await expect(page.locator('#endereco-logradouro')).toHaveValue('Avenida Central');
-    await expect(page.locator('#endereco-bairro')).toHaveValue('Bairro Novo');
-    await expect(page.locator('#endereco-cidade')).toHaveValue('Uberaba');
-    await expect(page.locator('#endereco-uf')).toHaveValue('MG');
-  });
-
-  test('CEP não encontrado mostra aviso pra preencher manualmente (CA04)', async ({ page }) => {
-    await page.route('https://viacep.com.br/**', (route) => route.fulfill({ json: { erro: true } }));
-    await entrarNoPainel(page, { ...PERFIL_BASE, endereco_cep: '' });
-
-    await page.fill('#endereco-cep', '00000000');
-    await page.locator('#endereco-cep').blur();
-
-    await expect(page.locator('#erro-endereco')).toHaveText('CEP não encontrado. Preencha o endereço manualmente.');
-  });
-
-  test('salva as alterações com sucesso (CA06)', async ({ page }) => {
+  test('salva as alterações com sucesso, sem mandar campos de empresa no payload (CA06)', async ({ page }) => {
     await entrarNoPainel(page);
     let corpoEnviado = null;
     await page.route('**/api/perfil', (route) => {
@@ -141,8 +91,9 @@ test.describe('Perfil (US33)', () => {
     await page.click('#btn-salvar-perfil');
 
     await expect(page.locator('.toast-sucesso')).toHaveText(/Perfil atualizado com sucesso/);
-    expect(corpoEnviado).toMatchObject({ nome_responsavel: 'Ana Souza Silva', nome_segmento: 'Salão da Ana', telefone_e_whatsapp: false });
-    expect(corpoEnviado.endereco).toMatchObject({ cep: '38400-000', cidade: 'Uberlândia', uf: 'MG' });
+    expect(corpoEnviado).toMatchObject({ nome_responsavel: 'Ana Souza Silva', telefone_e_whatsapp: false });
+    expect(corpoEnviado).not.toHaveProperty('nome_segmento');
+    expect(corpoEnviado).not.toHaveProperty('endereco');
   });
 
   test('marcar "é WhatsApp" envia telefone_e_whatsapp: true', async ({ page }) => {

@@ -82,11 +82,12 @@ test.describe('User menu — dropdown (PR11)', () => {
     await expect(page.locator('#conteudo')).toContainText('Em breve');
   });
 
-  test('"Minha Empresa" mostra o placeholder "em breve" por enquanto', async ({ page }) => {
+  test('"Minha Empresa" abre a tela de dados do negócio (PR12)', async ({ page }) => {
     await entrarNoPainel(page);
     await page.click('#user-menu-toggle');
     await page.click('.user-menu-item[data-menu="empresa"]');
-    await expect(page.locator('#conteudo')).toContainText('Em breve');
+    await expect(page.locator('#form-empresa')).toBeVisible();
+    await expect(page.locator('#nome_segmento')).toHaveValue('Salão da Ana');
   });
 
   test('clicar num item fecha o dropdown e navega pra tela certa', async ({ page }) => {

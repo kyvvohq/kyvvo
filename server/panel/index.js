@@ -1161,61 +1161,101 @@ async function start() {
       endereco,
     } = request.body || {};
 
-    const nomeResponsavel = (nomeResponsavelBruto || '').trim();
-    const nomeSegmento = (nomeSegmentoBruto || '').trim();
-    if (nomeResponsavel.length < 2) {
-      return reply.code(400).send({ error: 'Informe o nome do responsável.' });
-    }
-    if (nomeSegmento.length < 2) {
-      return reply.code(400).send({ error: 'Informe o nome do seu negócio.' });
-    }
-    const telefone = normalizarWhatsapp(telefoneBruto);
-    if (!telefone) {
-      return reply.code(400).send({ error: 'Informe um telefone válido com DDD.' });
+    // Meu Perfil (dados pessoais) e Minha Empresa (dados do negócio, PR12)
+    // viraram duas telas com botão de salvar independentes — cada grupo de
+    // campo só é validado/atualizado quando vem no corpo da requisição
+    // (padrão COALESCE, igual PATCH /api/configuracao já usa), em vez de
+    // exigir tudo junto como antes.
+    const grupoPessoal = nomeResponsavelBruto !== undefined || telefoneBruto !== undefined;
+    let nomeResponsavel, telefone;
+    if (grupoPessoal) {
+      nomeResponsavel = (nomeResponsavelBruto || '').trim();
+      if (nomeResponsavel.length < 2) {
+        return reply.code(400).send({ error: 'Informe o nome do responsável.' });
+      }
+      telefone = normalizarWhatsapp(telefoneBruto);
+      if (!telefone) {
+        return reply.code(400).send({ error: 'Informe um telefone válido com DDD.' });
+      }
     }
 
-    const { cep, logradouro, numero, complemento, bairro, cidade, uf } = endereco || {};
-    const cepLimpo = String(cep || '').replace(/\D/g, '');
-    const enderecoCompleto =
-      /^\d{8}$/.test(cepLimpo) &&
-      (logradouro || '').trim() &&
-      (numero || '').trim() &&
-      (bairro || '').trim() &&
-      (cidade || '').trim() &&
-      UF_VALIDAS.includes(String(uf || '').toUpperCase());
-    if (!enderecoCompleto) {
-      return reply.code(400).send({ error: 'Preencha todos os campos do endereço.' });
+    let nomeSegmento;
+    if (nomeSegmentoBruto !== undefined) {
+      nomeSegmento = (nomeSegmentoBruto || '').trim();
+      if (nomeSegmento.length < 2) {
+        return reply.code(400).send({ error: 'Informe o nome do seu negócio.' });
+      }
+    }
+
+    let enderecoValidado = null;
+    if (endereco !== undefined) {
+      const { cep, logradouro, numero, complemento, bairro, cidade, uf } = endereco || {};
+      const cepLimpo = String(cep || '').replace(/\D/g, '');
+      const enderecoCompleto =
+        /^\d{8}$/.test(cepLimpo) &&
+        (logradouro || '').trim() &&
+        (numero || '').trim() &&
+        (bairro || '').trim() &&
+        (cidade || '').trim() &&
+        UF_VALIDAS.includes(String(uf || '').toUpperCase());
+      if (!enderecoCompleto) {
+        return reply.code(400).send({ error: 'Preencha todos os campos do endereço.' });
+      }
+      enderecoValidado = {
+        cep: cepLimpo,
+        logradouro: logradouro.trim(),
+        numero: numero.trim(),
+        complemento: (complemento || '').trim() || null,
+        bairro: bairro.trim(),
+        cidade: cidade.trim(),
+        uf: String(uf).toUpperCase(),
+      };
     }
 
     const client = await pool.connect();
     let asaasCustomerId;
     try {
       await client.query('BEGIN');
-      await client.query('UPDATE usuarios SET nome = $2 WHERE id = $1', [userId, nomeResponsavel]);
+      if (grupoPessoal) {
+        await client.query('UPDATE usuarios SET nome = $2 WHERE id = $1', [userId, nomeResponsavel]);
+      }
       // Checkbox "Este número também é o WhatsApp" (Meu Perfil) — evita o
       // dono ter que digitar o mesmo número duas vezes; telefone e whatsapp
       // continuam sendo colunas separadas (whatsapp é chave única, usada no
       // cadastro self-service/reenvio de verificação/admin), então só
-      // espelha telefone → whatsapp quando o tenant marca a opção.
+      // espelha telefone → whatsapp quando o tenant marca a opção e o
+      // telefone está de fato sendo atualizado nesta requisição.
+      // endereco_complemento usa CASE (em vez de COALESCE) porque é o único
+      // subcampo opcional do grupo endereço — precisa poder ser limpo pra
+      // null quando o endereço é atualizado, mas não pode ser tocado quando
+      // o grupo inteiro está ausente; $4 (cep) só é não-nulo quando o grupo
+      // endereço está presente, então serve de sinalizador (mesmo truque já
+      // usado em horario_almoco_inicio no PATCH de Configuração).
       const { rows: tenantAtualizado } = await client.query(
         `UPDATE tenants SET
-           nome = $2, telefone = $3,
-           whatsapp = CASE WHEN $11 THEN $3 ELSE whatsapp END,
-           endereco_cep = $4, endereco_logradouro = $5, endereco_numero = $6,
-           endereco_complemento = $7, endereco_bairro = $8, endereco_cidade = $9, endereco_uf = $10
+           nome = COALESCE($2, nome),
+           telefone = COALESCE($3, telefone),
+           whatsapp = CASE WHEN $3 IS NOT NULL AND $11 THEN $3 ELSE whatsapp END,
+           endereco_cep = COALESCE($4, endereco_cep),
+           endereco_logradouro = COALESCE($5, endereco_logradouro),
+           endereco_numero = COALESCE($6, endereco_numero),
+           endereco_complemento = CASE WHEN $4 IS NOT NULL THEN $7 ELSE endereco_complemento END,
+           endereco_bairro = COALESCE($8, endereco_bairro),
+           endereco_cidade = COALESCE($9, endereco_cidade),
+           endereco_uf = COALESCE($10, endereco_uf)
          WHERE id = $1
          RETURNING asaas_customer_id`,
         [
           tenantId,
-          nomeSegmento,
-          telefone,
-          cepLimpo,
-          logradouro.trim(),
-          numero.trim(),
-          (complemento || '').trim() || null,
-          bairro.trim(),
-          cidade.trim(),
-          String(uf).toUpperCase(),
+          nomeSegmento ?? null,
+          telefone ?? null,
+          enderecoValidado?.cep ?? null,
+          enderecoValidado?.logradouro ?? null,
+          enderecoValidado?.numero ?? null,
+          enderecoValidado?.complemento ?? null,
+          enderecoValidado?.bairro ?? null,
+          enderecoValidado?.cidade ?? null,
+          enderecoValidado?.uf ?? null,
           !!telefoneEWhatsapp,
         ]
       );
@@ -1234,7 +1274,10 @@ async function start() {
     // CA08 — mantém o Customer da Asaas sincronizado quando o tenant já tem
     // assinatura (US32). Best-effort: uma falha aqui não deve impedir o
     // perfil de ser salvo, já que os dados já estão persistidos no Kyvvo.
-    if (asaasCustomerId) {
+    // Só roda quando o grupo pessoal (nome/telefone) de fato veio nesta
+    // requisição — salvar só Minha Empresa não tem nome/telefone novos pra
+    // sincronizar.
+    if (asaasCustomerId && grupoPessoal) {
       asaasService
         .atualizarCustomer({ customerId: asaasCustomerId, nome: nomeResponsavel, whatsapp: telefone })
         .catch((erro) => console.error(`[perfil] falha ao sincronizar customer ${asaasCustomerId} na Asaas: ${erro.message}`));
