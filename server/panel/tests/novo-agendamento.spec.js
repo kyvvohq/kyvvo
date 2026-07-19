@@ -55,7 +55,8 @@ test.describe('Novo agendamento — botão na agenda (ST09.1)', () => {
   test('o botão fica oculto fora do menu de agendamento (Perfil)', async ({ page }) => {
     await page.route('**/api/perfil', (route) => route.fulfill({ json: { nome: 'Salão Ana', telefone: '', endereco: '' } }));
     await entrarNoPainel(page);
-    await page.click('.menu-item[data-menu="perfil"]');
+    await page.click('#user-menu-toggle');
+    await page.click('.user-menu-item[data-menu="perfil"]');
     await expect(page.locator('#btn-novo-agendamento')).toBeHidden();
   });
 });

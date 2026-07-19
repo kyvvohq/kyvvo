@@ -41,15 +41,13 @@ async function entrarNoPainel(page, perfil = PERFIL_BASE) {
     window.localStorage.setItem('kyvvo_nome', 'Ana');
   });
   await page.goto('/painel.html');
-  await page.click('.menu-item[data-menu="perfil"]');
+  await page.click('#user-menu-toggle');
+  await page.click('.user-menu-item[data-menu="perfil"]');
 }
 
 test.describe('Perfil (US33)', () => {
-  test('itens de menu "Meu Perfil" e "Fatura" não têm emoticon', async ({ page }) => {
-    await entrarNoPainel(page);
-    await expect(page.locator('.menu-item[data-menu="perfil"]')).toHaveText('Meu Perfil');
-    await expect(page.locator('.menu-item[data-menu="pagamentos"]')).toHaveText('Fatura');
-  });
+  // Os labels/textos do user menu (Meu Perfil/Minha Empresa/Cobrança/
+  // Preferências/Ajuda/Sair) são cobertos em tests/user-menu.spec.js (PR11).
 
   test('pré-preenche o formulário com os dados atuais, CEP já mascarado (CA02)', async ({ page }) => {
     await entrarNoPainel(page);

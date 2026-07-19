@@ -41,7 +41,8 @@ async function entrarNoPainel(page, pagamentos, trialStatus) {
     window.localStorage.setItem('kyvvo_nome', 'Ana');
   });
   await page.goto('/painel.html');
-  await page.click('.menu-item[data-menu="pagamentos"]');
+  await page.click('#user-menu-toggle');
+  await page.click('.user-menu-item[data-menu="pagamentos"]');
 }
 
 // Assinatura já ativa (US35 redesign): "Alterar forma de pagamento" vira o
