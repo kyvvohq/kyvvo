@@ -12,7 +12,7 @@ document.getElementById('btn-sair').addEventListener('click', async () => {
   localStorage.removeItem('kyvvo_token');
   localStorage.removeItem('kyvvo_nome');
   localStorage.removeItem('kyvvo_email');
-  window.location.href = '/login.html';
+  window.location.href = 'https://kyvvo.com.br';
 });
 
 // US20 — guarda de e-mail não validado (CA10) + banner de trial (CA09) + toast
@@ -1484,6 +1484,7 @@ function abrirModalPagamento(dadosAtuais) {
 }
 
 async function render() {
+  if (menuAtual === 'inicio') return renderInicio();
   if (menuAtual === 'configuracao') return renderConfiguracao();
   if (menuAtual === 'perfil') return renderPerfil();
   if (menuAtual === 'pagamentos') return renderPagamentos();
@@ -1901,6 +1902,34 @@ function renderGradeHorariosDoDia(dataISO, agendamentos) {
         .join('')}
     </div>
   `;
+}
+
+// ---------- Início (dashboard) ----------
+// Reaproveita GET /api/agendamentos?view=dia (mesmo endpoint da aba Dia) e
+// renderAgendamentoItem (mesmo card com o menu de ações Reagendar/Encaixar/
+// Cancelar já ligado via delegação em `conteudo`) — não precisa de endpoint
+// nem de componente novo, só filtra pros agendamentos que ainda vão
+// acontecer hoje.
+async function renderInicio() {
+  conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
+  const iso = formatarDataISO(new Date());
+  const data = await api(`/api/agendamentos?view=dia&data=${iso}`);
+  if (!data) return;
+
+  const agora = Date.now();
+  const proximos = data.agendamentos.filter((ag) => ag.status !== 'cancelado' && new Date(ag.data_hora).getTime() >= agora);
+  agendamentosAtuais = proximos;
+
+  conteudo.innerHTML = `
+    <div class="inicio-cabecalho">
+      <h2>Próximos agendamentos de hoje</h2>
+      <button class="btn-novo-agendamento" id="btn-inicio-novo-agendamento">+ Novo agendamento</button>
+    </div>
+    ${proximos.length
+      ? proximos.map(renderAgendamentoItem).join('')
+      : '<div class="vazio">Nenhum agendamento para o restante de hoje.</div>'}
+  `;
+  document.getElementById('btn-inicio-novo-agendamento').addEventListener('click', () => abrirModalNovoAgendamento());
 }
 
 async function renderDia() {
