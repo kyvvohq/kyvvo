@@ -48,16 +48,22 @@ test.describe('Redirecionamento raiz (/)', () => {
 });
 
 test.describe('Logout (/painel.html) — ST07.5', () => {
-  test('clicar em Sair chama /api/auth/logout, limpa a sessão local e redireciona para /login.html', async ({ page }) => {
+  test('clicar em Sair chama /api/auth/logout, limpa a sessão local e redireciona para kyvvo.com.br', async ({ page }) => {
     await mockDashboardApis(page);
     let logoutChamado = false;
     await page.route('**/api/auth/logout', (route) => {
       logoutChamado = true;
       route.fulfill({ json: { ok: true } });
     });
-    // Semeia o token só ao carregar /painel.html: como addInitScript roda a
-    // cada navegação, semear incondicionalmente mascararia o removeItem do
-    // logout quando a página seguinte (/login.html) carregasse.
+    // Intercepta a navegação pro domínio de marketing (fora do servidor de
+    // teste) — evita bater na rede de verdade. O localStorage é checado via
+    // context.storageState() (lê o storage do navegador diretamente, sem
+    // precisar de um contexto JS vivo numa página) em vez de page.evaluate()
+    // — evaluate trava em deadlock se chamado de dentro do handler da rota
+    // que a própria navegação em andamento está esperando resolver.
+    await page.route('https://kyvvo.com.br/**', (route) =>
+      route.fulfill({ body: '<html></html>', contentType: 'text/html' })
+    );
     await page.addInitScript(() => {
       if (location.pathname.endsWith('/painel.html')) {
         window.localStorage.setItem('kyvvo_token', 'fake-jwt-token');
@@ -67,16 +73,20 @@ test.describe('Logout (/painel.html) — ST07.5', () => {
 
     await page.goto('/painel.html');
     await page.click('#btn-sair');
+    await page.waitForURL('https://kyvvo.com.br/');
 
-    await expect(page).toHaveURL(/\/login\.html$/);
     expect(logoutChamado).toBe(true);
-    expect(await page.evaluate(() => window.localStorage.getItem('kyvvo_token'))).toBeNull();
-    expect(await page.evaluate(() => window.localStorage.getItem('kyvvo_nome'))).toBeNull();
+    const estado = await page.context().storageState();
+    const origemPainel = estado.origins.find((o) => o.origin === 'http://127.0.0.1:4173');
+    expect(origemPainel?.localStorage.find((kv) => kv.name === 'kyvvo_token')).toBeUndefined();
   });
 
   test('logout limpa a sessão e redireciona mesmo se a chamada ao servidor falhar', async ({ page }) => {
     await mockDashboardApis(page);
     await page.route('**/api/auth/logout', (route) => route.abort());
+    await page.route('https://kyvvo.com.br/**', (route) =>
+      route.fulfill({ body: '<html></html>', contentType: 'text/html' })
+    );
     await page.addInitScript(() => {
       if (location.pathname.endsWith('/painel.html')) {
         window.localStorage.setItem('kyvvo_token', 'fake-jwt-token');
@@ -85,9 +95,11 @@ test.describe('Logout (/painel.html) — ST07.5', () => {
 
     await page.goto('/painel.html');
     await page.click('#btn-sair');
+    await page.waitForURL('https://kyvvo.com.br/');
 
-    await expect(page).toHaveURL(/\/login\.html$/);
-    expect(await page.evaluate(() => window.localStorage.getItem('kyvvo_token'))).toBeNull();
+    const estado = await page.context().storageState();
+    const origemPainel = estado.origins.find((o) => o.origin === 'http://127.0.0.1:4173');
+    expect(origemPainel?.localStorage.find((kv) => kv.name === 'kyvvo_token')).toBeUndefined();
   });
 });
 

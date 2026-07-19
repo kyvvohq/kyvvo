@@ -45,10 +45,10 @@ async function entrarNoPainel(page, perfil = PERFIL_BASE) {
 }
 
 test.describe('Perfil (US33)', () => {
-  test('itens de menu "Meu Perfil" e "Pagamento" não têm emoticon', async ({ page }) => {
+  test('itens de menu "Meu Perfil" e "Fatura" não têm emoticon', async ({ page }) => {
     await entrarNoPainel(page);
     await expect(page.locator('.menu-item[data-menu="perfil"]')).toHaveText('Meu Perfil');
-    await expect(page.locator('.menu-item[data-menu="pagamentos"]')).toHaveText('Pagamento');
+    await expect(page.locator('.menu-item[data-menu="pagamentos"]')).toHaveText('Fatura');
   });
 
   test('pré-preenche o formulário com os dados atuais, CEP já mascarado (CA02)', async ({ page }) => {
