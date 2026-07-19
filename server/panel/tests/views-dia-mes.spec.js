@@ -68,16 +68,16 @@ test.describe('formatarDataISO — fuso de Brasília, não UTC', () => {
   });
 });
 
-test.describe('View Dia — grade de horários (PR2)', () => {
+test.describe('View Dia — grade de horários (PR2/PR8 — hora em hora)', () => {
   test('mostra uma linha por horário do intervalo configurado', async ({ page }) => {
     await entrarNoPainel(page, {
       configuracao: { horario_abertura: '09:00:00', horario_fechamento: '11:00:00' },
     });
     const linhas = page.locator('.grade-linha');
-    // 09:00, 09:30, 10:00, 10:30 — meia em meia hora até (exclusive) 11:00.
-    await expect(linhas).toHaveCount(4);
+    // 09:00, 10:00 — hora em hora até (exclusive) 11:00.
+    await expect(linhas).toHaveCount(2);
     await expect(linhas.nth(0).locator('.grade-linha-hora')).toHaveText('09:00');
-    await expect(linhas.nth(3).locator('.grade-linha-hora')).toHaveText('10:30');
+    await expect(linhas.nth(1).locator('.grade-linha-hora')).toHaveText('10:00');
   });
 
   test('horário de almoço não aparece como linha disponível', async ({ page }) => {
@@ -88,7 +88,22 @@ test.describe('View Dia — grade de horários (PR2)', () => {
       },
     });
     const horarios = await page.locator('.grade-linha-hora').allTextContents();
-    expect(horarios).toEqual(['09:00', '09:30', '11:00', '11:30']);
+    expect(horarios).toEqual(['09:00', '11:00']);
+  });
+
+  test('agendamento numa meia-hora (14:30) cai no bucket "14:00" e mostra o horário exato no card', async ({ page }) => {
+    await entrarNoPainel(page, {
+      configuracao: { horario_abertura: '13:00:00', horario_fechamento: '16:00:00' },
+      dia: [{
+        id: 'ag-meia-hora', data_hora: '2026-07-08T17:30:00.000Z', status: 'confirmado', encaixe: false,
+        cliente: 'Carla', profissional: 'Bruna', servico: 'Escova', duracao_minutos: 30, preco: '40.00',
+      }],
+    });
+    // 17:30 UTC = 14:30 Brasília — sem linha própria "14:30" na grade horária,
+    // precisa entrar dentro da linha "14:00".
+    const linha = page.locator('.grade-linha').filter({ hasText: '14:00' });
+    await expect(linha.locator('.grade-ag-servico')).toHaveText('Escova');
+    await expect(linha.locator('.grade-ag-meta')).toContainText('14:30');
   });
 
   test('agendamento aparece na linha do horário com serviço, cliente, duração, valor e profissional', async ({ page }) => {
