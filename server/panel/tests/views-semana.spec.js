@@ -101,4 +101,13 @@ test.describe('View Semana — colunas lado a lado (PR3)', () => {
     await expect(page.locator('.vazio')).toContainText('Nenhum dia de funcionamento configurado');
     await expect(page.locator('.semana-coluna')).toHaveCount(0);
   });
+
+  test('com os 7 dias abertos, as colunas cabem na tela sem scroll horizontal (PR8)', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await entrarNoPainel(page, { configuracao: { dias_funcionamento: [0, 1, 2, 3, 4, 5, 6] } });
+    await expect(page.locator('.semana-coluna')).toHaveCount(7);
+    const semanaColunas = page.locator('.semana-colunas');
+    const [scrollWidth, clientWidth] = await semanaColunas.evaluate((el) => [el.scrollWidth, el.clientWidth]);
+    expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
+  });
 });

@@ -165,9 +165,8 @@ function nomeDiaSemana(d) {
 }
 
 // "HH:MM" em 24h de um data_hora ISO, sempre nesse formato independente da
-// preferência de exibição (formatarHora acima) — usado só pra bater um
-// agendamento com a linha certa da grade de horários (Dia/Semana), nunca
-// pra exibir na tela.
+// preferência de exibição (formatarHora abaixo) — usado só internamente,
+// nunca pra exibir na tela.
 function horaChave24h(dataHoraISO) {
   return new Date(dataHoraISO).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Sao_Paulo' });
 }
@@ -177,12 +176,26 @@ function horarioParaMinutosFrontend(horario) {
   return h * 60 + m;
 }
 
-// Mesma granularidade de 30min usada pelo backend em /agendamentos/
-// disponibilidade — gera só os RÓTULOS "HH:MM" do intervalo abertura→
-// fechamento configurado, excluindo o horário de almoço se ativo. Não
-// depende de serviço/profissional (ao contrário da disponibilidade real),
-// então dá pra montar a grade inteira só com o que já está em `configuracao`.
-const SLOT_INTERVALO_MINUTOS = 30;
+// "HH:MM" do início do bucket de SLOT_INTERVALO_MINUTOS em que o horário de
+// um agendamento cai — usado pra bater um agendamento com a linha certa da
+// grade (Dia/Semana). Com a grade de hora em hora (PR8), um agendamento às
+// 14:30 precisa cair na linha "14:00" (não existe linha "14:30"); igualdade
+// exata de horaChave24h deixaria esse agendamento sem nenhuma linha pra
+// entrar e ele sumiria da grade — a criação de agendamento continua em
+// blocos de 30min no backend, só a granularidade de EXIBIÇÃO da grade mudou.
+function horaChaveGradeBucket(dataHoraISO) {
+  const minutosNoDia = horarioParaMinutosFrontend(horaChave24h(dataHoraISO));
+  const bucketMin = Math.floor(minutosNoDia / SLOT_INTERVALO_MINUTOS) * SLOT_INTERVALO_MINUTOS;
+  return `${String(Math.floor(bucketMin / 60)).padStart(2, '0')}:${String(bucketMin % 60).padStart(2, '0')}`;
+}
+
+// Granularidade da grade de horários (Dia e Semana, PR8) — gera só os
+// RÓTULOS "HH:MM" do intervalo abertura→fechamento configurado, excluindo o
+// horário de almoço se ativo. Não depende de serviço/profissional (ao
+// contrário da disponibilidade real de criação, que continua em blocos de
+// 30min no backend), então dá pra montar a grade inteira só com o que já
+// está em `configuracao`.
+const SLOT_INTERVALO_MINUTOS = 60;
 function gerarHorariosGrade() {
   const aberturaMin = horarioParaMinutosFrontend(configuracao.horario_abertura || '08:00');
   const fechamentoMin = horarioParaMinutosFrontend(configuracao.horario_fechamento || '20:00');
@@ -1484,6 +1497,12 @@ function abrirModalPagamento(dadosAtuais) {
 }
 
 async function render() {
+  // Telas de agenda (Início/Dia/Semana/Mês) precisam de mais largura pra
+  // grade de horários e, principalmente, pras colunas da Semana caberem sem
+  // scroll horizontal — as demais telas (Perfil, Fatura, Serviços...)
+  // continuam nos 720px padrão, estreitos de propósito pra formulário.
+  conteudo.classList.toggle('conteudo-largo', menuAtual === 'inicio' || menuAtual === 'agendamento');
+
   if (menuAtual === 'inicio') return renderInicio();
   if (menuAtual === 'configuracao') return renderConfiguracao();
   if (menuAtual === 'perfil') return renderPerfil();
@@ -1849,7 +1868,7 @@ function renderAgendamentoGradeCard(ag) {
           <div class="grade-ag-servico">${ag.servico}</div>
           <div class="grade-ag-cliente">${ag.cliente || ag.cliente_telefone}</div>
           <div class="grade-ag-meta">
-            ${ag.duracao_minutos}min · ${formatarPreco(ag.preco)} · ${ag.profissional}
+            ${formatarHora(ag.data_hora)} · ${ag.duracao_minutos}min · ${formatarPreco(ag.preco)} · ${ag.profissional}
             ${ag.encaixe ? '<span class="badge badge-encaixe">Encaixe</span>' : ''}
             ${cancelado ? '<span class="badge badge-cancelado">Cancelado</span>' : ''}
           </div>
@@ -1873,7 +1892,7 @@ function renderAgendamentoGradeCard(ag) {
 function renderGradeHorariosDoDia(dataISO, agendamentos) {
   const porHorario = {};
   for (const ag of agendamentos) {
-    const chave = horaChave24h(ag.data_hora);
+    const chave = horaChaveGradeBucket(ag.data_hora);
     if (!porHorario[chave]) porHorario[chave] = [];
     porHorario[chave].push(ag);
   }
@@ -2032,7 +2051,10 @@ async function renderSemana() {
   if (diasAbertos.length === 0) {
     html += '<div class="vazio">Nenhum dia de funcionamento configurado nessa semana.</div>';
   } else {
-    html += '<div class="semana-colunas">';
+    // Número de colunas setado inline (CSS puro não sabe quantos dias
+    // dias_funcionamento tem) — grid fluido sem min-width fixo, pra caber
+    // todos os dias abertos na tela sem precisar de scroll horizontal (PR8).
+    html += `<div class="semana-colunas" style="grid-template-columns:repeat(${diasAbertos.length},1fr)">`;
     for (const d of diasAbertos) {
       const diaISO = formatarDataISO(d);
       const dataLabel = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' });

@@ -297,6 +297,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .conteudo { padding: 24px; max-width: 720px; margin: 0 auto; width: 100%; flex: 1; }
 
+/* Telas de agenda (Início/Dia/Semana/Mês, PR8) — mais largura pra grade de
+   horários e pras colunas da Semana caberem sem scroll horizontal. */
+.conteudo-largo { max-width: 1400px; }
+
 .inicio-cabecalho {
   display: flex;
   align-items: center;
@@ -479,17 +483,18 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 /* Semana (PR3) — uma coluna por dia aberto, lado a lado, cada uma com a
-   mesma grade de horários da view Dia (.grade-horarios). */
+   mesma grade de horários da view Dia (.grade-horarios). Grid fluido (PR8,
+   contagem de colunas setada inline via JS em renderSemana) em vez do flex
+   com min-width fixo de antes — sem largura mínima, as colunas encolhem
+   pra caber todos os dias abertos na tela sem precisar de scroll
+   horizontal, junto com .conteudo-largo alargando o container. */
 .semana-colunas {
-  display: flex;
+  display: grid;
   gap: 12px;
-  overflow-x: auto;
-  padding-bottom: 8px;
 }
 
 .semana-coluna {
-  flex: 1 1 240px;
-  min-width: 240px;
+  min-width: 0;
 }
 
 .semana-coluna-cabecalho {
@@ -534,8 +539,12 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .semana-coluna .grade-linha-add { width: 20px; height: 20px; font-size: 13px; right: 4px; }
 
 @media (max-width: 900px) {
-  .semana-colunas { flex-direction: column; overflow-x: visible; }
-  .semana-coluna { min-width: 0; }
+  /* Abaixo desse ponto, mesmo o grid fluido deixaria cada coluna estreita
+     demais pra ler os cards — empilha uma coluna por dia em vez de
+     comprimir horizontalmente (continua sem scroll horizontal, só passa a
+     rolar verticalmente). !important pra sobrepor o grid-template-columns
+     inline setado por renderSemana. */
+  .semana-colunas { grid-template-columns: 1fr !important; }
 }
 
 .vazio {
