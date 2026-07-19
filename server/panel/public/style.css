@@ -246,6 +246,37 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   border-left-color: var(--accent);
 }
 
+/* Cabeçalho de grupo "Cadastros" (PR10) — visual quase igual a .menu-item,
+   mas fora dela de propósito (sem data-menu, sem tela própria) pra não
+   entrar no loop genérico de clique/`active` dos itens de menu. */
+.menu-item-grupo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  cursor: pointer;
+  color: #a1a5c4;
+  font-size: 15px;
+  font-weight: 500;
+  border-radius: 8px;
+  border-left: 3px solid transparent;
+}
+
+.menu-item-grupo:hover { color: #f2f2f7; background: rgba(124, 92, 252, 0.08); }
+.menu-item-grupo.tem-filho-ativo { color: #f2f2f7; background: rgba(124, 92, 252, 0.15); border-left-color: var(--accent); }
+
+.menu-chevron { font-size: 11px; transition: transform 0.15s; }
+.menu-item-grupo.expandido .menu-chevron { transform: rotate(180deg); }
+
+.menu-submenu {
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 14px;
+}
+
+.menu-submenu.aberto { display: flex; }
+
 @media (max-width: 860px) {
   .painel-shell { flex-direction: column; }
   .painel-sidebar {
@@ -261,6 +292,9 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   .menu { flex-direction: row; gap: 4px; }
   .menu-item { border-left: none; border-bottom: 2px solid transparent; border-radius: 8px 8px 0 0; white-space: nowrap; }
   .menu-item.active { border-left-color: transparent; border-bottom-color: var(--accent); }
+  .menu-item-grupo { border-left: none; border-bottom: 2px solid transparent; border-radius: 8px 8px 0 0; white-space: nowrap; }
+  .menu-item-grupo.tem-filho-ativo { border-left-color: transparent; border-bottom-color: var(--accent); }
+  .menu-submenu.aberto { flex-direction: row; padding-left: 0; }
 }
 
 .subtabs {

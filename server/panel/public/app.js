@@ -78,9 +78,16 @@ async function carregarConfiguracao() {
   if (dados) configuracao = dados;
 }
 
+const menuCadastrosToggle = document.getElementById('menu-cadastros-toggle');
+const menuCadastrosSubmenu = document.getElementById('menu-cadastros-submenu');
+
 function ativarMenuItem(item) {
   menuEl.querySelectorAll('.menu-item').forEach((i) => i.classList.remove('active'));
   item.classList.add('active');
+  // Destaca o cabeçalho "Cadastros" quando Serviços/Profissionais (dentro
+  // do submenu) fica ativo — senão nada na sidebar aparece realçado
+  // enquanto uma dessas telas está aberta.
+  menuCadastrosToggle.classList.toggle('tem-filho-ativo', item.closest('#menu-cadastros-submenu') !== null);
   menuAtual = item.dataset.menu;
   subtabsEl.style.display = menuAtual === 'agendamento' ? 'flex' : 'none';
   dataRef = new Date();
@@ -89,6 +96,14 @@ function ativarMenuItem(item) {
 
 menuEl.querySelectorAll('.menu-item').forEach((item) => {
   item.addEventListener('click', () => ativarMenuItem(item));
+});
+
+// "Cadastros" é um cabeçalho de grupo, não um item de menu com tela própria
+// — por isso usa a classe .menu-item-grupo (fora do .menu-item genérico
+// acima) e só expande/recolhe o submenu, sem chamar ativarMenuItem.
+menuCadastrosToggle.addEventListener('click', () => {
+  menuCadastrosSubmenu.classList.toggle('aberto');
+  menuCadastrosToggle.classList.toggle('expandido');
 });
 
 // ---------- Menu dinâmico por módulo (ST10.3) ----------
