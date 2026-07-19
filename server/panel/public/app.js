@@ -1589,11 +1589,9 @@ async function render() {
   if (menuAtual === 'inicio') return renderInicio();
   if (menuAtual === 'configuracao') return renderConfiguracao();
   if (menuAtual === 'perfil') return renderPerfil();
-  // "Minha Empresa" e "Ajuda" (user menu, PR11) — Minha Empresa vira uma
-  // tela de verdade (dividindo os campos de negócio que hoje ainda estão
-  // em renderPerfil) num PR futuro; por enquanto reaproveita o mesmo
-  // placeholder "em breve" já usado pros módulos ainda não desenvolvidos.
-  if (menuAtual === 'empresa') return renderModuloEmBreve();
+  if (menuAtual === 'empresa') return renderMinhaEmpresa();
+  // "Ajuda" (user menu, PR11) reaproveita o mesmo placeholder "em breve" já
+  // usado pros módulos ainda não desenvolvidos.
   if (menuAtual === 'ajuda') return renderModuloEmBreve();
   if (menuAtual === 'pagamentos') return renderPagamentos();
   if (menuAtual === 'servicos') return renderServicos();
@@ -2272,13 +2270,15 @@ function formatarCepMascara(valor) {
   return digitos.length > 5 ? `${digitos.slice(0, 5)}-${digitos.slice(5)}` : digitos;
 }
 
+// Meu Perfil (dados pessoais, PR12) — Nome do Responsável, Telefone+WhatsApp,
+// E-mail. Nome do negócio/Endereço saíram pra renderMinhaEmpresa() logo
+// abaixo; as duas telas salvam via PATCH /api/perfil, cada uma enviando só
+// o grupo de campo que lhe cabe (o backend trata cada grupo como opcional).
 async function renderPerfil() {
   conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
   const perfil = await api('/api/perfil');
   if (!perfil) return;
 
-  const opcoesUF = UF_OPCOES.map((uf) => `<option value="${uf}" ${uf === perfil.endereco_uf ? 'selected' : ''}>${uf}</option>`).join('');
-  const nomeCampoSegmento = infoSegmento(perfil.segmento).nomeCampo;
   // Telefone/WhatsApp continuam sendo colunas separadas no banco (ver PATCH
   // /api/perfil) — o checkbox só reflete se elas já batem, pra não obrigar o
   // dono a digitar o número duas vezes quando são o mesmo.
@@ -2286,18 +2286,9 @@ async function renderPerfil() {
 
   conteudo.innerHTML = `
     <form class="perfil-form" id="form-perfil" novalidate>
-      <div class="perfil-grid-2col">
-        <div>
-          <label for="nome_responsavel">Nome do Responsável <span class="obrigatorio">*</span></label>
-          <input type="text" id="nome_responsavel" value="${perfil.nome_responsavel || ''}">
-          <div class="field-error" id="erro-nome_responsavel"></div>
-        </div>
-        <div>
-          <label for="nome_segmento">${nomeCampoSegmento} <span class="obrigatorio">*</span></label>
-          <input type="text" id="nome_segmento" value="${perfil.nome_segmento || ''}">
-          <div class="field-error" id="erro-nome_segmento"></div>
-        </div>
-      </div>
+      <label for="nome_responsavel">Nome do Responsável <span class="obrigatorio">*</span></label>
+      <input type="text" id="nome_responsavel" value="${perfil.nome_responsavel || ''}">
+      <div class="field-error" id="erro-nome_responsavel"></div>
 
       <label for="telefone">Telefone <span class="obrigatorio">*</span></label>
       <div class="campo-com-toggle">
@@ -2311,6 +2302,83 @@ async function renderPerfil() {
         </label>
       </div>
       <div class="field-error" id="erro-telefone"></div>
+
+      <label>E-mail</label>
+      <input type="text" value="${perfil.email || ''}" disabled>
+
+      <button type="submit" id="btn-salvar-perfil">Salvar alterações</button>
+    </form>
+  `;
+
+  const telefoneInput = document.getElementById('telefone');
+  telefoneInput.addEventListener('input', () => {
+    telefoneInput.value = formatarTelefoneMascara(telefoneInput.value);
+  });
+
+  document.getElementById('form-perfil').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const nomeResponsavel = document.getElementById('nome_responsavel').value;
+    const telefone = document.getElementById('telefone').value;
+
+    const erros = {
+      nome_responsavel: nomeResponsavel.trim().length >= 2 ? '' : 'Informe o nome do responsável.',
+      telefone: telefone.replace(/\D/g, '').length >= 10 ? '' : 'Informe um telefone válido com DDD.',
+    };
+
+    let primeiroInvalido = null;
+    ['nome_responsavel', 'telefone'].forEach((campo) => {
+      document.getElementById(campo).classList.toggle('invalid', !!erros[campo]);
+      document.getElementById('erro-' + campo).textContent = erros[campo];
+      if (erros[campo] && !primeiroInvalido) primeiroInvalido = document.getElementById(campo);
+    });
+
+    if (Object.values(erros).some(Boolean)) {
+      if (primeiroInvalido) primeiroInvalido.focus();
+      return;
+    }
+
+    const btn = document.getElementById('btn-salvar-perfil');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    const resultado = await api('/api/perfil', {
+      method: 'PATCH',
+      body: JSON.stringify({
+        nome_responsavel: nomeResponsavel,
+        telefone,
+        telefone_e_whatsapp: document.getElementById('telefone-e-whatsapp').checked,
+      }),
+    });
+
+    if (resultado && !resultado.error) {
+      mostrarToast('Perfil atualizado com sucesso.', 'sucesso');
+      preencherUserMenu(resultado);
+      renderPerfil();
+    } else {
+      mostrarToast((resultado && resultado.error) || 'Erro ao salvar. Tente novamente.', 'erro');
+      btn.disabled = false;
+      btn.textContent = 'Salvar alterações';
+    }
+  });
+}
+
+// Minha Empresa (dados do negócio, PR12) — Nome do [segmento] + Endereço
+// completo. Reaproveita a mesma máscara de CEP/autocomplete ViaCEP que
+// antes vivia em renderPerfil.
+async function renderMinhaEmpresa() {
+  conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
+  const perfil = await api('/api/perfil');
+  if (!perfil) return;
+
+  const opcoesUF = UF_OPCOES.map((uf) => `<option value="${uf}" ${uf === perfil.endereco_uf ? 'selected' : ''}>${uf}</option>`).join('');
+  const nomeCampoSegmento = infoSegmento(perfil.segmento).nomeCampo;
+
+  conteudo.innerHTML = `
+    <form class="perfil-form" id="form-empresa" novalidate>
+      <label for="nome_segmento">${nomeCampoSegmento} <span class="obrigatorio">*</span></label>
+      <input type="text" id="nome_segmento" value="${perfil.nome_segmento || ''}">
+      <div class="field-error" id="erro-nome_segmento"></div>
 
       <label>Endereço</label>
       <div class="endereco-grid">
@@ -2347,17 +2415,9 @@ async function renderPerfil() {
       </div>
       <div class="field-error" id="erro-endereco"></div>
 
-      <label>E-mail</label>
-      <input type="text" value="${perfil.email || ''}" disabled>
-
-      <button type="submit" id="btn-salvar-perfil">Salvar alterações</button>
+      <button type="submit" id="btn-salvar-empresa">Salvar alterações</button>
     </form>
   `;
-
-  const telefoneInput = document.getElementById('telefone');
-  telefoneInput.addEventListener('input', () => {
-    telefoneInput.value = formatarTelefoneMascara(telefoneInput.value);
-  });
 
   const cepInput = document.getElementById('endereco-cep');
   cepInput.addEventListener('input', () => {
@@ -2386,12 +2446,10 @@ async function renderPerfil() {
     }
   });
 
-  document.getElementById('form-perfil').addEventListener('submit', async (e) => {
+  document.getElementById('form-empresa').addEventListener('submit', async (e) => {
     e.preventDefault();
 
-    const nomeResponsavel = document.getElementById('nome_responsavel').value;
     const nomeSegmento = document.getElementById('nome_segmento').value;
-    const telefone = document.getElementById('telefone').value;
     const cep = document.getElementById('endereco-cep').value;
     const logradouro = document.getElementById('endereco-logradouro').value;
     const numero = document.getElementById('endereco-numero').value;
@@ -2401,9 +2459,7 @@ async function renderPerfil() {
     const uf = document.getElementById('endereco-uf').value;
 
     const erros = {
-      nome_responsavel: nomeResponsavel.trim().length >= 2 ? '' : 'Informe o nome do responsável.',
       nome_segmento: nomeSegmento.trim().length >= 2 ? '' : 'Informe o nome do seu negócio.',
-      telefone: telefone.replace(/\D/g, '').length >= 10 ? '' : 'Informe um telefone válido com DDD.',
       endereco:
         cep.replace(/\D/g, '').length === 8 && logradouro.trim() && numero.trim() && bairro.trim() && cidade.trim() && uf
           ? ''
@@ -2411,14 +2467,9 @@ async function renderPerfil() {
     };
 
     let primeiroInvalido = null;
-    ['nome_responsavel', 'telefone'].forEach((campo) => {
-      document.getElementById(campo).classList.toggle('invalid', !!erros[campo]);
-      document.getElementById('erro-' + campo).textContent = erros[campo];
-      if (erros[campo] && !primeiroInvalido) primeiroInvalido = document.getElementById(campo);
-    });
     document.getElementById('nome_segmento').classList.toggle('invalid', !!erros.nome_segmento);
     document.getElementById('erro-nome_segmento').textContent = erros.nome_segmento;
-    if (erros.nome_segmento && !primeiroInvalido) primeiroInvalido = document.getElementById('nome_segmento');
+    if (erros.nome_segmento) primeiroInvalido = document.getElementById('nome_segmento');
     document.getElementById('erro-endereco').textContent = erros.endereco;
     if (erros.endereco && !primeiroInvalido) primeiroInvalido = document.getElementById('endereco-cep');
 
@@ -2427,25 +2478,22 @@ async function renderPerfil() {
       return;
     }
 
-    const btn = document.getElementById('btn-salvar-perfil');
+    const btn = document.getElementById('btn-salvar-empresa');
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner"></span>';
 
     const resultado = await api('/api/perfil', {
       method: 'PATCH',
       body: JSON.stringify({
-        nome_responsavel: nomeResponsavel,
         nome_segmento: nomeSegmento,
-        telefone,
-        telefone_e_whatsapp: document.getElementById('telefone-e-whatsapp').checked,
         endereco: { cep, logradouro, numero, complemento, bairro, cidade, uf },
       }),
     });
 
     if (resultado && !resultado.error) {
-      mostrarToast('Perfil atualizado com sucesso.', 'sucesso');
+      mostrarToast('Dados da empresa atualizados com sucesso.', 'sucesso');
       preencherUserMenu(resultado);
-      renderPerfil();
+      renderMinhaEmpresa();
     } else {
       mostrarToast((resultado && resultado.error) || 'Erro ao salvar. Tente novamente.', 'erro');
       btn.disabled = false;

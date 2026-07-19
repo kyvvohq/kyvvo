@@ -1033,18 +1033,6 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 /* Asterisco de campo obrigatório (PR5) */
 .obrigatorio { color: #ff6b6b; }
 
-/* Nome do Responsável + Nome do [segmento] lado a lado (PR5) — encurta a
-   altura total do formulário. */
-.perfil-grid-2col {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-.perfil-grid-2col > div > label { margin-top: 0; }
-@media (max-width: 640px) {
-  .perfil-grid-2col { grid-template-columns: 1fr; }
-}
-
 /* Toggle "Também é WhatsApp?" na frente do campo Telefone, em vez de numa
    linha própria abaixo (PR7). */
 .campo-com-toggle { display: flex; align-items: center; gap: 12px; }
