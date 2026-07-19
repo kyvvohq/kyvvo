@@ -72,6 +72,7 @@ test.describe('Logout (/painel.html) — ST07.5', () => {
     });
 
     await page.goto('/painel.html');
+    await page.click('#user-menu-toggle');
     await page.click('#btn-sair');
     await page.waitForURL('https://kyvvo.com.br/');
 
@@ -94,6 +95,7 @@ test.describe('Logout (/painel.html) — ST07.5', () => {
     });
 
     await page.goto('/painel.html');
+    await page.click('#user-menu-toggle');
     await page.click('#btn-sair');
     await page.waitForURL('https://kyvvo.com.br/');
 

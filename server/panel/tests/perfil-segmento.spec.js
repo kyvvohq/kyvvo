@@ -21,7 +21,8 @@ async function entrarNoPainel(page, { segmento = 'salao_beleza' } = {}) {
     window.localStorage.setItem('kyvvo_nome', 'Ana');
   });
   await page.goto('/painel.html');
-  await page.click('.menu-item[data-menu="configuracao"]');
+  await page.click('#user-menu-toggle');
+  await page.click('.user-menu-item[data-menu="configuracao"]');
 }
 
 test.describe('Segmento do negócio — Configuração', () => {

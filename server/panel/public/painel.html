@@ -31,9 +31,6 @@
         <div class="menu-item" data-menu="servicos">Serviços</div>
         <div class="menu-item" data-menu="profissionais">Profissionais</div>
       </div>
-      <div class="menu-item" data-menu="perfil">Meu Perfil</div>
-      <div class="menu-item" data-menu="pagamentos">Fatura</div>
-      <div class="menu-item" data-menu="configuracao">Configuração</div>
     </nav>
   </aside>
   <div class="painel-main">
@@ -41,7 +38,25 @@
       <div class="topbar-textos">
         <div class="saudacao" id="saudacao"></div>
       </div>
-      <button class="sair" id="btn-sair">Sair</button>
+      <div class="user-menu" id="user-menu">
+        <button class="user-menu-toggle" id="user-menu-toggle">
+          <div class="user-menu-avatar" id="user-menu-avatar"></div>
+          <div class="user-menu-textos">
+            <div class="user-menu-nome" id="user-menu-nome"></div>
+            <div class="user-menu-empresa" id="user-menu-empresa"></div>
+          </div>
+          <span class="user-menu-chevron">▾</span>
+        </button>
+        <div class="user-menu-dropdown" id="user-menu-dropdown" hidden>
+          <div class="user-menu-item" data-menu="perfil">Meu Perfil</div>
+          <div class="user-menu-item" data-menu="empresa">Minha Empresa</div>
+          <div class="user-menu-item" data-menu="pagamentos">Cobrança</div>
+          <div class="user-menu-item" data-menu="configuracao">Preferências</div>
+          <div class="user-menu-item" data-menu="ajuda">Ajuda</div>
+          <div class="user-menu-divisor"></div>
+          <button class="user-menu-sair" id="btn-sair"><span aria-hidden="true">⎋</span> Sair</button>
+        </div>
+      </div>
     </div>
     <div class="subtabs" id="subtabs">
       <div class="tab active" data-tab="dia">Dia</div>

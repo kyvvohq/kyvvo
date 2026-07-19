@@ -81,17 +81,29 @@ async function carregarConfiguracao() {
 const menuCadastrosToggle = document.getElementById('menu-cadastros-toggle');
 const menuCadastrosSubmenu = document.getElementById('menu-cadastros-submenu');
 
-function ativarMenuItem(item) {
+// Reaproveitada tanto pelos itens da sidebar quanto pelos itens do user
+// menu (dropdown do avatar, ST-user-menu) — os dois só precisam de um jeito
+// de trocar `menuAtual` e re-renderizar; a diferença é só onde o clique
+// aconteceu.
+function selecionarMenu(novoMenu) {
   menuEl.querySelectorAll('.menu-item').forEach((i) => i.classList.remove('active'));
-  item.classList.add('active');
+  const itemSidebar = menuEl.querySelector(`.menu-item[data-menu="${novoMenu}"]`);
+  if (itemSidebar) itemSidebar.classList.add('active');
   // Destaca o cabeçalho "Cadastros" quando Serviços/Profissionais (dentro
   // do submenu) fica ativo — senão nada na sidebar aparece realçado
-  // enquanto uma dessas telas está aberta.
-  menuCadastrosToggle.classList.toggle('tem-filho-ativo', item.closest('#menu-cadastros-submenu') !== null);
-  menuAtual = item.dataset.menu;
+  // enquanto uma dessas telas está aberta. Itens que vieram do user menu
+  // (perfil/empresa/pagamentos/configuracao/ajuda) não têm item correspondente
+  // na sidebar, então itemSidebar é null e isso vira um no-op — correto,
+  // nenhum item da sidebar deve ficar "active" nessas telas.
+  menuCadastrosToggle.classList.toggle('tem-filho-ativo', itemSidebar?.closest('#menu-cadastros-submenu') != null);
+  menuAtual = novoMenu;
   subtabsEl.style.display = menuAtual === 'agendamento' ? 'flex' : 'none';
   dataRef = new Date();
   render();
+}
+
+function ativarMenuItem(item) {
+  selecionarMenu(item.dataset.menu);
 }
 
 menuEl.querySelectorAll('.menu-item').forEach((item) => {
@@ -105,6 +117,62 @@ menuCadastrosToggle.addEventListener('click', () => {
   menuCadastrosSubmenu.classList.toggle('aberto');
   menuCadastrosToggle.classList.toggle('expandido');
 });
+
+// ---------- User menu (avatar + dropdown) ----------
+const userMenuToggle = document.getElementById('user-menu-toggle');
+const userMenuDropdown = document.getElementById('user-menu-dropdown');
+
+function fecharUserMenu() {
+  userMenuDropdown.hidden = true;
+  userMenuToggle.classList.remove('aberto');
+}
+
+userMenuToggle.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const vaiAbrir = userMenuDropdown.hidden;
+  fecharUserMenu();
+  if (vaiAbrir) {
+    userMenuDropdown.hidden = false;
+    userMenuToggle.classList.add('aberto');
+  }
+});
+
+// Fecha ao clicar fora — mesmo espírito do fechamento de .menu-acoes.aberto
+// já usado nos itens de agendamento/serviço/profissional.
+document.addEventListener('click', (e) => {
+  if (!document.getElementById('user-menu').contains(e.target)) fecharUserMenu();
+});
+
+document.querySelectorAll('.user-menu-item').forEach((item) => {
+  item.addEventListener('click', () => {
+    selecionarMenu(item.dataset.menu);
+    fecharUserMenu();
+  });
+});
+
+// Iniciais do responsável (primeiro + último nome) pro avatar do user menu
+// — só isso por enquanto, sem foto (upload de foto de perfil fica fora
+// deste pacote de mudanças).
+function iniciaisNome(nomeCompleto) {
+  const partes = (nomeCompleto || '').trim().split(/\s+/).filter(Boolean);
+  if (!partes.length) return '';
+  return (partes[0][0] + (partes.length > 1 ? partes[partes.length - 1][0] : '')).toUpperCase();
+}
+
+function truncarTexto(texto, max) {
+  return texto && texto.length > max ? texto.slice(0, max) + '…' : (texto || '');
+}
+
+function preencherUserMenu(perfil) {
+  document.getElementById('user-menu-avatar').textContent = iniciaisNome(perfil.nome_responsavel);
+  document.getElementById('user-menu-nome').textContent = perfil.nome_responsavel || '';
+  document.getElementById('user-menu-empresa').textContent = truncarTexto(perfil.nome_segmento, 30);
+}
+
+async function carregarUserMenu() {
+  const perfil = await api('/api/perfil');
+  if (perfil) preencherUserMenu(perfil);
+}
 
 // ---------- Menu dinâmico por módulo (ST10.3) ----------
 // Os itens fixos (Agendamento/Perfil/Configuração) continuam sempre visíveis
@@ -1521,6 +1589,12 @@ async function render() {
   if (menuAtual === 'inicio') return renderInicio();
   if (menuAtual === 'configuracao') return renderConfiguracao();
   if (menuAtual === 'perfil') return renderPerfil();
+  // "Minha Empresa" e "Ajuda" (user menu, PR11) — Minha Empresa vira uma
+  // tela de verdade (dividindo os campos de negócio que hoje ainda estão
+  // em renderPerfil) num PR futuro; por enquanto reaproveita o mesmo
+  // placeholder "em breve" já usado pros módulos ainda não desenvolvidos.
+  if (menuAtual === 'empresa') return renderModuloEmBreve();
+  if (menuAtual === 'ajuda') return renderModuloEmBreve();
   if (menuAtual === 'pagamentos') return renderPagamentos();
   if (menuAtual === 'servicos') return renderServicos();
   if (menuAtual === 'profissionais') return renderProfissionais();
@@ -2370,6 +2444,7 @@ async function renderPerfil() {
 
     if (resultado && !resultado.error) {
       mostrarToast('Perfil atualizado com sucesso.', 'sucesso');
+      preencherUserMenu(resultado);
       renderPerfil();
     } else {
       mostrarToast((resultado && resultado.error) || 'Erro ao salvar. Tente novamente.', 'erro');
@@ -2537,3 +2612,4 @@ async function renderConfiguracao() {
 
 carregarConfiguracao().then(render);
 carregarModulosNoMenu();
+carregarUserMenu();
