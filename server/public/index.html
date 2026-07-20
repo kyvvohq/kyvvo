@@ -63,72 +63,43 @@
 .diagnostico-cta a{color:var(--accent-light);font-weight:600;text-decoration:none}
 .diagnostico-cta a:hover{text-decoration:underline}
 
-.quem-somos-section{padding:80px 6%;border-top:1px solid var(--border);--pink:#ec6cc2}
+.quem-somos-section{padding:80px 6%;border-top:1px solid var(--border);background:var(--bg2)}
 
-/* Topo: intro (eyebrow+título+texto) à esquerda, 3 diferenciais à direita */
-.quem-somos-top{display:grid;grid-template-columns:minmax(280px,420px) 1fr;gap:48px;align-items:start;margin-bottom:56px}
+/* Três colunas: intro+pills / foto do fundador / lista de pilares */
+.quem-somos-grid{display:grid;grid-template-columns:minmax(260px,340px) minmax(260px,360px) 1fr;gap:40px;align-items:start}
+.quem-somos-intro,.fundador-foto-card,.pilares-lista{min-width:0}
 .quem-somos-intro .section-title{white-space:normal;margin-bottom:18px}
 .quem-somos-intro .section-title em{font-style:normal;background:linear-gradient(120deg,var(--accent-light),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-.quem-somos-intro .section-sub{white-space:normal;margin-bottom:0}
+.quem-somos-intro .section-sub{white-space:normal;margin-bottom:24px}
+.quem-somos-pills{display:flex;flex-wrap:wrap;gap:10px 18px}
+.quem-somos-pill{display:flex;align-items:center;gap:7px;font-size:.8rem;color:var(--muted)}
+.quem-somos-pill svg{width:15px;height:15px;color:var(--accent-light);flex-shrink:0}
 
-.diferenciais-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:28px}
-.diferencial-icone{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin-bottom:18px}
-.diferencial-icone svg{width:22px;height:22px}
-.diferencial-item:nth-child(1) .diferencial-icone{background:rgba(124,92,252,.16);color:var(--accent-light)}
-.diferencial-item:nth-child(2) .diferencial-icone{background:rgba(0,212,255,.14);color:var(--cyan)}
-.diferencial-item:nth-child(3) .diferencial-icone{background:rgba(236,108,194,.14);color:var(--pink)}
-.diferencial-title{font-family:var(--font-d);font-weight:700;font-size:1rem;margin-bottom:8px}
-.diferencial-desc{font-size:.86rem;color:var(--muted);line-height:1.65}
+.fundador-foto-card{position:relative;border-radius:20px;overflow:hidden;background:linear-gradient(160deg,rgba(124,92,252,.35),rgba(0,212,255,.08))}
+.fundador-foto-card img{display:block;width:100%;height:420px;object-fit:cover;object-position:top center}
+.fundador-foto-legenda{position:absolute;left:14px;right:14px;bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:12px;background:rgba(8,11,20,.6);backdrop-filter:blur(10px);border-radius:12px;padding:10px 14px}
+.fundador-foto-nome{font-family:var(--font-d);font-weight:700;font-size:.95rem;color:#fff}
+.fundador-foto-cargo{font-size:.76rem;color:rgba(255,255,255,.72)}
+.fundador-linkedin-btn{width:30px;height:30px;border-radius:8px;background:#0a66c2;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#fff}
+.fundador-linkedin-btn svg{width:16px;height:16px}
 
-/* Card do fundador: perfil à esquerda, citação à direita */
-.fundador-showcase{display:grid;grid-template-columns:1fr 1fr;gap:40px;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:44px;margin-bottom:64px}
-.fundador-perfil{display:flex;gap:20px}
-.fundador-avatar{width:88px;height:88px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:var(--font-d);font-weight:800;font-size:1.5rem;background:linear-gradient(135deg,var(--accent-light),var(--cyan));color:var(--bg)}
-.fundador-nome{font-family:var(--font-d);font-size:1.15rem;font-weight:700;margin-bottom:2px}
-.fundador-cargo{font-size:.75rem;color:var(--accent-light);font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px}
-.fundador-bio{font-size:.88rem;color:var(--muted);line-height:1.65;margin-bottom:14px}
-.fundador-origem{display:flex;align-items:center;gap:6px;font-size:.82rem;color:var(--muted)}
-.fundador-origem svg{width:14px;height:14px;color:var(--accent-light);flex-shrink:0}
+.pilares-lista{display:flex;flex-direction:column}
+.pilar-item{display:flex;gap:16px;padding:20px 0;border-bottom:1px solid var(--border)}
+.pilar-item:first-child{padding-top:0}
+.pilar-item:last-child{border-bottom:none;padding-bottom:0}
+.pilar-icone{width:44px;height:44px;border-radius:50%;background:rgba(124,92,252,.14);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.pilar-icone svg{width:19px;height:19px;color:var(--accent-light)}
+.pilar-title{font-family:var(--font-d);font-weight:700;font-size:.95rem;margin-bottom:6px}
+.pilar-desc{font-size:.84rem;color:var(--muted);line-height:1.6}
 
-.fundador-quote{position:relative;padding-left:32px;border-left:1px solid var(--border);display:flex;flex-direction:column;justify-content:center}
-.fundador-quote-icon{color:var(--accent-light);opacity:.55;width:26px;height:26px;margin-bottom:12px}
-.fundador-quote p{font-family:var(--font-d);font-size:1.15rem;font-weight:600;line-height:1.55}
-
-/* "Por que escolhemos fazer diferente" — 4 colunas simples, sem card */
-.porque-titulo{text-align:center;margin-bottom:44px}
-.porque-titulo .section-eyebrow{justify-content:center;display:flex}
-.diferentes-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:32px;margin-bottom:64px}
-.diferente-icone{width:20px;height:20px;margin-bottom:14px}
-.diferente-item:nth-child(1) .diferente-icone{color:var(--accent-light)}
-.diferente-item:nth-child(2) .diferente-icone{color:var(--pink)}
-.diferente-item:nth-child(3) .diferente-icone{color:var(--accent-light)}
-.diferente-item:nth-child(4) .diferente-icone{color:var(--cyan)}
-.diferente-title{font-family:var(--font-d);font-weight:700;font-size:.95rem;margin-bottom:8px}
-.diferente-desc{font-size:.82rem;color:var(--muted);line-height:1.6}
-
-/* Barra de estatísticas */
-.stats-titulo{text-align:center;margin-bottom:32px}
-.stats-titulo .section-eyebrow{justify-content:center;display:flex}
-.stats-bar{border:1px solid var(--border);border-radius:20px;padding:40px;background:var(--bg2)}
-.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:24px}
-.stat-item{display:flex;align-items:center;gap:14px}
-.stat-icone{width:22px;height:22px;flex-shrink:0}
-.stat-item:nth-child(1) .stat-icone{color:var(--accent-light)}
-.stat-item:nth-child(2) .stat-icone{color:var(--cyan)}
-.stat-item:nth-child(3) .stat-icone{color:var(--pink)}
-.stat-item:nth-child(4) .stat-icone{color:#ffd166}
-.stat-numero{font-family:var(--font-d);font-size:1.3rem;font-weight:800}
-.stat-label{font-size:.78rem;color:var(--muted);line-height:1.4}
-
-@media(max-width:900px){
-  .quem-somos-top{grid-template-columns:1fr}
-  .diferenciais-grid{grid-template-columns:1fr}
-  .fundador-showcase{grid-template-columns:1fr;padding:32px}
-  .fundador-quote{border-left:none;padding-left:0;border-top:1px solid var(--border);padding-top:24px}
-  .diferentes-grid{grid-template-columns:repeat(2,1fr)}
-  .stats-grid{grid-template-columns:repeat(2,1fr)}
+@media(max-width:1050px){
+  .quem-somos-grid{grid-template-columns:1fr 1fr}
+  .pilares-lista{grid-column:1/-1;margin-top:8px}
 }
-@media(max-width:520px){.diferentes-grid,.stats-grid{grid-template-columns:1fr}.stats-bar{padding:28px 24px}}
+@media(max-width:700px){
+  .quem-somos-grid{grid-template-columns:1fr}
+  .fundador-foto-card img{height:320px}
+}
 
 .nav-link{
   font-family:var(--font-b);font-size:.85rem;font-weight:500;
@@ -138,10 +109,35 @@
 
 /* FAQ */
 .faq-section{
-  padding:80px 6% 90px;background:var(--bg2);
+  padding:80px 6%;background:var(--bg);
   border-top:1px solid var(--border);
 }
-.faq-wrap{max-width:760px;margin:44px auto 0}
+.faq-grid{display:grid;grid-template-columns:minmax(260px,340px) 1fr;gap:48px;align-items:start}
+.faq-intro,.faq-lista-wrap{min-width:0}
+.faq-intro .section-title{white-space:normal;margin-bottom:14px}
+.faq-intro .section-sub{white-space:normal;margin-bottom:32px}
+
+.faq-beneficios{display:flex;flex-direction:column;gap:18px;margin-bottom:28px}
+.faq-beneficio{display:flex;align-items:center;gap:14px}
+.faq-beneficio-icone{width:40px;height:40px;border-radius:50%;background:rgba(124,92,252,.14);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.faq-beneficio-icone svg{width:18px;height:18px;color:var(--accent-light)}
+.faq-beneficio-title{font-family:var(--font-d);font-weight:700;font-size:.9rem;margin-bottom:2px}
+.faq-beneficio-desc{font-size:.8rem;color:var(--muted)}
+
+.faq-whatsapp-box{display:flex;align-items:center;gap:14px;border:1px solid rgba(37,211,102,.35);background:rgba(37,211,102,.06);border-radius:14px;padding:18px}
+.faq-whatsapp-icone{width:38px;height:38px;border-radius:50%;background:rgba(37,211,102,.16);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#25d366}
+.faq-whatsapp-icone svg{width:19px;height:19px}
+.faq-whatsapp-texto{flex:1}
+.faq-whatsapp-titulo{font-weight:700;font-size:.86rem;margin-bottom:2px}
+.faq-whatsapp-desc{font-size:.78rem;color:var(--muted);margin-bottom:12px}
+.faq-whatsapp-btn{display:inline-flex;padding:9px 18px;font-size:.8rem;font-weight:600;font-family:var(--font-b);background:linear-gradient(135deg,var(--accent),#5b3fd4);color:#fff;border:none;border-radius:100px;text-decoration:none;cursor:pointer}
+
+.faq-tabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:24px}
+.faq-tab{padding:9px 18px;border-radius:100px;font-size:.82rem;font-weight:600;font-family:var(--font-b);color:var(--muted);background:var(--surface);border:1px solid var(--border);cursor:pointer;transition:all .2s;white-space:nowrap}
+.faq-tab:hover{border-color:rgba(124,92,252,.4);color:var(--text)}
+.faq-tab.active{background:linear-gradient(135deg,var(--accent),#5b3fd4);color:#fff;border-color:transparent}
+
+.faq-wrap{margin:0}
 .faq-item{
   border:1px solid var(--border);border-radius:12px;
   background:var(--surface);margin-bottom:12px;overflow:hidden;
@@ -156,15 +152,16 @@
 }
 .faq-icon{
   flex-shrink:0;width:22px;height:22px;position:relative;
-  transition:transform .3s ease;color:var(--accent-light);
+  color:var(--accent-light);
 }
 .faq-icon::before,.faq-icon::after{
   content:'';position:absolute;top:50%;left:50%;
-  width:12px;height:2px;background:currentColor;border-radius:2px;
+  background:currentColor;border-radius:2px;
   transform:translate(-50%,-50%);
 }
-.faq-icon::after{transform:translate(-50%,-50%) rotate(90deg)}
-.faq-item.open .faq-icon{transform:rotate(135deg)}
+.faq-icon::before{width:12px;height:2px}
+.faq-icon::after{width:2px;height:12px;transition:transform .25s ease}
+.faq-item.open .faq-icon::after{transform:translate(-50%,-50%) scaleY(0)}
 .faq-answer{
   max-height:0;overflow:hidden;
   transition:max-height .35s ease;
@@ -175,14 +172,21 @@
 }
 .faq-answer-inner strong{color:var(--text);font-weight:500}
 .faq-contact{
-  text-align:center;margin-top:36px;
-  font-size:.95rem;color:var(--muted);
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  text-align:center;margin-top:28px;
+  font-size:.88rem;color:var(--muted);
 }
+.faq-contact svg{width:16px;height:16px;color:var(--accent-light);flex-shrink:0}
 .faq-contact a{
   color:var(--accent-light);font-weight:600;text-decoration:none;
   transition:color .2s;
 }
 .faq-contact a:hover{color:var(--cyan)}
+
+@media(max-width:950px){
+  .faq-grid{grid-template-columns:1fr}
+}
+@media(max-width:600px){.faq-tabs{overflow-x:auto;flex-wrap:nowrap;padding-bottom:2px}}
 
 @keyframes fadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
 @media(max-width:700px){.beneficios-grid{grid-template-columns:1fr}.steps{grid-template-columns:1fr}}
@@ -321,208 +325,235 @@
   </div>
 </section>
 
-<!-- Quem somos -->
-<section class="quem-somos-section" id="quem-somos">
+<!-- FAQ -->
+<section class="faq-section" id="faq">
+  <div class="faq-grid">
+    <div class="faq-intro">
+      <div class="section-eyebrow" data-pt="FAQ" data-en="FAQ">FAQ</div>
+      <h2 class="section-title" data-pt="Perguntas frequentes" data-en="Frequently asked questions">Perguntas frequentes</h2>
+      <p class="section-sub" data-pt="Selecionamos as dúvidas mais comuns para te ajudar antes de começar." data-en="We've gathered the most common questions to help you get started.">Selecionamos as dúvidas mais comuns para te ajudar antes de começar.</p>
 
-  <div class="quem-somos-top">
-    <div class="quem-somos-intro">
-      <div class="section-eyebrow" data-pt="Quem somos" data-en="About us">Quem somos</div>
-      <h2 class="section-title" data-pt="Um time pequeno com um <em>propósito</em> grande" data-en="A small team with a big <em>purpose</em>">Um time pequeno com um <em>propósito</em> grande</h2>
-      <p class="section-sub" data-pt="Acreditamos que pequeno negócio merece tecnologia boa sem complicação. Construímos o Kyvvo para você atender sua cliente pelo WhatsApp que já usa, sem perder tempo com sistema difícil." data-en="We believe small businesses deserve good technology without the hassle. We built Kyvvo so you can serve your clients on the WhatsApp they already use, without wasting time on complicated software.">
-        Acreditamos que pequeno negócio merece tecnologia boa sem complicação. Construímos o Kyvvo para você atender sua cliente pelo WhatsApp que já usa, sem perder tempo com sistema difícil.
+      <div class="faq-beneficios">
+        <div class="faq-beneficio">
+          <div class="faq-beneficio-icone" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18"/><path d="M8 3v4M16 3v4"/></svg></div>
+          <div>
+            <div class="faq-beneficio-title" data-pt="Trial gratuito de 14 dias" data-en="14-day free trial">Trial gratuito de 14 dias</div>
+            <div class="faq-beneficio-desc" data-pt="Teste todas as funcionalidades." data-en="Try every feature.">Teste todas as funcionalidades.</div>
+          </div>
+        </div>
+        <div class="faq-beneficio">
+          <div class="faq-beneficio-icone" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16.5v2.3a2 2 0 0 1-2.2 2 18 18 0 0 1-7.8-2.8 17.6 17.6 0 0 1-5.4-5.4A18 18 0 0 1 3 4.7 2 2 0 0 1 5 2.5h2.3a2 2 0 0 1 2 1.7c.1.9.4 1.9.7 2.7a2 2 0 0 1-.5 2.1L8.3 10.3a14.4 14.4 0 0 0 5.4 5.4l1.3-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2.1z"/></svg></div>
+          <div>
+            <div class="faq-beneficio-title" data-pt="API Oficial da Meta" data-en="Official Meta API">API Oficial da Meta</div>
+            <div class="faq-beneficio-desc" data-pt="Segurança e conformidade garantidas." data-en="Security and compliance guaranteed.">Segurança e conformidade garantidas.</div>
+          </div>
+        </div>
+        <div class="faq-beneficio">
+          <div class="faq-beneficio-icone" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13v-1a8 8 0 0 1 16 0v1"/><rect x="2.5" y="13" width="4" height="6" rx="1.5"/><rect x="17.5" y="13" width="4" height="6" rx="1.5"/><path d="M20 19v1a3 3 0 0 1-3 3h-3"/></svg></div>
+          <div>
+            <div class="faq-beneficio-title" data-pt="Suporte humano" data-en="Human support">Suporte humano</div>
+            <div class="faq-beneficio-desc" data-pt="Atendimento rápido e próximo." data-en="Fast, hands-on service.">Atendimento rápido e próximo.</div>
+          </div>
+        </div>
+        <div class="faq-beneficio">
+          <div class="faq-beneficio-icone" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 5v6c0 5 3.5 8.5 8 11 4.5-2.5 8-6 8-11V5l-8-3z"/><path d="M9 12l2 2 4-4"/></svg></div>
+          <div>
+            <div class="faq-beneficio-title" data-pt="Seus dados protegidos" data-en="Your data protected">Seus dados protegidos</div>
+            <div class="faq-beneficio-desc" data-pt="LGPD, backups e infraestrutura AWS." data-en="LGPD, backups and AWS infrastructure.">LGPD, backups e infraestrutura AWS.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="faq-whatsapp-box">
+        <div class="faq-whatsapp-icone" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2a10 10 0 0 0-8.6 15L2 22l5.2-1.4A10 10 0 1 0 12 2zm5.8 14.2c-.25.7-1.4 1.3-2 1.4-.5.1-1.1.1-1.8-.1-.4-.1-1-.3-1.7-.6-3-1.3-5-4.3-5.1-4.5-.1-.2-1.2-1.6-1.2-3 0-1.4.7-2.1 1-2.4.3-.3.6-.4.8-.4h.6c.2 0 .4 0 .6.5.2.5.7 1.8.8 1.9.1.2.1.3 0 .5-.1.2-.1.3-.3.5l-.4.5c-.1.2-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1.1 2.1 1.4 2.4 1.6.3.2.5.1.7-.1l.6-.7c.2-.3.4-.2.7-.1l1.7.8c.2.1.4.2.4.4.1.2.1.9-.1 1.5z"/></svg></div>
+        <div class="faq-whatsapp-texto">
+          <div class="faq-whatsapp-titulo" data-pt="Ainda ficou alguma dúvida?" data-en="Still have a question?">Ainda ficou alguma dúvida?</div>
+          <div class="faq-whatsapp-desc" data-pt="Fale com nosso time pelo WhatsApp." data-en="Talk to our team on WhatsApp.">Fale com nosso time pelo WhatsApp.</div>
+          <a class="faq-whatsapp-btn" href="https://wa.me/553484285182?text=Ol%C3%A1!%20Quero%20saber%20mais%20sobre%20o%20Kyvvo." target="_blank" rel="noopener" data-pt="Conversar agora" data-en="Chat now">Conversar agora</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="faq-lista-wrap">
+      <div class="faq-tabs">
+        <button class="faq-tab active" data-categoria="todas" onclick="filtrarFaq(this)" data-pt="Todas" data-en="All">Todas</button>
+        <button class="faq-tab" data-categoria="comecando" onclick="filtrarFaq(this)" data-pt="Começando" data-en="Getting started">Começando</button>
+        <button class="faq-tab" data-categoria="whatsapp" onclick="filtrarFaq(this)" data-pt="WhatsApp" data-en="WhatsApp">WhatsApp</button>
+        <button class="faq-tab" data-categoria="pagamento" onclick="filtrarFaq(this)" data-pt="Pagamento" data-en="Billing">Pagamento</button>
+        <button class="faq-tab" data-categoria="seguranca" onclick="filtrarFaq(this)" data-pt="Segurança" data-en="Security">Segurança</button>
+        <button class="faq-tab" data-categoria="conta" onclick="filtrarFaq(this)" data-pt="Conta" data-en="Account">Conta</button>
+      </div>
+
+      <div class="faq-wrap">
+        <div class="faq-item" data-categoria="comecando">
+          <button class="faq-question" onclick="toggleFaq(this)" aria-expanded="false">
+            <span data-pt="O que é o Kyvvo?" data-en="What is Kyvvo?">O que é o Kyvvo?</span>
+            <span class="faq-icon" aria-hidden="true"></span>
+          </button>
+          <div class="faq-answer">
+            <div class="faq-answer-inner" data-pt="O Kyvvo é a <strong>plataforma</strong> que simplifica a gestão de pequenos negócios de serviços. Você organiza sua agenda, clientes, financeiro e WhatsApp em um só lugar." data-en="Kyvvo is the <strong>platform</strong> that simplifies management for small service businesses. You organize your schedule, clients, finances and WhatsApp in one place.">O Kyvvo é a <strong>plataforma</strong> que simplifica a gestão de pequenos negócios de serviços. Você organiza sua agenda, clientes, financeiro e WhatsApp em um só lugar.</div>
+          </div>
+        </div>
+
+        <div class="faq-item" data-categoria="comecando">
+          <button class="faq-question" onclick="toggleFaq(this)" aria-expanded="false">
+            <span data-pt="Preciso instalar alguma coisa?" data-en="Do I need to install anything?">Preciso instalar alguma coisa?</span>
+            <span class="faq-icon" aria-hidden="true"></span>
+          </button>
+          <div class="faq-answer">
+            <div class="faq-answer-inner" data-pt="Não. O Kyvvo funciona direto pelo navegador do celular ou computador. O app mobile estará disponível em breve." data-en="No. Kyvvo runs straight from your phone or computer browser. The mobile app will be available soon.">Não. O Kyvvo funciona direto pelo navegador do celular ou computador. O app mobile estará disponível em breve.</div>
+          </div>
+        </div>
+
+        <div class="faq-item" data-categoria="comecando">
+          <button class="faq-question" onclick="toggleFaq(this)" aria-expanded="false">
+            <span data-pt="Funciona no celular?" data-en="Does it work on mobile?">Funciona no celular?</span>
+            <span class="faq-icon" aria-hidden="true"></span>
+          </button>
+          <div class="faq-answer">
+            <div class="faq-answer-inner" data-pt="Sim, o Kyvvo funciona direto pelo navegador do seu celular, sem precisar instalar nada. Você gerencia sua agenda e seus clientes de qualquer lugar." data-en="Yes, Kyvvo runs straight from your phone's browser, no install needed. You can manage your schedule and clients from anywhere.">Sim, o Kyvvo funciona direto pelo navegador do seu celular, sem precisar instalar nada. Você gerencia sua agenda e seus clientes de qualquer lugar.</div>
+          </div>
+        </div>
+
+        <div class="faq-item" data-categoria="whatsapp">
+          <button class="faq-question" onclick="toggleFaq(this)" aria-expanded="false">
+            <span data-pt="Como funciona a integração com o WhatsApp?" data-en="How does the WhatsApp integration work?">Como funciona a integração com o WhatsApp?</span>
+            <span class="faq-icon" aria-hidden="true"></span>
+          </button>
+          <div class="faq-answer">
+            <div class="faq-answer-inner" data-pt="Seu cliente manda uma mensagem para o número do seu negócio. O bot do Kyvvo responde automaticamente, pergunta o serviço e o horário, e confirma o agendamento — tudo sem você precisar responder." data-en="Your client sends a message to your business's number. Kyvvo's bot replies automatically, asks for the service and time, and confirms the booking — all without you lifting a finger.">Seu cliente manda uma mensagem para o número do seu negócio. O bot do Kyvvo responde automaticamente, pergunta o serviço e o horário, e confirma o agendamento — tudo sem você precisar responder.</div>
+          </div>
+        </div>
+
+        <div class="faq-item" data-categoria="whatsapp">
+          <button class="faq-question" onclick="toggleFaq(this)" aria-expanded="false">
+            <span data-pt="Meu número de WhatsApp está seguro?" data-en="Is my WhatsApp number safe?">Meu número de WhatsApp está seguro?</span>
+            <span class="faq-icon" aria-hidden="true"></span>
+          </button>
+          <div class="faq-answer">
+            <div class="faq-answer-inner" data-pt="Sim. Usamos a API oficial do WhatsApp (Meta), que garante segurança e conformidade. Números conectados via API oficial não são bloqueados." data-en="Yes. We use the official WhatsApp API (Meta), which ensures security and compliance. Numbers connected through the official API are not blocked.">Sim. Usamos a API oficial do WhatsApp (Meta), que garante segurança e conformidade. Números conectados via API oficial não são bloqueados.</div>
+          </div>
+        </div>
+
+        <div class="faq-item" data-categoria="pagamento">
+          <button class="faq-question" onclick="toggleFaq(this)" aria-expanded="false">
+            <span data-pt="Quanto custa após o trial?" data-en="How much does it cost after the trial?">Quanto custa após o trial?</span>
+            <span class="faq-icon" aria-hidden="true"></span>
+          </button>
+          <div class="faq-answer">
+            <div class="faq-answer-inner" data-pt="A partir de R$ 147/mês no plano Starter. Veja todos os planos na seção de preços." data-en="From R$ 147/month on the Starter plan. See all plans in the pricing section.">A partir de R$ 147/mês no plano Starter. Veja todos os planos na seção de preços.</div>
+          </div>
+        </div>
+
+        <div class="faq-item" data-categoria="seguranca">
+          <button class="faq-question" onclick="toggleFaq(this)" aria-expanded="false">
+            <span data-pt="Meus dados estão protegidos?" data-en="Is my data protected?">Meus dados estão protegidos?</span>
+            <span class="faq-icon" aria-hidden="true"></span>
+          </button>
+          <div class="faq-answer">
+            <div class="faq-answer-inner" data-pt="Sim. Seguimos a LGPD, fazemos backups regulares e usamos infraestrutura AWS para manter seus dados e os do seu negócio protegidos." data-en="Yes. We follow LGPD (Brazil's data protection law), run regular backups and use AWS infrastructure to keep your data and your business's data safe.">Sim. Seguimos a LGPD, fazemos backups regulares e usamos infraestrutura AWS para manter seus dados e os do seu negócio protegidos.</div>
+          </div>
+        </div>
+
+        <div class="faq-item" data-categoria="conta">
+          <button class="faq-question" onclick="toggleFaq(this)" aria-expanded="false">
+            <span data-pt="Como funciona o trial gratuito?" data-en="How does the free trial work?">Como funciona o trial gratuito?</span>
+            <span class="faq-icon" aria-hidden="true"></span>
+          </button>
+          <div class="faq-answer">
+            <div class="faq-answer-inner" data-pt="Você tem 14 dias grátis para testar todas as funcionalidades, sem precisar cadastrar cartão de crédito. Depois, escolhe um dos nossos planos para continuar." data-en="You get 14 days free to try every feature, no credit card required. After that, you pick one of our plans to keep going.">Você tem 14 dias grátis para testar todas as funcionalidades, sem precisar cadastrar cartão de crédito. Depois, escolhe um dos nossos planos para continuar.</div>
+          </div>
+        </div>
+
+        <div class="faq-item" data-categoria="conta">
+          <button class="faq-question" onclick="toggleFaq(this)" aria-expanded="false">
+            <span data-pt="Posso cancelar quando quiser?" data-en="Can I cancel anytime?">Posso cancelar quando quiser?</span>
+            <span class="faq-icon" aria-hidden="true"></span>
+          </button>
+          <div class="faq-answer">
+            <div class="faq-answer-inner" data-pt="Sim. Sem fidelidade, sem multa. Cancele quando quiser direto pelo portal." data-en="Yes. No lock-in, no penalty. Cancel whenever you want, straight from the portal.">Sim. Sem fidelidade, sem multa. Cancele quando quiser direto pelo portal.</div>
+          </div>
+        </div>
+      </div>
+
+      <p class="faq-contact">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 4.6 1.4c0 1.6-2.1 1.8-2.1 3.3"/><circle cx="12" cy="17" r=".6" fill="currentColor" stroke="none"/></svg>
+        <span data-pt="Não encontrou sua resposta? " data-en="Didn't find your answer? ">Não encontrou sua resposta? </span>
+        <a href="https://wa.me/553484285182?text=Ol%C3%A1!%20Quero%20saber%20mais%20sobre%20o%20Kyvvo." target="_blank" rel="noopener"
+           data-pt="Fale com a gente pelo WhatsApp" data-en="Talk to us on WhatsApp">Fale com a gente pelo WhatsApp</a>
       </p>
-    </div>
-
-    <div class="diferenciais-grid">
-      <div class="diferencial-item">
-        <div class="diferencial-icone" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
-        </div>
-        <h3 class="diferencial-title" data-pt="Simples de usar" data-en="Simple to use">Simples de usar</h3>
-        <p class="diferencial-desc" data-pt="Interface intuitiva para você e sua equipe começarem em minutos." data-en="Intuitive interface for you and your team to get started in minutes.">Interface intuitiva para você e sua equipe começarem em minutos.</p>
-      </div>
-      <div class="diferencial-item">
-        <div class="diferencial-icone" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg>
-        </div>
-        <h3 class="diferencial-title" data-pt="Feito para WhatsApp" data-en="Built for WhatsApp">Feito para WhatsApp</h3>
-        <p class="diferencial-desc" data-pt="Atenda, agende e confirme pelo WhatsApp que você já usa todos os dias." data-en="Serve, schedule and confirm on the WhatsApp you already use every day.">Atenda, agende e confirme pelo WhatsApp que você já usa todos os dias.</p>
-      </div>
-      <div class="diferencial-item">
-        <div class="diferencial-icone" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 5v6c0 5 3.5 8.5 8 11 4.5-2.5 8-6 8-11V5l-8-3z"/><path d="M9 12l2 2 4-4"/></svg>
-        </div>
-        <h3 class="diferencial-title" data-pt="Seguro e confiável" data-en="Secure and reliable">Seguro e confiável</h3>
-        <p class="diferencial-desc" data-pt="Seus dados protegidos com tecnologia moderna e confiabilidade." data-en="Your data protected with modern, reliable technology.">Seus dados protegidos com tecnologia moderna e confiabilidade.</p>
-      </div>
-    </div>
-  </div>
-
-  <div class="fundador-showcase">
-    <div class="fundador-perfil">
-      <div class="fundador-avatar" aria-hidden="true">BA</div>
-      <div>
-        <h3 class="fundador-nome">Bruno Alves</h3>
-        <p class="fundador-cargo" data-pt="Fundador" data-en="Founder">Fundador</p>
-        <p class="fundador-bio" data-pt="Depois de ver de perto a bagunça de agenda em papel e planilha em dezenas de pequenos negócios, resolvi construir a ferramenta que eu queria que existisse: simples, direto e pensada para a realidade de quem empreende." data-en="After seeing firsthand the mess of paper schedules and spreadsheets in dozens of small businesses, I decided to build the tool I wished existed: simple, straightforward and built for the reality of entrepreneurs.">Depois de ver de perto a bagunça de agenda em papel e planilha em dezenas de pequenos negócios, resolvi construir a ferramenta que eu queria que existisse: simples, direto e pensada para a realidade de quem empreende.</p>
-        <p class="fundador-origem">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s7-6.5 7-12a7 7 0 0 0-14 0c0 5.5 7 12 7 12z"/><circle cx="12" cy="9" r="2.3"/></svg>
-          <span data-pt="Uberlândia, MG — fundada em 2026" data-en="Uberlândia, Brazil — founded in 2026">Uberlândia, MG — fundada em 2026</span>
-        </p>
-      </div>
-    </div>
-    <div class="fundador-quote">
-      <svg class="fundador-quote-icon" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><path d="M9.5 6C6.5 7.5 5 10 5 13c0 2.5 1.7 4.3 4 4.3 1.9 0 3.3-1.4 3.3-3.2 0-1.7-1.2-3-2.8-3-.3 0-.6 0-.8.1.3-1.8 1.7-3.4 3.3-4.2L9.5 6zm9 0c-3 1.5-4.5 4-4.5 7 0 2.5 1.7 4.3 4 4.3 1.9 0 3.3-1.4 3.3-3.2 0-1.7-1.2-3-2.8-3-.3 0-.6 0-.8.1.3-1.8 1.7-3.4 3.3-4.2L18.5 6z"/></svg>
-      <p data-pt="Nosso propósito é tirar a tecnologia do caminho e colocar o tempo de volta na sua mão para você focar no que realmente importa: suas clientes e o crescimento do seu negócio." data-en="Our purpose is to get technology out of the way and put time back in your hands, so you can focus on what really matters: your clients and your business's growth.">Nosso propósito é tirar a tecnologia do caminho e colocar o tempo de volta na sua mão para você focar no que realmente importa: suas clientes e o crescimento do seu negócio.</p>
-    </div>
-  </div>
-
-  <div class="porque-titulo">
-    <div class="section-eyebrow" data-pt="Por que escolhemos fazer diferente" data-en="Why we chose to do things differently">Por que escolhemos fazer diferente</div>
-  </div>
-  <div class="diferentes-grid">
-    <div class="diferente-item">
-      <svg class="diferente-icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.5-7 8-7s8 3 8 7"/></svg>
-      <h3 class="diferente-title" data-pt="Foco no essencial" data-en="Focus on the essentials">Foco no essencial</h3>
-      <p class="diferente-desc" data-pt="Nada de funções que você não usa. Apenas o que realmente faz diferença no seu dia a dia." data-en="No features you won't use. Just what actually makes a difference in your day.">Nada de funções que você não usa. Apenas o que realmente faz diferença no seu dia a dia.</p>
-    </div>
-    <div class="diferente-item">
-      <svg class="diferente-icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20s-7-4.4-9.5-9A5.5 5.5 0 0 1 12 5.5 5.5 5.5 0 0 1 21.5 11c-2.5 4.6-9.5 9-9.5 9z"/></svg>
-      <h3 class="diferente-title" data-pt="Apoio de verdade" data-en="Real support">Apoio de verdade</h3>
-      <p class="diferente-desc" data-pt="Estamos com você em cada passo, com suporte humano e próximo quando precisar." data-en="We're with you every step of the way, with human, hands-on support whenever you need it.">Estamos com você em cada passo, com suporte humano e próximo quando precisar.</p>
-    </div>
-    <div class="diferente-item">
-      <svg class="diferente-icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>
-      <h3 class="diferente-title" data-pt="Evolução constante" data-en="Constant evolution">Evolução constante</h3>
-      <p class="diferente-desc" data-pt="Melhoramos sempre com base no feedback de quem usa, porque você faz parte do nosso produto." data-en="We're always improving based on feedback from real users, because you're part of our product.">Melhoramos sempre com base no feedback de quem usa, porque você faz parte do nosso produto.</p>
-    </div>
-    <div class="diferente-item">
-      <svg class="diferente-icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
-      <h3 class="diferente-title" data-pt="Transparência" data-en="Transparency">Transparência</h3>
-      <p class="diferente-desc" data-pt="Planos justos, comunicação clara e compromisso real com o sucesso do seu negócio." data-en="Fair plans, clear communication and a real commitment to your business's success.">Planos justos, comunicação clara e compromisso real com o sucesso do seu negócio.</p>
-    </div>
-  </div>
-
-  <div class="stats-titulo">
-    <div class="section-eyebrow" data-pt="Pequenos negócios • Grandes histórias" data-en="Small businesses • Big stories">Pequenos negócios • Grandes histórias</div>
-  </div>
-  <div class="stats-bar">
-    <div class="stats-grid">
-      <div class="stat-item">
-        <svg class="stat-icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c0-3.3 2.9-6 6.5-6s6.5 2.7 6.5 6"/><path d="M16.5 4.6a3.2 3.2 0 0 1 0 6.3"/><path d="M18.8 14.3c2.3.6 3.7 2.7 3.7 5.7"/></svg>
-        <div>
-          <div class="stat-numero" data-pt="+ de 0" data-en="0+">+ de 0</div>
-          <div class="stat-label" data-pt="Negócios simplificando o dia a dia" data-en="Businesses simplifying their day-to-day">Negócios simplificando o dia a dia</div>
-        </div>
-      </div>
-      <div class="stat-item">
-        <svg class="stat-icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 16.5v2.3a2 2 0 0 1-2.2 2 18 18 0 0 1-7.8-2.8 17.6 17.6 0 0 1-5.4-5.4A18 18 0 0 1 3 4.7 2 2 0 0 1 5 2.5h2.3a2 2 0 0 1 2 1.7c.1.9.4 1.9.7 2.7a2 2 0 0 1-.5 2.1L8.3 10.3a14.4 14.4 0 0 0 5.4 5.4l1.3-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2.1z"/></svg>
-        <div>
-          <div class="stat-numero" data-pt="+ de 0" data-en="0+">+ de 0</div>
-          <div class="stat-label" data-pt="Atendimentos realizados pelo WhatsApp" data-en="Bookings handled through WhatsApp">Atendimentos realizados pelo WhatsApp</div>
-        </div>
-      </div>
-      <div class="stat-item">
-        <svg class="stat-icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>
-        <div>
-          <div class="stat-numero" data-pt="+ de 0" data-en="0+">+ de 0</div>
-          <div class="stat-label" data-pt="Horas economizadas todos os dias" data-en="Hours saved every day">Horas economizadas todos os dias</div>
-        </div>
-      </div>
-      <div class="stat-item">
-        <svg class="stat-icone" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><path d="M12 2.5l2.9 6 6.6.6-5 4.4 1.5 6.5L12 16.8 6 20l1.5-6.5-5-4.4 6.6-.6z"/></svg>
-        <div>
-          <div class="stat-numero" data-pt="0%" data-en="0%">0%</div>
-          <div class="stat-label" data-pt="Foco em fazer simples e bem feito" data-en="Focus on doing it simple and well">Foco em fazer simples e bem feito</div>
-        </div>
-      </div>
     </div>
   </div>
 </section>
 
-<!-- FAQ -->
-<section class="faq-section" id="faq">
-  <div class="section-eyebrow" data-pt="FAQ" data-en="FAQ">FAQ</div>
-  <h2 class="section-title" data-pt="Perguntas frequentes" data-en="Frequently asked questions">Perguntas frequentes</h2>
-  <p class="section-sub" data-pt="Tudo o que você precisa saber antes de começar." data-en="Everything you need to know before getting started.">Tudo o que você precisa saber antes de começar.</p>
+<!-- Quem somos -->
+<section class="quem-somos-section" id="quem-somos">
+  <div class="quem-somos-grid">
+    <div class="quem-somos-intro">
+      <div class="section-eyebrow" data-pt="Quem somos?" data-en="About us?">Quem somos?</div>
+      <h2 class="section-title" data-pt="Criamos o Kyvvo para <em>devolver tempo</em> para quem vive atendendo pessoas todos os dias." data-en="We created Kyvvo to <em>give back time</em> to those who spend every day serving people.">Criamos o Kyvvo para <em>devolver tempo</em> para quem vive atendendo pessoas todos os dias.</h2>
+      <p class="section-sub" data-pt="Acreditamos que pequenos negócios merecem tecnologia do mesmo nível das grandes empresas. Por isso, construímos uma plataforma simples, completa e feita para o dia a dia real de quem empreende." data-en="We believe small businesses deserve technology on par with big companies. That's why we built a simple, complete platform made for the real day-to-day of entrepreneurs.">Acreditamos que pequenos negócios merecem tecnologia do mesmo nível das grandes empresas. Por isso, construímos uma plataforma simples, completa e feita para o dia a dia real de quem empreende.</p>
 
-  <div class="faq-wrap">
-    <div class="faq-item">
-      <button class="faq-question" onclick="toggleFaq(this)" aria-expanded="false">
-        <span data-pt="O Kyvvo funciona com qualquer tipo de salão?" data-en="Does Kyvvo work with any type of salon?">O Kyvvo funciona com qualquer tipo de salão?</span>
-        <span class="faq-icon" aria-hidden="true"></span>
-      </button>
-      <div class="faq-answer">
-        <div class="faq-answer-inner" data-pt="Sim, funciona para qualquer salão de beleza. Em breve expandiremos para outros nichos como pet shops, clínicas e academias." data-en="Yes, it works for any beauty salon. Soon we'll expand to other niches such as pet shops, clinics and gyms.">Sim, funciona para qualquer salão de beleza. Em breve expandiremos para outros nichos como pet shops, clínicas e academias.</div>
+      <div class="quem-somos-pills">
+        <div class="quem-somos-pill">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s7-6.5 7-12a7 7 0 0 0-14 0c0 5.5 7 12 7 12z"/><circle cx="12" cy="9" r="2.3"/></svg>
+          <span data-pt="Uberlândia, MG" data-en="Uberlândia, Brazil">Uberlândia, MG</span>
+        </div>
+        <div class="quem-somos-pill">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18"/><path d="M8 3v4M16 3v4"/></svg>
+          <span data-pt="Fundada em 2026" data-en="Founded in 2026">Fundada em 2026</span>
+        </div>
+        <div class="quem-somos-pill">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20s-7-4.4-9.5-9A5.5 5.5 0 0 1 12 5.5 5.5 5.5 0 0 1 21.5 11c-2.5 4.6-9.5 9-9.5 9z"/></svg>
+          <span data-pt="Feita com propósito" data-en="Made with purpose">Feita com propósito</span>
+        </div>
       </div>
     </div>
 
-    <div class="faq-item">
-      <button class="faq-question" onclick="toggleFaq(this)" aria-expanded="false">
-        <span data-pt="Preciso instalar algum aplicativo?" data-en="Do I need to install any app?">Preciso instalar algum aplicativo?</span>
-        <span class="faq-icon" aria-hidden="true"></span>
-      </button>
-      <div class="faq-answer">
-        <div class="faq-answer-inner" data-pt="Não. O Kyvvo funciona direto pelo navegador do celular ou computador. O app mobile estará disponível em breve." data-en="No. Kyvvo runs straight from your phone or computer browser. The mobile app will be available soon.">Não. O Kyvvo funciona direto pelo navegador do celular ou computador. O app mobile estará disponível em breve.</div>
+    <div class="fundador-foto-card">
+      <img src="/images/bruno-alves-fundador.png" alt="Bruno Alves, fundador do Kyvvo" loading="lazy">
+      <div class="fundador-foto-legenda">
+        <div>
+          <div class="fundador-foto-nome">Bruno Alves</div>
+          <div class="fundador-foto-cargo" data-pt="Fundador do Kyvvo" data-en="Founder of Kyvvo">Fundador do Kyvvo</div>
+        </div>
+        <a class="fundador-linkedin-btn" href="#" target="_blank" rel="noopener" aria-label="LinkedIn">
+          <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M4.98 3.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5zM3 9h4v12H3zM9 9h3.8v1.7h.05c.53-1 1.83-2 3.77-2 4.03 0 4.78 2.65 4.78 6.1V21h-4v-5.4c0-1.3-.02-2.96-1.8-2.96-1.8 0-2.08 1.4-2.08 2.86V21H9z"/></svg>
+        </a>
       </div>
     </div>
 
-    <div class="faq-item">
-      <button class="faq-question" onclick="toggleFaq(this)" aria-expanded="false">
-        <span data-pt="Como funciona o agendamento pelo WhatsApp?" data-en="How does WhatsApp booking work?">Como funciona o agendamento pelo WhatsApp?</span>
-        <span class="faq-icon" aria-hidden="true"></span>
-      </button>
-      <div class="faq-answer">
-        <div class="faq-answer-inner" data-pt="Seu cliente manda uma mensagem para o número do salão. O bot do Kyvvo responde automaticamente, pergunta o serviço e o horário, e confirma o agendamento — tudo sem você precisar responder." data-en="Your client sends a message to the salon's number. Kyvvo's bot replies automatically, asks for the service and time, and confirms the booking — all without you lifting a finger.">Seu cliente manda uma mensagem para o número do salão. O bot do Kyvvo responde automaticamente, pergunta o serviço e o horário, e confirma o agendamento — tudo sem você precisar responder.</div>
+    <div class="pilares-lista">
+      <div class="pilar-item">
+        <div class="pilar-icone" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/></svg></div>
+        <div>
+          <h3 class="pilar-title" data-pt="Nosso propósito" data-en="Our purpose">Nosso propósito</h3>
+          <p class="pilar-desc" data-pt="Simplificar a gestão de negócios de serviços para que você possa focar no que importa." data-en="Simplify management for service businesses so you can focus on what matters.">Simplificar a gestão de negócios de serviços para que você possa focar no que importa.</p>
+        </div>
       </div>
-    </div>
-
-    <div class="faq-item">
-      <button class="faq-question" onclick="toggleFaq(this)" aria-expanded="false">
-        <span data-pt="O que acontece quando o trial de 14 dias terminar?" data-en="What happens when the 14-day trial ends?">O que acontece quando o trial de 14 dias terminar?</span>
-        <span class="faq-icon" aria-hidden="true"></span>
-      </button>
-      <div class="faq-answer">
-        <div class="faq-answer-inner" data-pt="Você escolhe um dos nossos planos para continuar. Se não quiser assinar, seu acesso é pausado e seus dados ficam guardados por 30 dias." data-en="You pick one of our plans to keep going. If you'd rather not subscribe, your access is paused and your data is kept for 30 days.">Você escolhe um dos nossos planos para continuar. Se não quiser assinar, seu acesso é pausado e seus dados ficam guardados por 30 dias.</div>
+      <div class="pilar-item">
+        <div class="pilar-icone" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c0-3.3 2.9-6 6.5-6s6.5 2.7 6.5 6"/><path d="M16.5 4.6a3.2 3.2 0 0 1 0 6.3"/><path d="M18.8 14.3c2.3.6 3.7 2.7 3.7 5.7"/></svg></div>
+        <div>
+          <h3 class="pilar-title" data-pt="Nosso compromisso" data-en="Our commitment">Nosso compromisso</h3>
+          <p class="pilar-desc" data-pt="Estar ao lado do cliente com suporte humano, transparência e evolução constante." data-en="Standing by our clients with human support, transparency and constant evolution.">Estar ao lado do cliente com suporte humano, transparência e evolução constante.</p>
+        </div>
       </div>
-    </div>
-
-    <div class="faq-item">
-      <button class="faq-question" onclick="toggleFaq(this)" aria-expanded="false">
-        <span data-pt="Meu número de WhatsApp pode ser bloqueado?" data-en="Can my WhatsApp number get blocked?">Meu número de WhatsApp pode ser bloqueado?</span>
-        <span class="faq-icon" aria-hidden="true"></span>
-      </button>
-      <div class="faq-answer">
-        <div class="faq-answer-inner" data-pt="Usamos a API oficial do WhatsApp (Meta), que garante segurança e conformidade. Números conectados via API oficial não são bloqueados." data-en="We use the official WhatsApp API (Meta), which ensures security and compliance. Numbers connected through the official API are not blocked.">Usamos a API oficial do WhatsApp (Meta), que garante segurança e conformidade. Números conectados via API oficial não são bloqueados.</div>
+      <div class="pilar-item">
+        <div class="pilar-icone" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2c3 2 5 6 5 10 0 2-.5 4-1.5 5.5L12 21l-3.5-3.5C7.5 16 7 14 7 12c0-4 2-8 5-10z"/><path d="M9 15l-3 1 1-3"/><path d="M15 15l3 1-1-3"/><circle cx="12" cy="10" r="1.6"/></svg></div>
+        <div>
+          <h3 class="pilar-title" data-pt="Nossa visão" data-en="Our vision">Nossa visão</h3>
+          <p class="pilar-desc" data-pt="Ser a plataforma número 1 para pequenos negócios de serviços na América Latina." data-en="To be the #1 platform for small service businesses in Latin America.">Ser a plataforma número 1 para pequenos negócios de serviços na América Latina.</p>
+        </div>
       </div>
-    </div>
-
-    <div class="faq-item">
-      <button class="faq-question" onclick="toggleFaq(this)" aria-expanded="false">
-        <span data-pt="Quanto custa após o trial?" data-en="How much does it cost after the trial?">Quanto custa após o trial?</span>
-        <span class="faq-icon" aria-hidden="true"></span>
-      </button>
-      <div class="faq-answer">
-        <div class="faq-answer-inner" data-pt="A partir de R$ 147/mês no plano Starter. Veja todos os planos na seção de preços." data-en="From R$ 147/month on the Starter plan. See all plans in the pricing section.">A partir de R$ 147/mês no plano Starter. Veja todos os planos na seção de preços.</div>
-      </div>
-    </div>
-
-    <div class="faq-item">
-      <button class="faq-question" onclick="toggleFaq(this)" aria-expanded="false">
-        <span data-pt="Posso cancelar a qualquer momento?" data-en="Can I cancel anytime?">Posso cancelar a qualquer momento?</span>
-        <span class="faq-icon" aria-hidden="true"></span>
-      </button>
-      <div class="faq-answer">
-        <div class="faq-answer-inner" data-pt="Sim. Sem fidelidade, sem multa. Cancele quando quiser direto pelo portal." data-en="Yes. No lock-in, no penalty. Cancel whenever you want, straight from the portal.">Sim. Sem fidelidade, sem multa. Cancele quando quiser direto pelo portal.</div>
+      <div class="pilar-item">
+        <div class="pilar-icone" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2.5l2.9 6 6.6.6-5 4.4 1.5 6.5L12 16.8 6 20l1.5-6.5-5-4.4 6.6-.6z"/></svg></div>
+        <div>
+          <h3 class="pilar-title" data-pt="Nossos valores" data-en="Our values">Nossos valores</h3>
+          <p class="pilar-desc" data-pt="Simplicidade, inovação, respeito e foco no sucesso do cliente." data-en="Simplicity, innovation, respect and a focus on our clients' success.">Simplicidade, inovação, respeito e foco no sucesso do cliente.</p>
+        </div>
       </div>
     </div>
   </div>
-
-  <p class="faq-contact">
-    <span data-pt="Ainda tem dúvidas? " data-en="Still have questions? ">Ainda tem dúvidas? </span>
-    <a href="https://wa.me/553484285182?text=Ol%C3%A1!%20Quero%20saber%20mais%20sobre%20o%20Kyvvo." target="_blank" rel="noopener"
-       data-pt="Fale com a gente pelo WhatsApp →" data-en="Talk to us on WhatsApp →">Fale com a gente pelo WhatsApp →</a>
-  </p>
 </section>
 
 <div id="site-footer"></div>
@@ -574,14 +605,36 @@ function onSharedReady() {
   const navRight = document.getElementById('navRight');
   if (navRight) {
     navRight.insertAdjacentHTML('afterbegin', `
-      <a class="nav-link" href="#quem-somos" data-pt="Quem somos" data-en="About us">Quem somos</a>
       <a class="nav-link" href="#faq" data-pt="Perguntas frequentes" data-en="FAQ">Perguntas frequentes</a>
+      <a class="nav-link" href="#quem-somos" data-pt="Quem somos" data-en="About us">Quem somos</a>
       <div class="lang-toggle">
         <button class="lang-btn active" onclick="setLang('pt')">PT</button>
         <button class="lang-btn" onclick="setLang('en')">EN</button>
       </div>
     `);
   }
+
+  // Primeiro item do FAQ (US: nova versão do FAQ) já abre expandido —
+  // igual toggleFaq() faria, mas disparado no load em vez de num clique.
+  const primeiroFaq = document.querySelector('.faq-item');
+  if (primeiroFaq) {
+    const answer = primeiroFaq.querySelector('.faq-answer');
+    primeiroFaq.classList.add('open');
+    answer.style.maxHeight = answer.scrollHeight + 'px';
+    primeiroFaq.querySelector('.faq-question').setAttribute('aria-expanded', 'true');
+  }
+}
+
+// Filtro de categoria do FAQ (Todas/Começando/WhatsApp/Pagamento/Segurança/
+// Conta) — cada .faq-item tem um data-categoria; "todas" mostra tudo.
+function filtrarFaq(btn) {
+  document.querySelectorAll('.faq-tab').forEach((t) => t.classList.remove('active'));
+  btn.classList.add('active');
+  const categoria = btn.dataset.categoria;
+  document.querySelectorAll('.faq-item').forEach((item) => {
+    const mostrar = categoria === 'todas' || item.dataset.categoria === categoria;
+    item.style.display = mostrar ? '' : 'none';
+  });
 }
 </script>
 </body>
