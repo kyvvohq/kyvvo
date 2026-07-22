@@ -1590,6 +1590,7 @@ async function render() {
   if (menuAtual === 'configuracao') return renderConfiguracao();
   if (menuAtual === 'perfil') return renderPerfil();
   if (menuAtual === 'empresa') return renderMinhaEmpresa();
+  if (menuAtual === 'whatsapp') return renderWhatsapp();
   // "Ajuda" (user menu, PR11) reaproveita o mesmo placeholder "em breve" já
   // usado pros módulos ainda não desenvolvidos.
   if (menuAtual === 'ajuda') return renderModuloEmBreve();
@@ -2525,6 +2526,139 @@ function abrirModalConfirmarDiasFechados(onContinuar) {
     fecharModal();
     onContinuar();
   });
+}
+
+// Único texto exibido em renderWhatsapp() que não vem do próprio backend do
+// Kyvvo (nome verificado / mensagem de erro vêm da Graph API da Meta) — por
+// isso escapado explicitamente, diferente do resto do app.js que confia nos
+// dados já validados do próprio perfil do tenant.
+function escapeHtml(valor) {
+  return String(valor ?? '').replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  }[c]));
+}
+
+let fbSdkPromise = null;
+function carregarFacebookSdk(appId) {
+  if (fbSdkPromise) return fbSdkPromise;
+  fbSdkPromise = new Promise((resolve) => {
+    window.fbAsyncInit = function () {
+      FB.init({ appId, cookie: true, xfbml: false, version: 'v22.0' });
+      resolve();
+    };
+    const script = document.createElement('script');
+    script.src = 'https://connect.facebook.net/pt_BR/sdk.js';
+    script.async = true;
+    script.defer = true;
+    document.body.appendChild(script);
+  });
+  return fbSdkPromise;
+}
+
+// Self-service de conexão do WhatsApp (Embedded Signup da Meta) — mostra o
+// status atual (GET /api/whatsapp/status, mesma lógica do card de status já
+// usado em Fatura/Admin) e, se ainda não conectado, um botão que abre o
+// popup de login do Facebook pra o tenant escolher/criar a WhatsApp Business
+// Account dele. Ver plano em .claude/plans — nenhum token de tenant é salvo
+// aqui, só waba_id/phone_number_id (POST /api/whatsapp/conectar).
+async function renderWhatsapp() {
+  conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
+  const status = await api('/api/whatsapp/status');
+  if (!status) return;
+
+  let cardClasse = 'status-card-inativo';
+  let linha2 = 'Não conectado';
+  let linha3 = 'Conecte o WhatsApp do seu negócio pra ativar o agendamento automático pelo bot.';
+
+  if (status.conectado) {
+    cardClasse = 'status-card-ativo';
+    linha2 = status.numeroExibido || 'Conectado';
+    linha3 = [status.nomeVerificado, status.qualidade ? `Qualidade: ${status.qualidade}` : null].filter(Boolean).join(' · ') || 'Sem detalhes adicionais.';
+  } else if (status.erro) {
+    cardClasse = 'status-card-pendente';
+    linha2 = 'Erro de conexão';
+    linha3 = status.erro;
+  }
+
+  conteudo.innerHTML = `
+    <h2 class="titulo-detalhe">WhatsApp</h2>
+    <div class="financeiro-resumo" style="grid-template-columns: 1fr">
+      <div class="financeiro-resumo-card financeiro-resumo-card-3linhas ${cardClasse}">
+        <div class="financeiro-resumo-label">${status.conectado ? 'WhatsApp conectado' : 'WhatsApp'}</div>
+        <div class="financeiro-resumo-linha2">${escapeHtml(linha2)}</div>
+        <div class="financeiro-resumo-linha3">${escapeHtml(linha3)}</div>
+      </div>
+    </div>
+    ${status.conectado ? '' : '<button class="btn-primario" id="btn-conectar-whatsapp" disabled style="margin-top:16px">Carregando conexão...</button>'}
+  `;
+
+  if (!status.conectado) {
+    iniciarConexaoWhatsapp();
+  }
+}
+
+async function iniciarConexaoWhatsapp() {
+  const btn = document.getElementById('btn-conectar-whatsapp');
+  const config = await api('/api/whatsapp/config-publica');
+  if (!btn) return; // usuário já navegou pra outra tela enquanto isso carregava
+
+  if (!config || !config.appId || !config.configId) {
+    btn.textContent = 'Conexão indisponível no momento';
+    return;
+  }
+
+  await carregarFacebookSdk(config.appId);
+  btn.textContent = 'Conectar WhatsApp';
+  btn.disabled = false;
+
+  let dadosSignup = null;
+  function ouvirMensagem(event) {
+    if (event.origin !== 'https://www.facebook.com' && event.origin !== 'https://web.facebook.com') return;
+    try {
+      const dados = JSON.parse(event.data);
+      if (dados.type === 'WA_EMBEDDED_SIGNUP' && dados.event === 'FINISH') {
+        dadosSignup = dados.data;
+      }
+    } catch (erro) {
+      // mensagem de outra origem/formato inesperado — ignora
+    }
+  }
+  window.addEventListener('message', ouvirMensagem);
+
+  btn.addEventListener('click', () => {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+    FB.login(
+      (response) => {
+        window.removeEventListener('message', ouvirMensagem);
+        const code = response.authResponse && response.authResponse.code;
+        if (!code || !dadosSignup) {
+          mostrarToast('Conexão cancelada ou incompleta. Tente novamente.', 'erro');
+          renderWhatsapp();
+          return;
+        }
+        conectarWhatsapp(code, dadosSignup.waba_id, dadosSignup.phone_number_id);
+      },
+      { config_id: config.configId, response_type: 'code', override_default_response_type: true, extras: { setup: {} } }
+    );
+  }, { once: true });
+}
+
+async function conectarWhatsapp(code, wabaId, phoneNumberId) {
+  const resultado = await api('/api/whatsapp/conectar', {
+    method: 'POST',
+    body: JSON.stringify({ code, wabaId, phoneNumberId }),
+  });
+  if (resultado && !resultado.error) {
+    mostrarToast('WhatsApp conectado com sucesso!', 'sucesso');
+  } else {
+    mostrarToast((resultado && resultado.error) || 'Erro ao conectar o WhatsApp.', 'erro');
+  }
+  renderWhatsapp();
 }
 
 async function renderConfiguracao() {
