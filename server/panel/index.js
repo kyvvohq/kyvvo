@@ -10,6 +10,7 @@ const bcrypt = require('bcryptjs');
 const { Pool } = require('pg');
 const tokenService = require('./token-service');
 const asaasService = require('./asaas-service');
+const metaWhatsappService = require('./meta-whatsapp-service');
 
 // ---------- Cadastro self-service (US20) ----------
 // `let` (não `const`) porque a US38 permite um admin da Kyvvo sobrescrever
@@ -1284,6 +1285,95 @@ async function start() {
     }
 
     return buscarPerfil(userId);
+  });
+
+  // ---------- WhatsApp (self-service, Embedded Signup da Meta) ----------
+  // appId/configId não são secretos — só inicializam o SDK do Facebook no
+  // frontend, por isso não têm problema em ir numa rota GET comum.
+  fastify.get('/api/whatsapp/config-publica', { preHandler: [fastify.authenticate] }, async () => {
+    return {
+      appId: process.env.META_APP_ID || null,
+      configId: process.env.META_CONFIG_ID || null,
+    };
+  });
+
+  // Chama a Graph API da Meta ao vivo com o phone_number_id do tenant (não
+  // um valor fixo de ambiente — cada tenant tem o seu, ver migration 033/034)
+  // usando o META_WHATSAPP_TOKEN compartilhado do Usuário do Sistema.
+  fastify.get('/api/whatsapp/status', { preHandler: [fastify.authenticate] }, async (request) => {
+    const { tenantId } = request.user;
+    const { rows } = await pool.query('SELECT meta_phone_number_id FROM tenants WHERE id = $1', [tenantId]);
+    const phoneNumberId = rows[0] && rows[0].meta_phone_number_id;
+    const status = { conectado: false, phoneNumberId: phoneNumberId || null };
+    if (!phoneNumberId) return status;
+
+    const metaToken = process.env.META_WHATSAPP_TOKEN;
+    if (!metaToken) {
+      status.erro = 'META_WHATSAPP_TOKEN não configurado no servidor.';
+      return status;
+    }
+
+    try {
+      const res = await fetch(
+        `https://graph.facebook.com/v22.0/${phoneNumberId}?fields=display_phone_number,verified_name,quality_rating`,
+        { headers: { Authorization: `Bearer ${metaToken}` }, signal: AbortSignal.timeout(8000) }
+      );
+      const corpo = await res.json();
+      if (res.ok) {
+        status.conectado = true;
+        status.numeroExibido = corpo.display_phone_number || null;
+        status.nomeVerificado = corpo.verified_name || null;
+        status.qualidade = corpo.quality_rating || null;
+      } else {
+        status.erro = (corpo.error && corpo.error.message) || `A Meta respondeu ${res.status}.`;
+      }
+    } catch (err) {
+      status.erro = `Falha ao contatar a Meta: ${err.message}`;
+    }
+    return status;
+  });
+
+  // Recebe o resultado do Embedded Signup (code + waba_id + phone_number_id,
+  // vindos do postMessage/callback do FB.login no frontend). Não troca por um
+  // token pra guardar — o code só confirma que o signup é legítimo; quem
+  // manda/recebe mensagem continua sendo o Usuário do Sistema compartilhado
+  // (ver comentário em meta-whatsapp-service.js).
+  fastify.post('/api/whatsapp/conectar', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const { tenantId } = request.user;
+    const { code, wabaId, phoneNumberId } = request.body || {};
+
+    if (!code || !wabaId || !phoneNumberId) {
+      return reply.code(400).send({ error: 'Dados incompletos retornados pelo WhatsApp. Tente conectar novamente.' });
+    }
+
+    try {
+      await metaWhatsappService.trocarCodePorToken(code);
+      await metaWhatsappService.assinarWebhooks(wabaId);
+      try {
+        await metaWhatsappService.registrarNumero(phoneNumberId);
+      } catch (erroRegistro) {
+        // Best-effort — o número pode já vir registrado dependendo da
+        // configuração do Embedded Signup; não impede a conexão de ser salva.
+        console.error(`[whatsapp] falha ao registrar número ${phoneNumberId} do tenant ${tenantId}: ${erroRegistro.message}`);
+      }
+    } catch (erro) {
+      return reply.code(400).send({ error: `Não foi possível conectar o WhatsApp: ${erro.message}` });
+    }
+
+    try {
+      await pool.query('UPDATE tenants SET meta_waba_id = $2, meta_phone_number_id = $3 WHERE id = $1', [
+        tenantId,
+        wabaId,
+        phoneNumberId,
+      ]);
+    } catch (erro) {
+      if (erro.code === '23505') {
+        return reply.code(409).send({ error: 'Esse número de WhatsApp já está conectado a outra conta Kyvvo.' });
+      }
+      throw erro;
+    }
+
+    return { conectado: true, phoneNumberId, wabaId };
   });
 
   // ---------- Configuração ----------
