@@ -182,6 +182,12 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .topbar .logo { margin: 0; font-size: 20px; }
 .saudacao { font-size: 13px; color: #a1a5c4; }
 
+/* Menu admin (Tenants/WhatsApp/Configurações) agrupado à esquerda, junto do
+   logo — só "Sair" fica à direita, em .topbar-acoes. */
+.topbar-left { display: flex; align-items: center; gap: 32px; }
+.topbar-menu { display: flex; align-items: center; gap: 18px; }
+.topbar-nav-link.ativo { color: #f2f2f7; font-weight: 600; }
+
 .topbar-acoes { display: flex; align-items: center; gap: 16px; }
 .topbar-nav-link { color: #a1a5c4; font-size: 14px; text-decoration: none; }
 .topbar-nav-link:hover { color: #f2f2f7; }
@@ -761,14 +767,26 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .status-card-ativo { background: #bbf7d0; border-color: #86efac; }
 .status-card-ativo .financeiro-resumo-label { color: #14532d; }
 .status-card-ativo .financeiro-resumo-linha2 { color: #14532d; font-size: 20px; font-weight: 800; }
+.status-card-ativo .financeiro-resumo-linha3 { color: #14532d; }
 
 .status-card-inativo { background: #fecaca; border-color: #fca5a5; }
 .status-card-inativo .financeiro-resumo-label { color: #7f1d1d; }
 .status-card-inativo .financeiro-resumo-linha2 { color: #7f1d1d; font-size: 20px; font-weight: 800; }
+.status-card-inativo .financeiro-resumo-linha3 { color: #7f1d1d; }
 
 .status-card-pendente { background: #fef08a; border-color: #fde047; }
 .status-card-pendente .financeiro-resumo-label { color: #713f12; }
 .status-card-pendente .financeiro-resumo-linha2 { color: #713f12; font-size: 20px; font-weight: 800; }
+.status-card-pendente .financeiro-resumo-linha3 { color: #713f12; }
+
+/* Card de status do WhatsApp (admin) mostra mensagem de erro da Meta, que
+   pode ser uma frase longa — a linha3 por padrão é nowrap (pensada pra
+   subtítulos curtos de 1 linha), o que estourava a largura do card. */
+.status-card-ativo .financeiro-resumo-linha3,
+.status-card-inativo .financeiro-resumo-linha3,
+.status-card-pendente .financeiro-resumo-linha3 {
+  white-space: normal;
+}
 
 /* Collapse "Detalhes" (PR5) — substitui o antigo botão "Alterar forma de
    pagamento" fora de um modal; reaproveita o mesmo formulário (Pix/Cartão)
