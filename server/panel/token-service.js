@@ -89,24 +89,47 @@ async function enviarTokenEmail(email, token, nome) {
   }
 }
 
-// Envia o token por WhatsApp via Evolution API, se configurada (CA03). Espera
-// o número nacional em dígitos (ex: "34984285182") e prefixa o DDI 55.
-async function enviarTokenWhatsapp(whatsappNacional, token) {
-  // Tenant sem WhatsApp cadastrado (ex: criado pela área admin, US16) — não
-  // há número nenhum pra tentar enviar.
-  if (!whatsappNacional) {
+// Envia o token por WhatsApp via API oficial da Meta (Cloud API), se
+// configurada. Espera o número nacional em dígitos e prefixa o DDI 55.
+async function enviarTokenWhatsappMeta(whatsappNacional, token) {
+  const apiToken = process.env.META_WHATSAPP_TOKEN;
+  const phoneNumberId = process.env.META_PHONE_NUMBER_ID;
+  const texto = `Seu código de verificação Kyvvo é: ${token}. Válido por ${TOKEN_EXPIRACAO_MINUTOS} minutos. Não compartilhe este código.`;
+
+  try {
+    const res = await fetch(`https://graph.facebook.com/v22.0/${phoneNumberId}/messages`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        to: `55${whatsappNacional}`,
+        type: 'text',
+        text: { body: texto },
+      }),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) {
+      const corpo = await res.text().catch(() => '');
+      console.error(`[token-service] Meta WhatsApp API respondeu ${res.status} ao enviar para 55${whatsappNacional}: ${corpo}`);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error(`[token-service] Falha ao enviar WhatsApp (Meta) para 55${whatsappNacional}: ${err.message}`);
     return false;
   }
+}
 
+// Envia o token por WhatsApp via Evolution API (CA03). Espera o número
+// nacional em dígitos (ex: "34984285182") e prefixa o DDI 55.
+async function enviarTokenWhatsappEvolution(whatsappNacional, token) {
   const url = process.env.EVOLUTION_API_URL;
   const apiKey = process.env.EVOLUTION_API_KEY;
   const instancia = process.env.EVOLUTION_INSTANCE;
   const texto = `Seu código de verificação Kyvvo é: ${token}. Válido por ${TOKEN_EXPIRACAO_MINUTOS} minutos. Não compartilhe este código.`;
-
-  if (!url || !apiKey || !instancia) {
-    console.log(`[token-service] (dev) WhatsApp para 55${whatsappNacional} — código: ${token}`);
-    return false;
-  }
 
   try {
     const res = await fetch(`${url.replace(/\/$/, '')}/message/sendText/${instancia}`, {
@@ -124,9 +147,30 @@ async function enviarTokenWhatsapp(whatsappNacional, token) {
     }
     return true;
   } catch (err) {
-    console.error(`[token-service] Falha ao enviar WhatsApp para 55${whatsappNacional}: ${err.message}`);
+    console.error(`[token-service] Falha ao enviar WhatsApp (Evolution) para 55${whatsappNacional}: ${err.message}`);
     return false;
   }
+}
+
+// Escolhe o provedor: API oficial da Meta se configurada (preferida — CA03),
+// senão Evolution API se configurada, senão cai no modo de log (dev/homolog).
+async function enviarTokenWhatsapp(whatsappNacional, token) {
+  // Tenant sem WhatsApp cadastrado (ex: criado pela área admin, US16) — não
+  // há número nenhum pra tentar enviar.
+  if (!whatsappNacional) {
+    return false;
+  }
+
+  if (process.env.META_WHATSAPP_TOKEN && process.env.META_PHONE_NUMBER_ID) {
+    return enviarTokenWhatsappMeta(whatsappNacional, token);
+  }
+
+  if (process.env.EVOLUTION_API_URL && process.env.EVOLUTION_API_KEY && process.env.EVOLUTION_INSTANCE) {
+    return enviarTokenWhatsappEvolution(whatsappNacional, token);
+  }
+
+  console.log(`[token-service] (dev) WhatsApp para 55${whatsappNacional} — código: ${token}`);
+  return false;
 }
 
 function emailHtml(token, nome) {

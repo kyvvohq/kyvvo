@@ -1,0 +1,1207 @@
+{
+  "name": "Kyvvo — Bot Agendamento v4 — Meta (paralelo, não ativar sem testar)",
+  "description": "Cópia de v3 migrada pra API oficial da Meta (WhatsApp Cloud API). Só os nós de transporte (webhook, filtro, resolver tenant, extrair mensagem, enviar resposta) mudaram — o resto da lógica de menu/agendamento é idêntico ao v3. Importar como workflow novo, testar com o número real ANTES de ativar, e só desligar o v3 (Evolution) depois de confirmar.",
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "kyvvo-whatsapp-meta",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook_meta_verify",
+      "name": "Webhook — Meta (verificação)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        0,
+        160
+      ],
+      "webhookId": "kyvvo-whatsapp-meta-verify"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "kyvvo-whatsapp-meta",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook_meta",
+      "name": "Webhook — Meta (mensagens)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        0,
+        400
+      ],
+      "webhookId": "kyvvo-whatsapp-meta"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Handshake de verificação do webhook da Meta (App Dashboard → WhatsApp →\n// Configuração → Webhook). META_VERIFY_TOKEN é uma senha que você escolhe e\n// configura em duas pontas: aqui (variável de ambiente do n8n) e no painel\n// da Meta, no mesmo campo \"Verify token\".\nconst query = $input.item.json.query || {};\nconst mode = query['hub.mode'];\nconst token = query['hub.verify_token'];\nconst challenge = query['hub.challenge'];\nconst esperado = $env.META_VERIFY_TOKEN;\n\nconst valido = mode === 'subscribe' && !!esperado && token === esperado;\nreturn { valido, challenge: valido ? challenge : '' };"
+      },
+      "id": "verificar_handshake_meta",
+      "name": "Verificar handshake Meta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.valido }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "handshake_valido",
+      "name": "Handshake válido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        448,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.challenge }}",
+        "options": {}
+      },
+      "id": "responder_challenge",
+      "name": "Responder challenge",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        672,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "Forbidden",
+        "options": {}
+      },
+      "id": "responder_403",
+      "name": "Responder 403",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        672,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ !($json.body.entry && $json.body.entry[0] && $json.body.entry[0].changes && $json.body.entry[0].changes[0].value.messages) }}",
+              "value2": false
+            }
+          ]
+        }
+      },
+      "id": "Filtrar___s__mensagens_recebidas",
+      "name": "Filtrar — só mensagens recebidas",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        272,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// v4/Meta — resolvido pelo node \"Postgres — Resolver tenant\" a partir do\n// phone_number_id. Mantém os nomes de campo remoteJid/instanceName do fluxo\n// Evolution (agora: phone digits / phone_number_id) pra não precisar tocar\n// nos nodes de lógica de menu/agendamento adiante.\nconst TENANT_ID = $input.item.json.tenant_id;\n\nconst body = $('Webhook — Meta (mensagens)').first().json.body;\nconst value = body.entry[0].changes[0].value;\nconst msg = value.messages[0];\n\nconst phone = msg.from; // já vem em formato internacional (ex: \"5534998887777\"), sem \"+\"\nconst message = ((msg.text && msg.text.body) || '').trim();\nconst pushName = (value.contacts && value.contacts[0] && value.contacts[0].profile && value.contacts[0].profile.name) || 'cliente';\nconst phoneNumberId = value.metadata.phone_number_id;\n\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.sessions) staticData.sessions = {};\nconst sessionKey = 'session_' + phone;\nlet session = staticData.sessions[sessionKey] || { step: 'menu', data: {} };\n\nif (message === '0') {\n  session = { step: 'menu', data: {} };\n}\n\nreturn {\n  tenantId: TENANT_ID,\n  phone,\n  remoteJid: phone,\n  message,\n  pushName,\n  instanceName: phoneNumberId,\n  step: session.step,\n  sessionData: session.data || {},\n};"
+      },
+      "id": "Extrair_mensagem_e_sess_o",
+      "name": "Extrair mensagem e sessão",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        528,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.step }}",
+              "value2": "menu"
+            }
+          ]
+        }
+      },
+      "id": "Step____menu",
+      "name": "Step == menu",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        784,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.step }}",
+              "value2": "menu_opcao"
+            }
+          ]
+        }
+      },
+      "id": "Step____menu_opcao",
+      "name": "Step == menu_opcao",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        784,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.step }}",
+              "value2": "escolher_servico"
+            }
+          ]
+        }
+      },
+      "id": "Step____escolher_servico",
+      "name": "Step == escolher_servico",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        784,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.step }}",
+              "value2": "escolher_profissional"
+            }
+          ]
+        }
+      },
+      "id": "Step____escolher_profissional",
+      "name": "Step == escolher_profissional",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        784,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.step }}",
+              "value2": "escolher_data"
+            }
+          ]
+        }
+      },
+      "id": "Step____escolher_data",
+      "name": "Step == escolher_data",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        784,
+        1008
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.step }}",
+              "value2": "escolher_horario"
+            }
+          ]
+        }
+      },
+      "id": "Step____escolher_horario",
+      "name": "Step == escolher_horario",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        784,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.item.json;\nconst staticData = $getWorkflowStaticData('global');\nconst sessionKey = 'session_' + item.phone;\n\nconst responseText = 'Olá' + (item.pushName ? ', ' + item.pushName.split(' ')[0] : '') + '! 👋 Bem-vinda ao Salão Kyvvo!\\n\\nComo posso te ajudar?\\n\\n1️⃣ Agendar\\n2️⃣ Reagendar\\n3️⃣ Cancelar agendamento';\n\nstaticData.sessions[sessionKey] = { step: 'menu_opcao', data: {} };\n\nreturn { remoteJid: item.remoteJid, instanceName: item.instanceName, responseText };"
+      },
+      "id": "Menu___texto",
+      "name": "Menu — texto",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.item.json;\nconst msg = item.message;\nlet acao = 'invalido';\nif (msg === '1') acao = 'agendar';\nelse if (msg === '2') acao = 'reagendar';\nelse if (msg === '3') acao = 'cancelar';\n\nreturn Object.assign({}, item, { acao });"
+      },
+      "id": "Menu_op__o___decidir",
+      "name": "Menu opção — decidir",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.acao }}",
+              "value2": "agendar"
+            }
+          ]
+        }
+      },
+      "id": "A__o____agendar",
+      "name": "Ação == agendar",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1312,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, nome, duracao_minutos, preco FROM servicos WHERE tenant_id = $1 ORDER BY nome;",
+        "options": {
+          "queryReplacement": "={{ $json.tenantId }}"
+        }
+      },
+      "id": "Postgres___Listar_servi_os",
+      "name": "Postgres — Listar serviços",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        1568,
+        224
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "e58KF5H4vtFYltBY",
+          "name": "Kyvvo Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const ctx = $('Menu opção — decidir').first().json;\nconst rows = $input.all().map(i => i.json);\n\nconst staticData = $getWorkflowStaticData('global');\nconst sessionKey = 'session_' + ctx.phone;\n\nlet responseText;\nif (rows.length === 0) {\n  responseText = 'No momento não temos serviços cadastrados. 😔\\n\\n_Digite 0 para voltar ao menu._';\n  staticData.sessions[sessionKey] = { step: 'menu', data: {} };\n} else {\n  const linhas = rows.map((s, idx) => (idx + 1) + '️⃣ ' + s.nome + ' — ' + s.duracao_minutos + 'min — R$ ' + Number(s.preco).toFixed(2));\n  responseText = 'Ótimo! Qual serviço você deseja? 💇\\n\\n' + linhas.join('\\n');\n  staticData.sessions[sessionKey] = { step: 'escolher_servico', data: { servicosDisponiveis: rows } };\n}\n\nreturn { remoteJid: ctx.remoteJid, instanceName: ctx.instanceName, responseText };"
+      },
+      "id": "Formatar_lista_de_servi_os",
+      "name": "Formatar lista de serviços",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1824,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.item.json;\nconst staticData = $getWorkflowStaticData('global');\nconst sessionKey = 'session_' + item.phone;\nlet responseText;\nlet nextStep;\n\nif (item.acao === 'reagendar') {\n  responseText = 'Entendido! ✅ Nossa equipe vai entrar em contato para confirmar o novo horário.\\n\\n_Digite 0 para voltar ao menu._';\n  nextStep = 'menu';\n} else if (item.acao === 'cancelar') {\n  responseText = 'Cancelamento registrado. ✅\\n\\nSe precisar reagendar, é só nos chamar! 💜\\n\\n_Digite 0 para voltar ao menu._';\n  nextStep = 'menu';\n} else {\n  responseText = 'Opção inválida. Por favor, escolha:\\n\\n1️⃣ Agendar\\n2️⃣ Reagendar\\n3️⃣ Cancelar agendamento';\n  nextStep = 'menu_opcao';\n}\n\nstaticData.sessions[sessionKey] = { step: nextStep, data: {} };\n\nreturn { remoteJid: item.remoteJid, instanceName: item.instanceName, responseText };"
+      },
+      "id": "Menu_op__o___canned_inv_lido",
+      "name": "Menu opção — canned/inválido",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.item.json;\nconst servicos = (item.sessionData && item.sessionData.servicosDisponiveis) || [];\nconst idx = parseInt(item.message, 10) - 1;\nconst valido = Number.isInteger(idx) && idx >= 0 && idx < servicos.length;\n\nreturn Object.assign({}, item, { valido, servicoEscolhido: valido ? servicos[idx] : null });"
+      },
+      "id": "Validar_servi_o_escolhido",
+      "name": "Validar serviço escolhido",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.valido }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "Servi_o_v_lido_",
+      "name": "Serviço válido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1312,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT p.id, p.nome FROM profissionais p JOIN profissionais_servicos ps ON ps.profissional_id = p.id WHERE ps.servico_id = $1 ORDER BY p.nome;",
+        "options": {
+          "queryReplacement": "={{ $json.servicoEscolhido.id }}"
+        }
+      },
+      "id": "Postgres___Listar_profissionais",
+      "name": "Postgres — Listar profissionais",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        1568,
+        512
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "e58KF5H4vtFYltBY",
+          "name": "Kyvvo Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const ctx = $('Validar serviço escolhido').first().json;\nconst rows = $input.all().map(i => i.json);\n\nconst staticData = $getWorkflowStaticData('global');\nconst sessionKey = 'session_' + ctx.phone;\n\nlet responseText;\nif (rows.length === 0) {\n  responseText = 'No momento não temos profissionais disponíveis para esse serviço. 😔\\n\\n_Digite 0 para voltar ao menu._';\n  staticData.sessions[sessionKey] = { step: 'menu', data: {} };\n} else {\n  const linhas = rows.map((p, idx) => (idx + 1) + '️⃣ ' + p.nome);\n  responseText = 'Com quem você prefere? 💜\\n\\n' + linhas.join('\\n');\n  staticData.sessions[sessionKey] = { step: 'escolher_profissional', data: { servico: ctx.servicoEscolhido, profissionaisDisponiveis: rows } };\n}\n\nreturn { remoteJid: ctx.remoteJid, instanceName: ctx.instanceName, responseText };"
+      },
+      "id": "Formatar_lista_de_profissionais",
+      "name": "Formatar lista de profissionais",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1824,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.item.json;\nconst servicos = (item.sessionData && item.sessionData.servicosDisponiveis) || [];\nconst linhas = servicos.map((s, idx) => (idx + 1) + '️⃣ ' + s.nome + ' — ' + s.duracao_minutos + 'min — R$ ' + Number(s.preco).toFixed(2));\nconst responseText = 'Opção inválida. Escolha um número da lista:\\n\\n' + linhas.join('\\n');\nreturn { remoteJid: item.remoteJid, instanceName: item.instanceName, responseText };"
+      },
+      "id": "Servi_o_inv_lido",
+      "name": "Serviço inválido",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        656
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.item.json;\nconst profissionais = (item.sessionData && item.sessionData.profissionaisDisponiveis) || [];\nconst idx = parseInt(item.message, 10) - 1;\nconst valido = Number.isInteger(idx) && idx >= 0 && idx < profissionais.length;\n\nconst staticData = $getWorkflowStaticData('global');\nconst sessionKey = 'session_' + item.phone;\n\nlet responseText;\nif (valido) {\n  const profissional = profissionais[idx];\n  responseText = 'Qual data você prefere? 📅\\n\\nResponda no formato DD/MM\\nEx: 25/06';\n  staticData.sessions[sessionKey] = { step: 'escolher_data', data: { servico: item.sessionData.servico, profissional } };\n} else {\n  const linhas = profissionais.map((p, i) => (i + 1) + '️⃣ ' + p.nome);\n  responseText = 'Opção inválida. Escolha um número da lista:\\n\\n' + linhas.join('\\n');\n}\n\nreturn { remoteJid: item.remoteJid, instanceName: item.instanceName, responseText };"
+      },
+      "id": "Validar_profissional_e_pedir_data",
+      "name": "Validar profissional e pedir data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.item.json;\nconst dateRegex = /^(0?[1-9]|[12][0-9]|3[01])\\/(0?[1-9]|1[0-2])$/;\nconst msg = item.message;\nlet valido = false;\nlet isoDate = null;\nlet displayDate = msg;\n\nif (dateRegex.test(msg)) {\n  const partes = msg.split('/').map(Number);\n  const dia = partes[0];\n  const mes = partes[1];\n  const hoje = new Date();\n  let ano = hoje.getFullYear();\n  let candidata = new Date(ano, mes - 1, dia);\n  const hojeSemHora = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());\n  if (candidata < hojeSemHora) {\n    ano += 1;\n    candidata = new Date(ano, mes - 1, dia);\n  }\n  if (candidata.getMonth() === mes - 1 && candidata.getDate() === dia) {\n    valido = true;\n    isoDate = ano + '-' + String(mes).padStart(2, '0') + '-' + String(dia).padStart(2, '0');\n    displayDate = String(dia).padStart(2, '0') + '/' + String(mes).padStart(2, '0');\n  }\n}\n\nreturn Object.assign({}, item, { valido, isoDate, displayDate });"
+      },
+      "id": "Validar_data",
+      "name": "Validar data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        1008
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.valido }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "Data_v_lida_",
+      "name": "Data válida?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1312,
+        1008
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT a.data_hora, s.duracao_minutos FROM agendamentos a JOIN servicos s ON s.id = a.servico_id WHERE a.profissional_id = $1 AND a.status = 'confirmado' AND a.data_hora::date = $2::date ORDER BY a.data_hora;",
+        "options": {
+          "queryReplacement": "={{ $json.sessionData.profissional.id }},={{ $json.isoDate }}"
+        }
+      },
+      "id": "Postgres___Agendamentos_do_dia",
+      "name": "Postgres — Agendamentos do dia",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        1568,
+        960
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "e58KF5H4vtFYltBY",
+          "name": "Kyvvo Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const ctx = $('Validar data').first().json;\nconst ocupados = $input.all().map(i => i.json);\n\nconst duracaoServico = ctx.sessionData.servico.duracao_minutos;\n\n// US12 — horário de funcionamento configurável por tenant (antes era uma\n// lista fixa 09h-17h hardcoded). Gera slots de hora em hora entre abertura e\n// fechamento, pulando o intervalo de almoço 12h-14h (mantido fixo — o modelo\n// de configuração hoje só tem abertura/fechamento, sem campo de almoço).\nconst horarioTenant = $('Postgres — Horário do tenant').first().json;\nfunction paraHHMM(pgTime) {\n  return pgTime.slice(0, 5);\n}\nconst aberturaHHMM = paraHHMM(horarioTenant.horario_abertura);\nconst fechamentoHHMM = paraHHMM(horarioTenant.horario_fechamento);\nconst ALMOCO_INICIO = '12:00';\nconst ALMOCO_FIM = '14:00';\n\nfunction paraMinutosLocal(hhmm) {\n  const partes = hhmm.split(':').map(Number);\n  return partes[0] * 60 + partes[1];\n}\n\nconst aberturaMin = paraMinutosLocal(aberturaHHMM);\nconst fechamentoMin = paraMinutosLocal(fechamentoHHMM);\nconst almocoInicioMin = paraMinutosLocal(ALMOCO_INICIO);\nconst almocoFimMin = paraMinutosLocal(ALMOCO_FIM);\n\nconst HORARIOS_BASE = [];\nfor (let m = aberturaMin; m < fechamentoMin; m += 60) {\n  if (m >= almocoInicioMin && m < almocoFimMin) continue;\n  const h = String(Math.floor(m / 60)).padStart(2, '0');\n  const min = String(m % 60).padStart(2, '0');\n  HORARIOS_BASE.push(h + ':' + min);\n}\n\nfunction paraMinutos(hhmm) {\n  const partes = hhmm.split(':').map(Number);\n  return partes[0] * 60 + partes[1];\n}\n\nconst OFFSET_SP_MINUTOS = 180; // America/Sao_Paulo = UTC-3 (sem horário de verão desde 2019)\nconst intervalosOcupados = ocupados.map(o => {\n  const inicio = new Date(o.data_hora);\n  const inicioMinUtc = inicio.getUTCHours() * 60 + inicio.getUTCMinutes();\n  const inicioMin = inicioMinUtc - OFFSET_SP_MINUTOS;\n  return { inicio: inicioMin, fim: inicioMin + o.duracao_minutos };\n});\n\nconst disponiveis = HORARIOS_BASE.filter(h => {\n  const inicio = paraMinutos(h);\n  const fim = inicio + duracaoServico;\n  if (fim > fechamentoMin) return false;\n  return !intervalosOcupados.some(o => inicio < o.fim && fim > o.inicio);\n});\n\nconst staticData = $getWorkflowStaticData('global');\nconst sessionKey = 'session_' + ctx.phone;\n\nlet responseText;\nif (disponiveis.length === 0) {\n  responseText = 'Não há horários disponíveis em ' + ctx.displayDate + ' para ' + ctx.sessionData.profissional.nome + '. 😔\\n\\nTente outra data (DD/MM) ou digite 0 para voltar ao menu.';\n  staticData.sessions[sessionKey] = { step: 'escolher_data', data: ctx.sessionData };\n} else {\n  responseText = 'Horários disponíveis em ' + ctx.displayDate + ': ⏰\\n\\n' + disponiveis.join(' • ');\n  staticData.sessions[sessionKey] = { step: 'escolher_horario', data: Object.assign({}, ctx.sessionData, { data: ctx.isoDate, dataDisplay: ctx.displayDate, horariosDisponiveis: disponiveis }) };\n}\n\nreturn { remoteJid: ctx.remoteJid, instanceName: ctx.instanceName, responseText };"
+      },
+      "id": "Calcular_hor_rios_dispon_veis",
+      "name": "Calcular horários disponíveis",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1824,
+        960
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.item.json;\nreturn { remoteJid: item.remoteJid, instanceName: item.instanceName, responseText: 'Data inválida. Por favor, use o formato DD/MM.\\nEx: 25/06' };"
+      },
+      "id": "Data_inv_lida",
+      "name": "Data inválida",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        1104
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.item.json;\nconst horarios = (item.sessionData && item.sessionData.horariosDisponiveis) || [];\n\nfunction normalizar(txt) {\n  let t = txt.trim().toLowerCase().replace('h', '');\n  if (/^\\d{1,2}$/.test(t)) return t.padStart(2, '0') + ':00';\n  if (/^\\d{1,2}:\\d{2}$/.test(t)) {\n    const partes = t.split(':');\n    return partes[0].padStart(2, '0') + ':' + partes[1];\n  }\n  return null;\n}\n\nconst horarioNorm = normalizar(item.message);\nconst valido = !!horarioNorm && horarios.includes(horarioNorm);\n\nreturn Object.assign({}, item, { valido, horarioEscolhido: horarioNorm });"
+      },
+      "id": "Validar_hor_rio",
+      "name": "Validar horário",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.valido }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "Hor_rio_v_lido_",
+      "name": "Horário válido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1312,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH cli AS (\n  INSERT INTO clientes (tenant_id, nome, telefone)\n  VALUES ($1, $2, $3)\n  ON CONFLICT (tenant_id, telefone) DO UPDATE SET nome = COALESCE(clientes.nome, EXCLUDED.nome)\n  RETURNING id\n)\nINSERT INTO agendamentos (tenant_id, cliente_id, profissional_id, servico_id, data_hora)\nSELECT $1, cli.id, $4, $5, (($6 || ' ' || $7)::timestamp AT TIME ZONE 'America/Sao_Paulo')\nFROM cli\nRETURNING id, data_hora;",
+        "options": {
+          "queryReplacement": "={{ $json.tenantId }},={{ $json.pushName }},={{ $json.phone }},={{ $json.sessionData.profissional.id }},={{ $json.sessionData.servico.id }},={{ $json.sessionData.data }},={{ $json.horarioEscolhido }}"
+        }
+      },
+      "id": "Postgres___Confirmar_agendamento",
+      "name": "Postgres — Confirmar agendamento",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        1568,
+        1152
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "e58KF5H4vtFYltBY",
+          "name": "Kyvvo Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const ctx = $('Validar horário').first().json;\n\nconst staticData = $getWorkflowStaticData('global');\nstaticData.sessions['session_' + ctx.phone] = { step: 'menu', data: {} };\n\nconst responseText = '✅ Agendamento confirmado!\\n\\n💇 ' + ctx.sessionData.servico.nome + '\\n👤 ' + ctx.sessionData.profissional.nome + '\\n📅 ' + ctx.sessionData.dataDisplay + ' às ' + ctx.horarioEscolhido + '\\n\\nAté lá! 💜\\n\\n_Digite 0 para voltar ao menu._';\n\nreturn { remoteJid: ctx.remoteJid, instanceName: ctx.instanceName, responseText };"
+      },
+      "id": "Confirmar_agendamento___texto",
+      "name": "Confirmar agendamento — texto",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1824,
+        1152
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.item.json;\nconst horarios = (item.sessionData && item.sessionData.horariosDisponiveis) || [];\nreturn { remoteJid: item.remoteJid, instanceName: item.instanceName, responseText: 'Horário inválido. Escolha um dos disponíveis:\\n\\n' + horarios.join(' • ') };"
+      },
+      "id": "Hor_rio_inv_lido",
+      "name": "Horário inválido",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        1312
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v22.0/{{ $json.instanceName }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.META_WHATSAPP_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $json.remoteJid, type: 'text', text: { body: $json.responseText } }) }}",
+        "options": {}
+      },
+      "id": "node_send",
+      "name": "WhatsApp — Enviar resposta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        2112,
+        704
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "OK",
+        "options": {}
+      },
+      "id": "node_respond",
+      "name": "Responder webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        2368,
+        704
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id AS tenant_id FROM tenants WHERE meta_phone_number_id = $1;",
+        "options": {
+          "queryReplacement": "={{ $json.body.entry[0].changes[0].value.metadata.phone_number_id }}"
+        }
+      },
+      "id": "Postgres___Resolver_tenant",
+      "name": "Postgres — Resolver tenant",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        400,
+        300
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "e58KF5H4vtFYltBY",
+          "name": "Kyvvo Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT horario_abertura, horario_fechamento FROM tenants WHERE id = $1;",
+        "options": {
+          "queryReplacement": "={{ $('Validar data').first().json.tenantId }}"
+        }
+      },
+      "id": "Postgres___Horario_do_tenant",
+      "name": "Postgres — Horário do tenant",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        1440,
+        960
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "e58KF5H4vtFYltBY",
+          "name": "Kyvvo Postgres"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Filtrar — só mensagens recebidas": {
+      "main": [
+        [
+          {
+            "node": "Postgres — Resolver tenant",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extrair mensagem e sessão": {
+      "main": [
+        [
+          {
+            "node": "Step == menu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step == menu": {
+      "main": [
+        [
+          {
+            "node": "Menu — texto",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Step == menu_opcao",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step == menu_opcao": {
+      "main": [
+        [
+          {
+            "node": "Menu opção — decidir",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Step == escolher_servico",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step == escolher_servico": {
+      "main": [
+        [
+          {
+            "node": "Validar serviço escolhido",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Step == escolher_profissional",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step == escolher_profissional": {
+      "main": [
+        [
+          {
+            "node": "Validar profissional e pedir data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Step == escolher_data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step == escolher_data": {
+      "main": [
+        [
+          {
+            "node": "Validar data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Step == escolher_horario",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step == escolher_horario": {
+      "main": [
+        [
+          {
+            "node": "Validar horário",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Menu — texto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Menu opção — decidir": {
+      "main": [
+        [
+          {
+            "node": "Ação == agendar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ação == agendar": {
+      "main": [
+        [
+          {
+            "node": "Postgres — Listar serviços",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Menu opção — canned/inválido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres — Listar serviços": {
+      "main": [
+        [
+          {
+            "node": "Formatar lista de serviços",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar serviço escolhido": {
+      "main": [
+        [
+          {
+            "node": "Serviço válido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Serviço válido?": {
+      "main": [
+        [
+          {
+            "node": "Postgres — Listar profissionais",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Serviço inválido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres — Listar profissionais": {
+      "main": [
+        [
+          {
+            "node": "Formatar lista de profissionais",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar data": {
+      "main": [
+        [
+          {
+            "node": "Data válida?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data válida?": {
+      "main": [
+        [
+          {
+            "node": "Postgres — Horário do tenant",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Data inválida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres — Agendamentos do dia": {
+      "main": [
+        [
+          {
+            "node": "Calcular horários disponíveis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar horário": {
+      "main": [
+        [
+          {
+            "node": "Horário válido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Horário válido?": {
+      "main": [
+        [
+          {
+            "node": "Postgres — Confirmar agendamento",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Horário inválido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres — Confirmar agendamento": {
+      "main": [
+        [
+          {
+            "node": "Confirmar agendamento — texto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Menu — texto": {
+      "main": [
+        [
+          {
+            "node": "WhatsApp — Enviar resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formatar lista de serviços": {
+      "main": [
+        [
+          {
+            "node": "WhatsApp — Enviar resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Menu opção — canned/inválido": {
+      "main": [
+        [
+          {
+            "node": "WhatsApp — Enviar resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formatar lista de profissionais": {
+      "main": [
+        [
+          {
+            "node": "WhatsApp — Enviar resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Serviço inválido": {
+      "main": [
+        [
+          {
+            "node": "WhatsApp — Enviar resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar profissional e pedir data": {
+      "main": [
+        [
+          {
+            "node": "WhatsApp — Enviar resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calcular horários disponíveis": {
+      "main": [
+        [
+          {
+            "node": "WhatsApp — Enviar resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data inválida": {
+      "main": [
+        [
+          {
+            "node": "WhatsApp — Enviar resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confirmar agendamento — texto": {
+      "main": [
+        [
+          {
+            "node": "WhatsApp — Enviar resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Horário inválido": {
+      "main": [
+        [
+          {
+            "node": "WhatsApp — Enviar resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WhatsApp — Enviar resposta": {
+      "main": [
+        [
+          {
+            "node": "Responder webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres — Resolver tenant": {
+      "main": [
+        [
+          {
+            "node": "Extrair mensagem e sessão",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres — Horário do tenant": {
+      "main": [
+        [
+          {
+            "node": "Postgres — Agendamentos do dia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook — Meta (mensagens)": {
+      "main": [
+        [
+          {
+            "node": "Filtrar — só mensagens recebidas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook — Meta (verificação)": {
+      "main": [
+        [
+          {
+            "node": "Verificar handshake Meta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verificar handshake Meta": {
+      "main": [
+        [
+          {
+            "node": "Handshake válido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Handshake válido?": {
+      "main": [
+        [
+          {
+            "node": "Responder challenge",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder 403",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "staticData": {
+    "global": {}
+  },
+  "meta": null,
+  "nodeGroups": [],
+  "pinData": {},
+  "tags": []
+}
