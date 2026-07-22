@@ -1,4 +1,5 @@
 {
+  "id": "PmsJHFqlEXpo0oB6",
   "name": "Kyvvo — Bot Agendamento v4 — Meta (paralelo, não ativar sem testar)",
   "description": "Cópia de v3 migrada pra API oficial da Meta (WhatsApp Cloud API). Só os nós de transporte (webhook, filtro, resolver tenant, extrair mensagem, enviar resposta) mudaram — o resto da lógica de menu/agendamento é idêntico ao v3. Importar como workflow novo, testar com o número real ANTES de ativar, e só desligar o v3 (Evolution) depois de confirmar.",
   "active": false,
