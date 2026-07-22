@@ -711,7 +711,12 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   margin-bottom: 20px;
 }
 
+/* min-width:0 evita que um item do grid estoure a largura do container
+   quando o conteúdo tem uma palavra/URL longa sem espaço pra quebrar (ex:
+   mensagem de erro da Meta no card de status do WhatsApp) — grid items têm
+   min-width:auto por padrão, dimensionados pelo min-content. */
 .financeiro-resumo-card {
+  min-width: 0;
   background: #12162a;
   border: 1px solid #232847;
   border-radius: 10px;
@@ -786,6 +791,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .status-card-inativo .financeiro-resumo-linha3,
 .status-card-pendente .financeiro-resumo-linha3 {
   white-space: normal;
+  overflow-wrap: break-word;
 }
 
 /* Collapse "Detalhes" (PR5) — substitui o antigo botão "Alterar forma de
