@@ -25,11 +25,12 @@ nav{
 .lang-toggle{display:flex;align-items:center;gap:4px;background:var(--surface);border:1px solid var(--border);border-radius:100px;padding:4px;cursor:pointer}
 .lang-btn{padding:5px 12px;border-radius:100px;font-size:.78rem;font-weight:500;font-family:var(--font-b);border:none;cursor:pointer;transition:all .2s;color:var(--muted);background:transparent}
 .lang-btn.active{background:var(--accent);color:#fff}
-.btn-login{padding:9px 20px;border-radius:100px;font-size:.82rem;font-weight:600;font-family:var(--font-b);color:#fff;background:linear-gradient(135deg,var(--accent),#5b3fd4);border:none;cursor:pointer;transition:all .2s;white-space:nowrap}
-.btn-login:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(124,92,252,.35)}
-/* "Criar conta" (US20): CTA secundário no header, contorno em vez de preenchido. */
-.btn-cadastro{padding:9px 18px;border-radius:100px;font-size:.82rem;font-weight:600;font-family:var(--font-b);color:var(--text);background:transparent;border:1px solid var(--border);cursor:pointer;transition:all .2s;white-space:nowrap;text-decoration:none}
-.btn-cadastro:hover{border-color:rgba(124,92,252,.5);transform:translateY(-1px)}
+/* "Entrar": CTA secundário no header, contorno em vez de preenchido. */
+.btn-login{padding:9px 20px;border-radius:100px;font-size:.82rem;font-weight:600;font-family:var(--font-b);color:var(--text);background:transparent;border:1px solid var(--border);cursor:pointer;transition:all .2s;white-space:nowrap}
+.btn-login:hover{border-color:rgba(124,92,252,.5);transform:translateY(-1px)}
+/* "Criar conta grátis": CTA principal do header, preenchido em gradiente. */
+.btn-cadastro{padding:9px 20px;border-radius:100px;font-size:.82rem;font-weight:600;font-family:var(--font-b);color:#fff;background:linear-gradient(135deg,var(--accent),#5b3fd4);border:none;cursor:pointer;transition:all .2s;white-space:nowrap;text-decoration:none;box-shadow:0 4px 14px rgba(124,92,252,.3)}
+.btn-cadastro:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(124,92,252,.4)}
 
 .login-modal-overlay{display:none;position:fixed;inset:0;z-index:1000;background:rgba(5,7,14,.72);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:20px}
 .login-modal-overlay.open{display:flex}
