@@ -7,8 +7,7 @@
 
 alter table tenants add column meta_phone_number_id text unique;
 
--- PREENCHER antes de rodar: o Phone Number ID do número 34 98428-5182 (não é
--- o telefone em si — é o ID que aparece na tela "Configuração da API" do
--- WhatsApp no painel da Meta, ao lado do número).
-update tenants set meta_phone_number_id = 'PREENCHER_PHONE_NUMBER_ID'
+-- Phone Number ID do número 34 98428-5182, obtido na tela "Configuração da
+-- API" do WhatsApp no painel da Meta.
+update tenants set meta_phone_number_id = '1219869254547193'
 where id = 'f8f8601d-b395-475b-a8ae-d6059426daf9';
