@@ -2365,6 +2365,46 @@ async function start() {
     return Object.fromEntries(sistemaRows.map((r) => [r.chave, r.valor]));
   });
 
+  // Status de conexão do WhatsApp — chama a Graph API da Meta ao vivo com as
+  // credenciais configuradas (META_WHATSAPP_TOKEN/META_PHONE_NUMBER_ID) pra
+  // diagnosticar problema de token/permissão sem precisar entrar no painel da
+  // Meta ou no servidor. Também reporta se o fallback via Evolution API está
+  // configurado (token-service.js usa a Meta se disponível, senão Evolution).
+  fastify.get('/admin/api/whatsapp/status', { preHandler: [fastify.authenticateAdmin] }, async () => {
+    const metaToken = process.env.META_WHATSAPP_TOKEN;
+    const phoneNumberId = process.env.META_PHONE_NUMBER_ID;
+    const meta = { configurado: Boolean(metaToken && phoneNumberId), phoneNumberId: phoneNumberId || null };
+
+    if (meta.configurado) {
+      try {
+        const res = await fetch(
+          `https://graph.facebook.com/v22.0/${phoneNumberId}?fields=display_phone_number,verified_name,quality_rating,code_verification_status`,
+          { headers: { Authorization: `Bearer ${metaToken}` }, signal: AbortSignal.timeout(8000) }
+        );
+        const corpo = await res.json();
+        if (res.ok) {
+          meta.conectado = true;
+          meta.numeroExibido = corpo.display_phone_number || null;
+          meta.nomeVerificado = corpo.verified_name || null;
+          meta.qualidade = corpo.quality_rating || null;
+          meta.statusVerificacao = corpo.code_verification_status || null;
+        } else {
+          meta.conectado = false;
+          meta.erro = (corpo.error && corpo.error.message) || `A Meta respondeu ${res.status}.`;
+        }
+      } catch (err) {
+        meta.conectado = false;
+        meta.erro = `Falha ao contatar a Meta: ${err.message}`;
+      }
+    }
+
+    const evolution = {
+      configurado: Boolean(process.env.EVOLUTION_API_URL && process.env.EVOLUTION_API_KEY && process.env.EVOLUTION_INSTANCE),
+    };
+
+    return { meta, evolution, verificadoEm: new Date().toISOString() };
+  });
+
   // CA09 — carrega os valores configuráveis do banco antes de aceitar
   // requisições, pra nunca servir com os literais hardcoded quando já existe
   // uma configuração diferente salva.
