@@ -5,9 +5,9 @@
 ```
 Cliente (WhatsApp)
        ↓
-Evolution API (Baileys) — Railway
+Evolution API (Baileys) — AWS
        ↓ webhook
-n8n — Railway
+n8n — AWS
        ↓
 Supabase (PostgreSQL + Auth)
        ↑
@@ -48,14 +48,16 @@ Cada salão é um tenant isolado via Row Level Security (Supabase).
 - id, tenant_id, cliente_id, profissional_id, servico_id
 - data_hora, status, criado_em
 
-## Infraestrutura (Railway)
+## Infraestrutura (AWS)
 
 | Serviço | Imagem | Porta |
 |---|---|---|
 | Evolution API | atendai/evolution-api:v1.7.4 | 8080 |
 | n8n | n8nio/n8n:latest | 5678 |
-| PostgreSQL | railway nativo | 5432 |
+| PostgreSQL | container Docker | 5432 |
+
+Todos os serviços rodam via Docker Compose no mesmo host EC2 que já serve a landing page e o painel (`/opt/kyvvo`, ver deploy em `.github/workflows/deploy.yml`).
 
 ## Variáveis de ambiente sensíveis
 
-Nunca commitar no repositório. Usar o painel de variáveis do Railway.
+Nunca commitar no repositório. Configurar direto no `docker-compose.yml`/`.env` do host EC2.

@@ -25,7 +25,7 @@
 
 ### Infra mínima
 - Supabase Auth + PostgreSQL multi-tenant
-- Deploy Railway
+- Deploy AWS
 - React Native + Expo
 
 ---
@@ -56,5 +56,5 @@
 | Banco | PostgreSQL (Supabase) |
 | Auth | Supabase Auth |
 | Mobile | React Native + Expo |
-| Infra | Railway |
+| Infra | AWS |
 | Monitoramento | Sentry + PostHog |
