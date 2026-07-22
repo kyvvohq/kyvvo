@@ -7,7 +7,9 @@
 
 alter table tenants add column meta_phone_number_id text unique;
 
--- Phone Number ID do número 34 98428-5182, obtido na tela "Configuração da
--- API" do WhatsApp no painel da Meta.
-update tenants set meta_phone_number_id = '1219869254547193'
+-- Phone Number ID do número 34 98428-5182, confirmado na tela "Etapa 2.
+-- Configuração da produção" do caso de uso WhatsApp Business Messaging
+-- (o valor visto antes, 1219869254547193, era de uma tela diferente — o
+-- número de teste temporário da "Etapa 1. Experimente" — e estava errado).
+update tenants set meta_phone_number_id = '1263829973471596'
 where id = 'f8f8601d-b395-475b-a8ae-d6059426daf9';
