@@ -1663,6 +1663,21 @@ input.invalid, select.invalid {
   border-color: #ff6b6b;
 }
 
+.cadastro-legal {
+  font-size: 12px;
+  color: #a1a5c4;
+  text-align: center;
+  margin-top: 14px;
+  line-height: 1.5;
+}
+
+.cadastro-legal a {
+  color: var(--accent-light);
+  text-decoration: none;
+}
+
+.cadastro-legal a:hover { text-decoration: underline; }
+
 .cadastro-rodape {
   font-size: 13px;
   color: #a1a5c4;
