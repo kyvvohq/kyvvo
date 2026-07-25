@@ -7,7 +7,11 @@ html{scroll-behavior:smooth}
 :root{
   --bg:#080b14;--bg2:#0d1120;--surface:#111827;--border:#1e2d4a;
   --accent:#7c5cfc;--accent-light:#a688ff;--cyan:#00d4ff;
-  --text:#f0eeff;--muted:#6b7a99;
+  /* --muted clareado de #6b7a99 pra #7484a5 (US49/CA — auditoria WCAG AA):
+     o tom original tinha só 4.11:1 de contraste sobre --surface, abaixo do
+     mínimo de 4.5:1 pra texto normal. #7484a5 mantém o mesmo tom (só mais
+     claro) e passa em 4.7:1+ tanto sobre --bg quanto sobre --surface. */
+  --text:#f0eeff;--muted:#7484a5;
   --font-d:'Syne',sans-serif;--font-b:'DM Sans',sans-serif;
 }
 body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-height:1.6;overflow-x:hidden}

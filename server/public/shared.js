@@ -19,6 +19,11 @@ function openLoginModal() {
   iframe.src = PANEL_ORIGIN + '/login.html';
   overlay.classList.add('open');
   document.body.style.overflow = 'hidden';
+  // Leitor de tela/teclado: move o foco pro diálogo assim que ele abre (o
+  // conteúdo do login em si é um iframe de outra origem, então não dá pra
+  // focar direto nele — o botão de fechar é o primeiro elemento focável do
+  // diálogo no mesmo documento).
+  document.getElementById('btnCloseLogin').focus();
 }
 
 function closeLoginModal() {
@@ -27,6 +32,8 @@ function closeLoginModal() {
   overlay.classList.remove('open');
   document.body.style.overflow = '';
   iframe.src = 'about:blank';
+  // Devolve o foco pro botão que abriu o diálogo.
+  document.getElementById('btnLogin').focus();
 }
 
 window.addEventListener('keydown', (e) => {
