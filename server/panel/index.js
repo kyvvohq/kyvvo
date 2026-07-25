@@ -2489,8 +2489,7 @@ async function start() {
   // Status de conexão do WhatsApp — chama a Graph API da Meta ao vivo com as
   // credenciais configuradas (META_WHATSAPP_TOKEN/META_PHONE_NUMBER_ID) pra
   // diagnosticar problema de token/permissão sem precisar entrar no painel da
-  // Meta ou no servidor. Também reporta se o fallback via Evolution API está
-  // configurado (token-service.js usa a Meta se disponível, senão Evolution).
+  // Meta ou no servidor.
   fastify.get('/admin/api/whatsapp/status', { preHandler: [fastify.authenticateAdmin] }, async () => {
     const metaToken = process.env.META_WHATSAPP_TOKEN;
     const phoneNumberId = process.env.META_PHONE_NUMBER_ID;
@@ -2519,11 +2518,7 @@ async function start() {
       }
     }
 
-    const evolution = {
-      configurado: Boolean(process.env.EVOLUTION_API_URL && process.env.EVOLUTION_API_KEY && process.env.EVOLUTION_INSTANCE),
-    };
-
-    return { meta, evolution, verificadoEm: new Date().toISOString() };
+    return { meta, verificadoEm: new Date().toISOString() };
   });
 
   // CA09 — carrega os valores configuráveis do banco antes de aceitar
