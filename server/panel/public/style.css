@@ -1659,7 +1659,7 @@ textarea:focus { outline: none; border-color: var(--accent); }
   min-height: 14px;
 }
 
-input.invalid {
+input.invalid, select.invalid {
   border-color: #ff6b6b;
 }
 
