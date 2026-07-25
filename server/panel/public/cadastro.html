@@ -9,6 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Syne:wght@400;600;700;800&display=swap">
 <link rel="stylesheet" href="/style.css">
+<script src="/analytics.js"></script>
 </head>
 <body>
 <div class="center-screen">
@@ -200,6 +201,12 @@
         localStorage.setItem('kyvvo_nome', data.nome || '');
         localStorage.setItem('kyvvo_email', data.email || '');
         localStorage.setItem('kyvvo_email_verified', 'false');
+        // Liga a identidade anônima (que já vinha capturando o cta_clicado na
+        // landing, via cross_subdomain_cookie) à conta recém-criada — sem
+        // isso o funil visita→cadastro vira duas pessoas separadas no
+        // PostHog (US47).
+        if (window.kyvvoIdentify) window.kyvvoIdentify(data.email, { nome: data.nome });
+        if (window.kyvvoCapture) window.kyvvoCapture('cadastro_concluido');
         window.location.href = '/verificar.html';
         return;
       }

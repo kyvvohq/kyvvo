@@ -54,6 +54,16 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// GET /config-publica — expõe só a chave pública do PostHog pro front (US47),
+// nunca a chave de servidor. Sem POSTHOG_KEY configurada no ambiente,
+// analytics.js recebe posthogKey: null e não inicializa o tracking.
+app.get('/config-publica', (req, res) => {
+  res.json({
+    posthogKey: process.env.POSTHOG_KEY || null,
+    posthogHost: process.env.POSTHOG_HOST || 'https://us.i.posthog.com',
+  });
+});
+
 // POST /waitlist — salva lead no banco
 app.post('/waitlist', async (req, res) => {
   const { nome, email, whatsapp, nicho, idioma } = req.body;

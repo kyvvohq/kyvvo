@@ -15,6 +15,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Syne:wght@400;600;700;800&display=swap">
 <link rel="stylesheet" href="/style.css">
+<script src="/analytics.js"></script>
 </head>
 <body>
 <div class="center-screen">
@@ -133,6 +134,9 @@
       if (res.ok) {
         // CA08 — toast é exibido pelo painel após o redirect.
         localStorage.setItem('kyvvo_email_verified', 'true');
+        // Aha Moment do MVP (US47): e-mail validado = trial de 14 dias ativo
+        // e usuário liberado pro painel de verdade.
+        if (window.kyvvoCapture) window.kyvvoCapture('conta_ativada');
         window.location.href = '/painel.html?verificado=1';
         return;
       }
