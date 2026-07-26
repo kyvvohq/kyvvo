@@ -217,6 +217,31 @@
   color:var(--muted);text-decoration:none;transition:color .2s;
 }
 .nav-link:hover{color:var(--text)}
+/* Menu âncora só aparece no desktop — no mobile o header já tem Entrar +
+   Começar grátis, links de seção a mais só poluiriam (US51.10). */
+@media(max-width:900px){.nav-link{display:none}}
+
+.precos-section{padding:100px 6%;border-top:1px solid var(--border)}
+.precos-header{max-width:680px;margin:0 auto 56px;text-align:center}
+.precos-header .section-eyebrow{justify-content:center}
+.precos-header .section-title{white-space:normal;margin-bottom:16px}
+.precos-header .section-sub{white-space:normal;margin-bottom:0;margin-left:auto;margin-right:auto}
+.precos-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;max-width:1080px;margin:0 auto}
+.plano-card{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:32px 28px;transition:transform .2s,border-color .2s;min-width:0;display:flex;flex-direction:column}
+.plano-card:hover{transform:translateY(-4px);border-color:rgba(124,92,252,.4)}
+.plano-card.destaque{border-color:rgba(124,92,252,.55);box-shadow:0 20px 40px -20px rgba(124,92,252,.35)}
+.plano-selo{align-self:flex-start;background:rgba(124,92,252,.16);color:var(--accent-light);font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;border-radius:100px;padding:5px 14px;margin-bottom:16px}
+.plano-nome{font-family:var(--font-d);font-size:1.1rem;font-weight:700;margin-bottom:8px}
+.plano-preco{font-family:var(--font-d);font-size:2rem;font-weight:800;letter-spacing:-.02em;margin-bottom:4px}
+.plano-preco span{font-family:var(--font-b);font-size:.85rem;font-weight:400;color:var(--muted)}
+.plano-desc{font-size:.86rem;color:var(--muted);line-height:1.6;margin-bottom:24px}
+.plano-cta{margin-top:auto;display:block;text-align:center;padding:12px 20px;border-radius:100px;font-size:.85rem;font-weight:600;font-family:var(--font-b);text-decoration:none;transition:all .2s}
+.plano-card.destaque .plano-cta{color:#fff;background:linear-gradient(135deg,var(--accent),#5b3fd4);box-shadow:0 4px 14px rgba(124,92,252,.3)}
+.plano-card.destaque .plano-cta:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(124,92,252,.4)}
+.plano-card:not(.destaque) .plano-cta{color:var(--text);background:transparent;border:1px solid var(--border)}
+.plano-card:not(.destaque) .plano-cta:hover{border-color:rgba(124,92,252,.5)}
+.precos-nota{text-align:center;color:var(--muted);font-size:.85rem;margin-top:32px}
+@media(max-width:900px){.precos-grid{grid-template-columns:1fr;max-width:420px}}
 
 /* FAQ */
 .faq-section{
@@ -509,7 +534,7 @@
   </div>
 </section>
 
-<section class="how-section">
+<section class="how-section" id="como-funciona">
   <div class="section-eyebrow" data-pt="Como funciona" data-en="How it works">Como funciona</div>
   <h2 class="section-title" data-pt="Do WhatsApp ao painel em 3&nbsp;passos" data-en="From WhatsApp to dashboard in 3&nbsp;steps">Do WhatsApp ao painel em 3&nbsp;passos</h2>
   <p class="section-sub" data-pt="Sua cliente agenda pelo WhatsApp que já usa. Você visualiza tudo no painel, sem planilha, sem caderno." data-en="Your client books via WhatsApp they already use. You see everything in the dashboard — no spreadsheet, no notebook.">
@@ -552,7 +577,7 @@
   </div>
 </section>
 
-<section class="niches-section">
+<section class="niches-section" id="segmentos">
   <div class="section-eyebrow" data-pt="Segmentos" data-en="Segments">Segmentos</div>
   <h2 class="section-title" data-pt="Para pequenos negócios de serviço" data-en="For small service businesses">Para pequenos negócios de serviço</h2>
   <div class="niches-grid">
@@ -619,6 +644,36 @@
       <img src="/images/roadmap-fundador.png" alt="Fundador do Kyvvo trabalhando no painel com o logo Kyvvo em destaque" loading="lazy">
     </div>
   </div>
+</section>
+
+<section class="precos-section" id="precos">
+  <div class="precos-header">
+    <div class="section-eyebrow" data-pt="Preços" data-en="Pricing">Preços</div>
+    <h2 class="section-title" data-pt="Um plano pra cada tamanho de negócio" data-en="A plan for every size of business">Um plano pra cada tamanho de negócio</h2>
+    <p class="section-sub" data-pt="14 dias grátis em qualquer plano, sem cartão de crédito. Cancele quando quiser." data-en="14 days free on any plan, no credit card required. Cancel anytime.">14 dias grátis em qualquer plano, sem cartão de crédito. Cancele quando quiser.</p>
+  </div>
+  <div class="precos-grid">
+    <div class="plano-card">
+      <div class="plano-nome" data-pt="Starter" data-en="Starter">Starter</div>
+      <div class="plano-preco">R$&nbsp;147<span data-pt="/mês" data-en="/mo">/mês</span></div>
+      <p class="plano-desc" data-pt="Acesso web + bot de agendamento no WhatsApp. Ideal pra quem está começando." data-en="Web access + WhatsApp booking bot. Ideal for getting started.">Acesso web + bot de agendamento no WhatsApp. Ideal pra quem está começando.</p>
+      <a class="plano-cta" data-panel-path="/cadastro.html" href="#" data-pt="Começar grátis" data-en="Start free">Começar grátis</a>
+    </div>
+    <div class="plano-card destaque">
+      <div class="plano-selo" data-pt="Mais popular" data-en="Most popular">Mais popular</div>
+      <div class="plano-nome" data-pt="Profissional" data-en="Professional">Profissional</div>
+      <div class="plano-preco">R$&nbsp;247<span data-pt="/mês" data-en="/mo">/mês</span></div>
+      <p class="plano-desc" data-pt="Painel web + app mobile + até 500 disparos de WhatsApp por mês." data-en="Web dashboard + mobile app + up to 500 WhatsApp messages a month.">Painel web + app mobile + até 500 disparos de WhatsApp por mês.</p>
+      <a class="plano-cta" data-panel-path="/cadastro.html" href="#" data-pt="Começar grátis" data-en="Start free">Começar grátis</a>
+    </div>
+    <div class="plano-card">
+      <div class="plano-nome" data-pt="Empresarial" data-en="Business">Empresarial</div>
+      <div class="plano-preco">R$&nbsp;447<span data-pt="/mês" data-en="/mo">/mês</span></div>
+      <p class="plano-desc" data-pt="Tudo do Profissional, mais multi-unidades e disparos de WhatsApp ilimitados." data-en="Everything in Professional, plus multiple locations and unlimited WhatsApp messages.">Tudo do Profissional, mais multi-unidades e disparos de WhatsApp ilimitados.</p>
+      <a class="plano-cta" data-panel-path="/cadastro.html" href="#" data-pt="Começar grátis" data-en="Start free">Começar grátis</a>
+    </div>
+  </div>
+  <p class="precos-nota" data-pt="Preços sujeitos a alteração. Assinaturas em andamento não são afetadas por mudanças de preço." data-en="Prices subject to change. Existing subscriptions aren't affected by price changes.">Preços sujeitos a alteração. Assinaturas em andamento não são afetadas por mudanças de preço.</p>
 </section>
 
 <!-- FAQ -->
@@ -902,6 +957,9 @@ function onSharedReady() {
   if (navRight) {
     navRight.insertAdjacentHTML('afterbegin', `
       <a class="nav-link" href="#recursos" data-pt="Recursos" data-en="Features">Recursos</a>
+      <a class="nav-link" href="#como-funciona" data-pt="Como funciona" data-en="How it works">Como funciona</a>
+      <a class="nav-link" href="#segmentos" data-pt="Segmentos" data-en="Segments">Segmentos</a>
+      <a class="nav-link" href="#precos" data-pt="Preços" data-en="Pricing">Preços</a>
       <a class="nav-link" href="#faq" data-pt="Perguntas frequentes" data-en="FAQ">Perguntas frequentes</a>
       <a class="nav-link" href="#quem-somos" data-pt="Quem somos" data-en="About us">Quem somos</a>
       <div class="lang-toggle">

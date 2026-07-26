@@ -43,6 +43,19 @@ nav.site-header{
 .login-modal-close{position:absolute;top:10px;right:12px;z-index:1;width:32px;height:32px;border-radius:50%;border:none;background:rgba(255,255,255,.08);color:var(--text);font-size:1.1rem;line-height:1;cursor:pointer;transition:background .2s}
 .login-modal-close:hover{background:rgba(255,255,255,.16)}
 
+/* Header ficava cortado no mobile (Criar conta grátis saía da tela) — logo +
+   toggle de idioma + Entrar + CTA não cabiam numa linha só de 390px (bug
+   encontrado durante a US51/US51.10). Reduz espaçamento/fonte e permite
+   quebrar linha como rede de segurança em telas ainda mais estreitas. */
+@media(max-width:640px){
+  nav.site-header{padding:14px 4%}
+  .nav-right{gap:8px;flex-wrap:wrap;justify-content:flex-end}
+  .logo{font-size:1.2rem}
+  .lang-toggle{padding:3px}
+  .lang-btn{padding:4px 9px;font-size:.72rem}
+  .btn-login,.btn-cadastro{padding:8px 14px;font-size:.76rem}
+}
+
 footer{padding:48px 6%;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:20px}
 .footer-copy{font-size:.78rem;color:var(--muted)}
 .footer-links{display:flex;gap:20px;flex-wrap:wrap}
