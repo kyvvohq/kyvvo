@@ -22,6 +22,10 @@ test.describe('Cadastro (/cadastro.html)', () => {
     await page.fill('#whatsapp', '123');
     await page.locator('#whatsapp').blur();
     await expect(page.locator('#erro-whatsapp')).toHaveText('Digite um número de WhatsApp válido com DDD.');
+
+    await page.locator('#segmento').focus();
+    await page.locator('#segmento').blur();
+    await expect(page.locator('#erro-segmento')).toHaveText('Selecione o segmento do seu negócio.');
   });
 
   test('submeter formulário inválido não chama a API e foca o primeiro campo com erro', async ({ page }) => {
@@ -54,6 +58,7 @@ test.describe('Cadastro (/cadastro.html)', () => {
     await page.goto('/cadastro.html');
     await page.fill('#nome', 'Ana Souza');
     await page.fill('#nome_empresa', 'Salão da Ana');
+    await page.selectOption('#segmento', 'salao_beleza');
     await page.fill('#email', 'ana@salao.com');
     await page.fill('#whatsapp', '(34) 99999-9999');
     await page.fill('#senha', 'Senha123');
@@ -75,6 +80,7 @@ test.describe('Cadastro (/cadastro.html)', () => {
     await page.goto('/cadastro.html');
     await page.fill('#nome', 'Ana Souza');
     await page.fill('#nome_empresa', 'Salão da Ana');
+    await page.selectOption('#segmento', 'salao_beleza');
     await page.fill('#email', 'ana@salao.com');
     await page.fill('#whatsapp', '(34) 99999-9999');
     await page.fill('#senha', 'Senha123');

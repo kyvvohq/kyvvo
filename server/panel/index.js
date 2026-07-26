@@ -37,6 +37,11 @@ const MODULOS_TRIAL = ['agenda_inteligente', 'financeiro', 'dashboards'];
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // Senha: mínimo 8 caracteres, ao menos 1 número e 1 letra maiúscula (CA02).
 const SENHA_REGEX = /^(?=.*[A-Z])(?=.*\d).{8,}$/;
+// Nichos atendidos pelo Kyvvo (US34) — lista curta e fixa, mesmo enum do
+// CHECK da coluna tenants.segmento (migration 018). Reaproveitada no cadastro
+// self-service e no CRUD de tenants do admin; migrar pra tabela dinâmica
+// (segmentos) fica pra uma US futura, não é necessário pro MVP.
+const SEGMENTOS_VALIDOS = ['salao_beleza', 'petshop', 'psicologia', 'fisioterapia', 'pilates', 'outro'];
 
 // Normaliza um WhatsApp brasileiro para os dígitos nacionais (DDD + número,
 // sem o DDI 55), que é o formato guardado como unique key. Retorna null se
@@ -349,6 +354,7 @@ async function start() {
       senha,
       nome_empresa: nomeEmpresa,
       whatsapp: whatsappBruto,
+      segmento,
     } = request.body || {};
 
     const nomeLimpo = (nome || '').trim();
@@ -368,6 +374,9 @@ async function start() {
     }
     if (nomeEmpresaLimpo.length < 2) {
       return reply.code(400).send({ error: 'Informe o nome da empresa (mínimo 2 caracteres).' });
+    }
+    if (!SEGMENTOS_VALIDOS.includes(segmento)) {
+      return reply.code(400).send({ error: 'Selecione o segmento do seu negócio.' });
     }
     const whatsapp = normalizarWhatsapp(whatsappBruto);
     if (!whatsapp) {
@@ -391,10 +400,10 @@ async function start() {
       // Trial começa imediatamente, antes mesmo da validação do token (CA04).
       const trialExpira = new Date(Date.now() + TRIAL_DIAS * 24 * 60 * 60 * 1000);
       const { rows: tenantRows } = await client.query(
-        `INSERT INTO tenants (nome, telefone, whatsapp, plano, status, trial_expires_at)
-         VALUES ($1, $2, $3, 'trial', 'trial', $4)
+        `INSERT INTO tenants (nome, telefone, whatsapp, segmento, plano, status, trial_expires_at)
+         VALUES ($1, $2, $3, $4, 'trial', 'trial', $5)
          RETURNING id`,
-        [nomeEmpresaLimpo, whatsapp, whatsapp, trialExpira.toISOString()]
+        [nomeEmpresaLimpo, whatsapp, whatsapp, segmento, trialExpira.toISOString()]
       );
       const tenantId = tenantRows[0].id;
 
@@ -1119,7 +1128,6 @@ async function start() {
   });
 
   // ---------- Perfil (US33) ----------
-  const SEGMENTOS_VALIDOS = ['salao_beleza', 'petshop', 'psicologia', 'fisioterapia', 'pilates', 'outro'];
   const UF_VALIDAS = [
     'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB',
     'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO',
