@@ -12,7 +12,11 @@ html{scroll-behavior:smooth}
 }
 body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-height:1.6;overflow-x:hidden}
 
-nav{
+/* Seletor de classe (não tag "nav" pura) — o rodapé (partials/footer.html)
+   também usa um <nav class="footer-links"> pros links legais; um seletor
+   bare "nav" pegaria os dois e o footer-links (mais tarde no DOM, mesmo
+   z-index) cobriria o header de verdade. */
+nav.site-header{
   position:fixed;top:0;left:0;right:0;z-index:100;
   padding:18px 6%;display:flex;align-items:center;justify-content:space-between;
   background:rgba(8,11,20,0.85);backdrop-filter:blur(20px);
