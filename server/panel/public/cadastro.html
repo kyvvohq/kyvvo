@@ -18,29 +18,23 @@
     <p class="cadastro-sub">Comece agora seu trial de 14 dias. Sem cartão de crédito.</p>
 
     <form id="form-cadastro" novalidate>
-      <label for="nome">Seu nome</label>
-      <input type="text" id="nome" autocomplete="name">
-      <div class="field-error" id="erro-nome"></div>
-
-      <label for="nome_empresa">Nome da empresa</label>
-      <input type="text" id="nome_empresa" autocomplete="organization">
-      <div class="field-error" id="erro-nome_empresa"></div>
-
-      <label for="segmento">Segmento</label>
-      <select id="segmento">
-        <option value="" disabled selected>Selecione seu segmento...</option>
-        <option value="salao_beleza">Salão de beleza</option>
-        <option value="petshop">Pet Shop</option>
-        <option value="psicologia">Psicólogo(a)</option>
-        <option value="fisioterapia">Fisioterapia</option>
-        <option value="pilates">Pilates</option>
-        <option value="outro">Outro</option>
-      </select>
-      <div class="field-error" id="erro-segmento"></div>
+      <label for="nome_responsavel">Nome Responsável</label>
+      <input type="text" id="nome_responsavel" autocomplete="name" placeholder="Nome completo do responsável">
+      <div class="field-error" id="erro-nome_responsavel"></div>
 
       <label for="email">E-mail</label>
       <input type="email" id="email" autocomplete="email">
       <div class="field-error" id="erro-email"></div>
+
+      <label for="segmento">Segmento</label>
+      <select id="segmento" autocomplete="off">
+        <option value="" disabled selected>Selecione seu segmento...</option>
+      </select>
+      <div class="field-error" id="erro-segmento"></div>
+
+      <label for="telefone">Telefone</label>
+      <input type="tel" id="telefone" autocomplete="tel" placeholder="(34) 99999-9999">
+      <div class="field-error" id="erro-telefone"></div>
 
       <label for="whatsapp">WhatsApp</label>
       <input type="tel" id="whatsapp" autocomplete="tel" placeholder="(34) 99999-9999">
@@ -78,10 +72,10 @@
   const toggleSenhaBtn = document.getElementById('btn-toggle-senha');
 
   const campos = {
-    nome: document.getElementById('nome'),
-    nome_empresa: document.getElementById('nome_empresa'),
-    segmento: document.getElementById('segmento'),
+    nome_responsavel: document.getElementById('nome_responsavel'),
     email: document.getElementById('email'),
+    segmento: document.getElementById('segmento'),
+    telefone: document.getElementById('telefone'),
     whatsapp: document.getElementById('whatsapp'),
     senha: senhaInput,
   };
@@ -90,7 +84,7 @@
   const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const SENHA_REGEX = /^(?=.*[A-Z])(?=.*\d).{8,}$/;
 
-  function validarWhatsapp(valor) {
+  function validarTelefone(valor) {
     let d = (valor || '').replace(/\D/g, '');
     if (d.startsWith('55') && d.length >= 12) d = d.slice(2);
     if (d.length < 10 || d.length > 11) return false;
@@ -98,12 +92,46 @@
     return ddd >= 11 && ddd <= 99;
   }
 
+  // Máscara de telefone brasileiro (fixo ou celular) ao vivo — mesma lógica
+  // usada em "Meu Perfil" (app.js `formatarTelefoneMascara`); duplicada aqui
+  // porque cadastro.html não carrega app.js (tela pública, sem sessão).
+  function formatarTelefoneMascara(valor) {
+    const digitos = (valor || '').replace(/\D/g, '').slice(0, 11);
+    if (digitos.length <= 2) return digitos ? `(${digitos}` : '';
+    const ddd = digitos.slice(0, 2);
+    const resto = digitos.slice(2);
+    if (digitos.length <= 10) {
+      return resto.length > 4 ? `(${ddd}) ${resto.slice(0, 4)}-${resto.slice(4)}` : `(${ddd}) ${resto}`;
+    }
+    return `(${ddd}) ${resto.slice(0, 5)}-${resto.slice(5)}`;
+  }
+
+  campos.telefone.addEventListener('input', () => {
+    campos.telefone.value = formatarTelefoneMascara(campos.telefone.value);
+  });
+
+  // CA02 — dropdown de segmento populado dinamicamente (tabela `segmentos`).
+  fetch('/api/segmentos')
+    .then((res) => {
+      if (!res.ok) throw new Error('status ' + res.status);
+      return res.json();
+    })
+    .then((data) => {
+      const lista = (data && data.segmentos) || [];
+      campos.segmento.innerHTML =
+        '<option value="" disabled selected>Selecione seu segmento...</option>' +
+        lista.map((s) => `<option value="${s.id}">${s.nome}</option>`).join('');
+    })
+    .catch(() => {
+      mostrarErroCampo('segmento', 'Não foi possível carregar os segmentos. Tente novamente.');
+    });
+
   const validadores = {
-    nome: (v) => (v.trim().length >= 2 ? '' : 'Informe seu nome (mínimo 2 caracteres).'),
-    nome_empresa: (v) => (v.trim().length >= 2 ? '' : 'Informe o nome da empresa (mínimo 2 caracteres).'),
-    segmento: (v) => (v ? '' : 'Selecione o segmento do seu negócio.'),
+    nome_responsavel: (v) => (v.trim().length >= 2 ? '' : 'Informe o nome do responsável.'),
     email: (v) => (EMAIL_REGEX.test(v.trim()) ? '' : 'Digite um e-mail válido.'),
-    whatsapp: (v) => (validarWhatsapp(v) ? '' : 'Digite um número de WhatsApp válido com DDD.'),
+    segmento: (v) => (v ? '' : 'Selecione seu segmento.'),
+    telefone: (v) => (validarTelefone(v) ? '' : 'Digite um telefone válido com DDD.'),
+    whatsapp: (v) => (validarTelefone(v) ? '' : 'Digite um número de WhatsApp válido com DDD.'),
     senha: (v) => (SENHA_REGEX.test(v) ? '' : 'A senha deve ter no mínimo 8 caracteres, 1 número e 1 letra maiúscula.'),
   };
 
@@ -157,10 +185,10 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          nome: campos.nome.value,
-          nome_empresa: campos.nome_empresa.value,
-          segmento: campos.segmento.value,
+          nome_responsavel: campos.nome_responsavel.value,
           email: campos.email.value,
+          segmento_id: Number(campos.segmento.value),
+          telefone: campos.telefone.value,
           whatsapp: campos.whatsapp.value,
           senha: campos.senha.value,
         }),

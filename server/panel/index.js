@@ -346,23 +346,29 @@ async function start() {
     return { ok: true };
   });
 
-  // ---------- Cadastro self-service (US20) ----------
+  // ---------- Cadastro self-service (US20/US34) ----------
+  // Segmentos disponíveis pro dropdown do cadastro (CA02/US34) — tabela
+  // dinâmica (035), consultada sem autenticação já que roda antes do login.
+  fastify.get('/api/segmentos', async () => {
+    const { rows } = await pool.query('SELECT id, nome FROM segmentos WHERE ativo = true ORDER BY id');
+    return { segmentos: rows };
+  });
+
   fastify.post('/api/auth/register', async (request, reply) => {
     const {
-      nome,
+      nome_responsavel: nomeResponsavel,
       email,
       senha,
-      nome_empresa: nomeEmpresa,
+      segmento_id: segmentoIdBruto,
+      telefone: telefoneBruto,
       whatsapp: whatsappBruto,
-      segmento,
     } = request.body || {};
 
-    const nomeLimpo = (nome || '').trim();
+    const nomeLimpo = (nomeResponsavel || '').trim();
     const emailLimpo = (email || '').toLowerCase().trim();
-    const nomeEmpresaLimpo = (nomeEmpresa || '').trim();
 
     if (nomeLimpo.length < 2) {
-      return reply.code(400).send({ error: 'Informe seu nome (mínimo 2 caracteres).' });
+      return reply.code(400).send({ error: 'Informe o nome do responsável.' });
     }
     if (!EMAIL_REGEX.test(emailLimpo)) {
       return reply.code(400).send({ error: 'Digite um e-mail válido.' });
@@ -372,11 +378,16 @@ async function start() {
         error: 'A senha deve ter no mínimo 8 caracteres, 1 número e 1 letra maiúscula.',
       });
     }
-    if (nomeEmpresaLimpo.length < 2) {
-      return reply.code(400).send({ error: 'Informe o nome da empresa (mínimo 2 caracteres).' });
+    const segmentoId = parseInt(segmentoIdBruto, 10);
+    if (!Number.isInteger(segmentoId)) {
+      return reply.code(400).send({ error: 'Selecione seu segmento.' });
     }
-    if (!SEGMENTOS_VALIDOS.includes(segmento)) {
-      return reply.code(400).send({ error: 'Selecione o segmento do seu negócio.' });
+    // Telefone usa a mesma validação/formato do WhatsApp (DDD + número), mas
+    // sem checagem de unicidade — diferente do WhatsApp, pode repetir entre
+    // contas (CA03 do US34).
+    const telefone = normalizarWhatsapp(telefoneBruto);
+    if (!telefone) {
+      return reply.code(400).send({ error: 'Digite um telefone válido com DDD.' });
     }
     const whatsapp = normalizarWhatsapp(whatsappBruto);
     if (!whatsapp) {
@@ -392,18 +403,30 @@ async function start() {
     if (whatsappRows.length > 0) {
       return reply.code(409).send({ error: 'Este número de WhatsApp já está associado a uma conta.' });
     }
+    const { rows: segmentoRows } = await pool.query(
+      'SELECT slug FROM segmentos WHERE id = $1 AND ativo = true',
+      [segmentoId]
+    );
+    if (!segmentoRows[0]) {
+      return reply.code(400).send({ error: 'Selecione um segmento válido.' });
+    }
+    const segmentoSlug = segmentoRows[0].slug;
 
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
 
       // Trial começa imediatamente, antes mesmo da validação do token (CA04).
+      // `nome` (nome comercial exibido em "Minha Empresa") nasce igual ao
+      // nome do responsável — o formulário de cadastro não coleta mais um
+      // nome de empresa separado (substituído pelo Segmento, CA01/US34); o
+      // tenant pode ajustá-lo depois em Minha Empresa (US33).
       const trialExpira = new Date(Date.now() + TRIAL_DIAS * 24 * 60 * 60 * 1000);
       const { rows: tenantRows } = await client.query(
-        `INSERT INTO tenants (nome, telefone, whatsapp, segmento, plano, status, trial_expires_at)
-         VALUES ($1, $2, $3, $4, 'trial', 'trial', $5)
+        `INSERT INTO tenants (nome, telefone, whatsapp, segmento, segmento_id, plano, status, trial_expires_at)
+         VALUES ($1, $2, $3, $4, $5, 'trial', 'trial', $6)
          RETURNING id`,
-        [nomeEmpresaLimpo, whatsapp, whatsapp, segmento, trialExpira.toISOString()]
+        [nomeLimpo, telefone, whatsapp, segmentoSlug, segmentoId, trialExpira.toISOString()]
       );
       const tenantId = tenantRows[0].id;
 
