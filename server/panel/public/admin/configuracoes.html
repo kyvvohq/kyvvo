@@ -16,27 +16,41 @@
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-<div class="topbar">
-  <div class="topbar-left">
-    <div class="topbar-textos">
-      <div class="logo">ky<span class="logo-vv">vv</span>o</div>
-      <div class="admin-badge">🛠 Área administrativa — <span id="admin-nome"></span></div>
-    </div>
-    <nav class="topbar-menu">
-      <a class="topbar-nav-link" href="/admin/painel.html">Tenants</a>
-      <a class="topbar-nav-link" href="/admin/whatsapp.html">📱 WhatsApp</a>
-      <a class="topbar-nav-link ativo" href="/admin/configuracoes.html">⚙️ Configurações</a>
+<div class="painel-shell">
+  <aside class="painel-sidebar">
+    <div class="logo">ky<span class="logo-vv">vv</span>o</div>
+    <nav class="menu">
+      <a class="menu-item" href="/admin/painel.html">Tenants</a>
+      <a class="menu-item" href="/admin/whatsapp.html">📱 WhatsApp</a>
+      <a class="menu-item active" href="/admin/configuracoes.html">⚙️ Configurações</a>
     </nav>
-  </div>
-  <div class="topbar-acoes">
-    <button class="sair" id="btn-sair">Sair</button>
+  </aside>
+  <div class="painel-main">
+    <div class="topbar">
+      <div class="topbar-textos">
+        <div class="admin-badge">🛠 Área administrativa</div>
+      </div>
+      <div class="user-menu" id="user-menu">
+        <button class="user-menu-toggle" id="user-menu-toggle">
+          <div class="user-menu-avatar" id="user-menu-avatar"></div>
+          <div class="user-menu-textos">
+            <div class="user-menu-nome" id="admin-nome"></div>
+          </div>
+          <span class="user-menu-chevron">▾</span>
+        </button>
+        <div class="user-menu-dropdown" id="user-menu-dropdown" hidden>
+          <button class="user-menu-sair" id="btn-sair"><span aria-hidden="true">⎋</span> Sair</button>
+        </div>
+      </div>
+    </div>
+    <div class="conteudo" id="conteudo" style="max-width: 1000px;"></div>
+    <footer class="rodape-app">
+      <div class="logo">ky<span class="logo-vv">vv</span>o</div>
+      <p class="rodape-app-copy">© 2026 Kyvvo. Todos os direitos reservados.</p>
+    </footer>
   </div>
 </div>
-<div class="conteudo" id="conteudo" style="max-width: 1000px;"></div>
-<footer class="rodape-app">
-  <div class="logo">ky<span class="logo-vv">vv</span>o</div>
-  <p class="rodape-app-copy">© 2026 Kyvvo. Todos os direitos reservados.</p>
-</footer>
+<script src="/admin/shell.js"></script>
 <script src="/admin/configuracoes.js"></script>
 </body>
 </html>

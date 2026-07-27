@@ -4,14 +4,8 @@
 // diagnosticar. Consome GET /admin/api/whatsapp/status, que chama a Graph
 // API da Meta ao vivo com as credenciais configuradas no ambiente.
 
-const token = localStorage.getItem('kyvvo_admin_token');
-document.getElementById('admin-nome').textContent = localStorage.getItem('kyvvo_admin_nome') || '';
-
-document.getElementById('btn-sair').addEventListener('click', () => {
-  localStorage.removeItem('kyvvo_admin_token');
-  localStorage.removeItem('kyvvo_admin_nome');
-  window.location.href = '/admin/login.html';
-});
+// token / identificação do admin / dropdown "Sair" agora vivem em shell.js
+// (US53), carregado antes deste script em todas as páginas admin.
 
 async function api(path, options = {}) {
   const res = await fetch(path, {

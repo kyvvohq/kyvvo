@@ -2,14 +2,8 @@
 // numa única tela. Clicar numa linha da tabela navega pro detalhe
 // consolidado do tenant em /admin/tenants/:id.
 
-const token = localStorage.getItem('kyvvo_admin_token');
-document.getElementById('admin-nome').textContent = localStorage.getItem('kyvvo_admin_nome') || '';
-
-document.getElementById('btn-sair').addEventListener('click', () => {
-  localStorage.removeItem('kyvvo_admin_token');
-  localStorage.removeItem('kyvvo_admin_nome');
-  window.location.href = '/admin/login.html';
-});
+// token / identificação do admin / dropdown "Sair" agora vivem em shell.js
+// (US53), carregado antes deste script em todas as páginas admin.
 
 async function api(path, options = {}) {
   const res = await fetch(path, {

@@ -2,14 +2,8 @@
 // GET /admin/api/tenants/:id (dados consolidados). Chegou aqui a partir de
 // um clique na linha/"Ver detalhes" da listagem (US26/US27).
 
-const token = localStorage.getItem('kyvvo_admin_token');
-document.getElementById('admin-nome').textContent = localStorage.getItem('kyvvo_admin_nome') || '';
-
-document.getElementById('btn-sair').addEventListener('click', () => {
-  localStorage.removeItem('kyvvo_admin_token');
-  localStorage.removeItem('kyvvo_admin_nome');
-  window.location.href = '/admin/login.html';
-});
+// token / identificação do admin / dropdown "Sair" agora vivem em shell.js
+// (US53), carregado antes deste script em todas as páginas admin.
 
 async function api(path, options = {}) {
   const res = await fetch(path, {
