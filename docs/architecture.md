@@ -5,7 +5,7 @@
 ```
 Cliente (WhatsApp)
        ↓
-Evolution API (Baileys) — AWS
+WhatsApp Cloud API (oficial da Meta) — AWS
        ↓ webhook
 n8n — AWS
        ↓
@@ -17,11 +17,11 @@ React Native App (Expo)
 ## Fluxo de agendamento
 
 1. Cliente envia mensagem no WhatsApp do salão
-2. Evolution API recebe e dispara webhook para o n8n
+2. WhatsApp Cloud API recebe e dispara webhook para o n8n
 3. n8n filtra mensagens recebidas (ignora as próprias)
 4. Extrai: número do remetente, texto, nome
 5. Lógica do bot gerencia o estado da conversa (Static Data)
-6. Bot responde via Evolution API → WhatsApp do cliente
+6. Bot responde via WhatsApp Cloud API → WhatsApp do cliente
 7. Ao confirmar: grava agendamento no Supabase
 8. Dona do salão visualiza no app React Native
 
@@ -52,7 +52,6 @@ Cada salão é um tenant isolado via Row Level Security (Supabase).
 
 | Serviço | Imagem | Porta |
 |---|---|---|
-| Evolution API | atendai/evolution-api:v1.7.4 | 8080 |
 | n8n | n8nio/n8n:latest | 5678 |
 | PostgreSQL | container Docker | 5432 |
 

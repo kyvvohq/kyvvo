@@ -9,7 +9,7 @@
 ## ✅ Entra no MVP
 
 ### E1 — Agendamento via WhatsApp
-- Recepção de mensagem via BSP (Evolution API / Baileys)
+- Recepção de mensagem via WhatsApp Cloud API (oficial da Meta)
 - Fluxo conversacional: serviço → data → horário
 - Validação de disponibilidade em tempo real
 - Sugestão de horário alternativo se ocupado
@@ -51,7 +51,7 @@
 
 | Camada | Tecnologia |
 |---|---|
-| Bot | n8n + Evolution API |
+| Bot | n8n + WhatsApp Cloud API |
 | Backend | Node.js + Fastify |
 | Banco | PostgreSQL (Supabase) |
 | Auth | Supabase Auth |

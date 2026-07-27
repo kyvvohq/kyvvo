@@ -8,7 +8,7 @@ Kyvvo é uma plataforma SaaS que permite que negócios (salões de beleza, petsh
 
 ## Componentes
 
-- **Bot WhatsApp**: fluxo conversacional em n8n + Evolution API (Baileys), guia o cliente final pelo agendamento.
+- **Bot WhatsApp**: fluxo conversacional em n8n + WhatsApp Cloud API (oficial da Meta), guia o cliente final pelo agendamento.
 - **Painel do tenant** (`server/panel/public/`): app web onde o dono do negócio gerencia agenda (dia/semana/mês), clientes, serviços, financeiro, perfil e forma de pagamento da assinatura.
 - **Painel admin** (`server/panel/public/admin/`): área interna da Kyvvo para gestão de todos os tenants (busca, detalhe, CRUD).
 - **Landing page** (`server/public/`, `landing/`): página pública e lista de espera.
@@ -17,7 +17,7 @@ Kyvvo é uma plataforma SaaS que permite que negócios (salões de beleza, petsh
 
 | Camada | Tecnologia |
 |---|---|
-| Bot / Automação | n8n + Evolution API (WhatsApp Baileys) |
+| Bot / Automação | n8n + WhatsApp Cloud API (oficial da Meta) |
 | Backend (painel + admin) | Node.js + Fastify + PostgreSQL |
 | Pagamentos | Asaas (Pix recorrente + cartão de crédito, tokenização server-side) |
 | E-mail transacional | Resend |
@@ -51,7 +51,7 @@ kyvvo/
 ### Pré-requisitos
 - Node.js 18+
 - PostgreSQL
-- Número de WhatsApp para teste (Evolution API)
+- Número de WhatsApp Business configurado na Meta (Cloud API) para teste
 
 ### Rodando os testes (painel)
 ```bash
@@ -69,7 +69,7 @@ Deploy automático via GitHub Actions (`.github/workflows/deploy.yml`) a cada pu
 
 ## Links úteis
 
-- [Evolution API Docs](https://doc.evolution-api.com)
+- [WhatsApp Cloud API Docs](https://developers.facebook.com/docs/whatsapp/cloud-api)
 - [n8n Docs](https://docs.n8n.io)
 - [Asaas API Docs](https://docs.asaas.com)
 

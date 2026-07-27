@@ -65,7 +65,7 @@ async function carregar() {
 }
 
 function render(dados) {
-  const { meta, evolution, verificadoEm } = dados;
+  const { meta, verificadoEm } = dados;
 
   let metaCardClasse = 'status-card-inativo';
   let metaLinha2 = 'Não configurado';
@@ -95,13 +95,6 @@ function render(dados) {
       ${meta.phoneNumberId ? `<p>Phone Number ID: <strong>${escapeHtml(meta.phoneNumberId)}</strong></p>` : ''}
       <p class="vazio-inline">Última verificação: ${formatarDataHora(verificadoEm)}</p>
       <button class="btn-primario btn-tabela" id="btn-atualizar" style="margin-top: 12px;">🔄 Verificar novamente</button>
-    </section>
-    <section class="secao-detalhe">
-      <h3>Evolution API (fallback)</h3>
-      <p>
-        <span class="badge-status ${evolution.configurado ? 'badge-status-ativo' : 'badge-status-inativo'}">${evolution.configurado ? 'Configurado' : 'Não configurado'}</span>
-      </p>
-      <p class="vazio-inline">Usado pra envio de código de verificação (OTP) quando a API oficial da Meta não está configurada. O bot de agendamento em produção (v3) usa o Evolution API diretamente via n8n, fora do escopo desta tela.</p>
     </section>
   `;
   conteudo.innerHTML = html;

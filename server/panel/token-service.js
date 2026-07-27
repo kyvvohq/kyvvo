@@ -12,11 +12,11 @@
 // conexão do pool nem atrasar a resposta. `send` é o atalho que faz as duas
 // coisas de uma vez (CA06), pra fluxos mais simples.
 //
-// Ambos os provedores (Resend/Evolution API) são opcionais: sem as variáveis
-// de ambiente configuradas, o envio cai num modo de log (imprime o token no
-// console), pra que qualquer fluxo funcione em dev/homologação sem depender
-// de serviço externo. `enviarPorCanais` nunca lança — falha de um canal é
-// logada e engolida, o outro canal ainda é tentado (CA04).
+// Ambos os provedores (Resend/Meta WhatsApp Cloud API) são opcionais: sem as
+// variáveis de ambiente configuradas, o envio cai num modo de log (imprime o
+// token no console), pra que qualquer fluxo funcione em dev/homologação sem
+// depender de serviço externo. `enviarPorCanais` nunca lança — falha de um
+// canal é logada e engolida, o outro canal ainda é tentado (CA04).
 
 const crypto = require('crypto');
 
@@ -123,37 +123,8 @@ async function enviarTokenWhatsappMeta(whatsappNacional, token) {
   }
 }
 
-// Envia o token por WhatsApp via Evolution API (CA03). Espera o número
-// nacional em dígitos (ex: "34984285182") e prefixa o DDI 55.
-async function enviarTokenWhatsappEvolution(whatsappNacional, token) {
-  const url = process.env.EVOLUTION_API_URL;
-  const apiKey = process.env.EVOLUTION_API_KEY;
-  const instancia = process.env.EVOLUTION_INSTANCE;
-  const texto = `Seu código de verificação Kyvvo é: ${token}. Válido por ${TOKEN_EXPIRACAO_MINUTOS} minutos. Não compartilhe este código.`;
-
-  try {
-    const res = await fetch(`${url.replace(/\/$/, '')}/message/sendText/${instancia}`, {
-      method: 'POST',
-      headers: {
-        apikey: apiKey,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ number: `55${whatsappNacional}`, text: texto }),
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!res.ok) {
-      console.error(`[token-service] Evolution API respondeu ${res.status} ao enviar para 55${whatsappNacional}`);
-      return false;
-    }
-    return true;
-  } catch (err) {
-    console.error(`[token-service] Falha ao enviar WhatsApp (Evolution) para 55${whatsappNacional}: ${err.message}`);
-    return false;
-  }
-}
-
-// Escolhe o provedor: API oficial da Meta se configurada (preferida — CA03),
-// senão Evolution API se configurada, senão cai no modo de log (dev/homolog).
+// Escolhe o provedor: API oficial da Meta se configurada (CA03), senão cai
+// no modo de log (dev/homolog).
 async function enviarTokenWhatsapp(whatsappNacional, token) {
   // Tenant sem WhatsApp cadastrado (ex: criado pela área admin, US16) — não
   // há número nenhum pra tentar enviar.
@@ -163,10 +134,6 @@ async function enviarTokenWhatsapp(whatsappNacional, token) {
 
   if (process.env.META_WHATSAPP_TOKEN && process.env.META_PHONE_NUMBER_ID) {
     return enviarTokenWhatsappMeta(whatsappNacional, token);
-  }
-
-  if (process.env.EVOLUTION_API_URL && process.env.EVOLUTION_API_KEY && process.env.EVOLUTION_INSTANCE) {
-    return enviarTokenWhatsappEvolution(whatsappNacional, token);
   }
 
   console.log(`[token-service] (dev) WhatsApp para 55${whatsappNacional} — código: ${token}`);

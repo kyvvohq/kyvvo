@@ -1,7 +1,7 @@
 // US32 — integração com a Asaas (E3 — Sistema de módulos e planos) pra
 // cobrança recorrente (Pix ou cartão de crédito) depois do trial de 14 dias.
 //
-// Mesmo padrão do token-service.js (Resend/Evolution API): sem as variáveis
+// Mesmo padrão do token-service.js (Resend/Meta WhatsApp Cloud API): sem as variáveis
 // de ambiente configuradas, as chamadas caem num modo de log (devolvem um id
 // fake), pra que o fluxo funcione em dev/homologação sem depender de uma
 // conta real na Asaas. `ASAAS_ENV` escolhe entre sandbox e produção — nunca
