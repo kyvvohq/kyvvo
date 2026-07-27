@@ -7,7 +7,7 @@
 </nav>
 
 <div class="login-modal-overlay" id="loginModalOverlay" onclick="if(event.target===this)closeLoginModal()">
-  <div class="login-modal">
+  <div class="login-modal" role="dialog" aria-modal="true" aria-label="Login Kyvvo">
     <button class="login-modal-close" id="btnCloseLogin" onclick="closeLoginModal()" aria-label="Fechar">✕</button>
     <iframe id="loginIframe" title="Login Kyvvo" src="about:blank"></iframe>
   </div>
