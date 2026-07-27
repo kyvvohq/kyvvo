@@ -21,6 +21,7 @@ Kyvvo é uma plataforma SaaS que permite que negócios (salões de beleza, petsh
 | Backend (painel + admin) | Node.js + Fastify + PostgreSQL |
 | Pagamentos | Asaas (Pix recorrente + cartão de crédito, tokenização server-side) |
 | E-mail transacional | Resend |
+| Analytics / funil | PostHog (`POSTHOG_KEY` / `POSTHOG_HOST` — landing e painel; sem chave configurada, tracking fica desligado) |
 | Testes | Playwright |
 | Infra | EC2 (Docker Compose) atrás de Cloudflare |
 | CI/CD | GitHub Actions (deploy automático em push na `main`) |

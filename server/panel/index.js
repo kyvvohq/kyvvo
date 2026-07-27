@@ -416,6 +416,16 @@ async function start() {
     return { ok: true };
   });
 
+  // GET /api/config-publica — expõe só a chave pública do PostHog pro front do
+  // painel (US47/CA de rastreamento de conversão). Não autenticada de
+  // propósito: precisa estar disponível em login.html/cadastro.html, antes de
+  // qualquer sessão existir. Sem POSTHOG_KEY configurada, o front recebe
+  // posthogKey: null e analytics.js não inicializa o tracking (fail-safe).
+  fastify.get('/api/config-publica', async () => ({
+    posthogKey: process.env.POSTHOG_KEY || null,
+    posthogHost: process.env.POSTHOG_HOST || 'https://us.i.posthog.com',
+  }));
+
   // ---------- Cadastro self-service (US20/US34) ----------
   // Segmentos disponíveis pro dropdown do cadastro (CA02/US34) — tabela
   // dinâmica (035), consultada sem autenticação já que roda antes do login.
@@ -423,6 +433,7 @@ async function start() {
     const { rows } = await pool.query('SELECT id, nome FROM segmentos WHERE ativo = true ORDER BY id');
     return { segmentos: rows };
   });
+
 
   fastify.post('/api/auth/register', async (request, reply) => {
     const {
