@@ -22,10 +22,11 @@ let MAX_REENVIOS_HORA = 5;
 // Cooldown entre pedidos de reenvio — não faz parte da lista de
 // configurações editáveis da CA06, então continua fixo no código.
 const REENVIO_COOLDOWN_SEGUNDOS = 60;
-// CA06 (US38) — configurações gerais editáveis pelo admin que ainda não têm
-// nenhum consumidor no código (não existe hoje uma tela de "fale com o
-// suporte" no portal do tenant); ficam disponíveis via
-// /admin/api/configuracoes pra quando essa tela existir.
+// CA06 (US38) — configurações gerais editáveis pelo admin. EMAIL_SUPORTE/
+// WHATSAPP_SUPORTE são consumidos por GET /api/tenant/status desde a US52
+// (tela de bloqueio pós-trial precisa dizer como falar com o suporte);
+// CARENCIA_DIAS_INADIMPLENCIA continua sem consumidor no código, só
+// disponível via /admin/api/configuracoes pra quando existir.
 let CARENCIA_DIAS_INADIMPLENCIA = 3;
 let EMAIL_SUPORTE = 'suporte@kyvvo.com.br';
 let WHATSAPP_SUPORTE = '553484285182';
@@ -202,6 +203,38 @@ function proximaCobrancaRespeitandoTrial(tenant) {
   return new Date().toISOString().slice(0, 10);
 }
 
+// US52 — funil de conversão pós-trial (CA: aviso exibido, trial expirado,
+// bloqueio exibido, pagamento iniciado, pagamento concluído). Tabela
+// append-only (eventos_analytics); os tipos válidos são só esses, checados
+// aqui em vez de num enum/check no banco.
+const EVENTOS_ANALYTICS_TIPOS = new Set([
+  'aviso_trial_exibido',
+  'trial_expirado',
+  'bloqueio_exibido',
+  'pagamento_iniciado',
+  'pagamento_concluido',
+]);
+// Subconjunto que o próprio frontend pode registrar via POST /api/eventos —
+// os outros (trial_expirado, pagamento_iniciado/concluido) nascem direto nos
+// handlers do backend, que já sabem que o evento de fato aconteceu; aceitar
+// esses pelo endpoint deixaria qualquer tenant forjar métricas de conversão.
+const EVENTOS_ANALYTICS_TIPOS_FRONTEND = new Set(['aviso_trial_exibido', 'bloqueio_exibido']);
+
+async function registrarEvento(tenantId, tipo) {
+  await pool.query('INSERT INTO eventos_analytics (tenant_id, tipo) VALUES ($1, $2)', [tenantId, tipo]);
+}
+
+// 'trial_expirado' marca a transição de estado, não uma impressão de tela —
+// só grava na primeira vez que o guard de `authenticate` barra esse tenant,
+// senão toda requisição bloqueada geraria uma linha nova.
+async function registrarEventoTrialExpiradoUmaVez(tenantId) {
+  const { rows } = await pool.query(
+    "SELECT 1 FROM eventos_analytics WHERE tenant_id = $1 AND tipo = 'trial_expirado' LIMIT 1",
+    [tenantId]
+  );
+  if (rows.length === 0) await registrarEvento(tenantId, 'trial_expirado');
+}
+
 async function start() {
   await fastify.register(cors, { origin: true });
   await fastify.register(jwt, { secret: JWT_SECRET });
@@ -240,6 +273,21 @@ async function start() {
     'GET /api/tenant/status',
   ]);
 
+  // US52/CA03 — acessíveis mesmo com trial vencido e sem assinatura ativa:
+  // só o necessário pra regularizar a conta (sair, ver o próprio status/
+  // perfil básico, consultar e cadastrar meio de pagamento, e o endpoint de
+  // analytics que a própria tela de bloqueio usa). Todo o resto (agenda,
+  // clientes, serviços, configuração...) fica bloqueado até reativar.
+  const ROTAS_LIVRES_SEM_ASSINATURA = new Set([
+    'POST /api/auth/logout',
+    'GET /api/tenant/status',
+    'GET /api/perfil',
+    'GET /api/pagamentos',
+    'GET /api/pagamentos/status',
+    'POST /api/pagamentos/cadastrar',
+    'POST /api/eventos',
+  ]);
+
   fastify.decorate('authenticate', async (request, reply) => {
     try {
       await request.jwtVerify();
@@ -248,7 +296,9 @@ async function start() {
     }
 
     const { rows } = await pool.query(
-      'SELECT token_version, email_verified FROM usuarios WHERE id = $1',
+      `SELECT u.token_version, u.email_verified, t.status AS tenant_status, t.ativado_em
+       FROM usuarios u JOIN tenants t ON t.id = u.tenant_id
+       WHERE u.id = $1`,
       [request.user.userId]
     );
     const usuario = rows[0];
@@ -257,8 +307,28 @@ async function start() {
     }
 
     const rotaAtual = `${request.method} ${request.routeOptions.url}`;
-    if (!usuario.email_verified && !ROTAS_LIVRES_SEM_VERIFICACAO.has(rotaAtual)) {
-      return reply.code(403).send({ error: 'Confirme seu cadastro para continuar. Verifique seu e-mail ou WhatsApp.' });
+    if (!usuario.email_verified) {
+      if (!ROTAS_LIVRES_SEM_VERIFICACAO.has(rotaAtual)) {
+        return reply.code(403).send({ error: 'Confirme seu cadastro para continuar. Verifique seu e-mail ou WhatsApp.' });
+      }
+      return;
+    }
+
+    // US52/CA01-CA07 — trial vencido (calcularTrialTenant, mesma fonte de
+    // verdade usada pra cobrança) sem o tenant ter migrado pra 'ativo'/
+    // outro status comercial: bloqueia módulos operacionais, mantém acesso
+    // à regularização. Só avaliado depois da verificação de e-mail acima —
+    // um tenant recém-cadastrado (ativado_em ainda nulo) sempre bate em
+    // `!trialAtivo`, mas nesse caso email_verified também é false e o early
+    // return acima já resolveu a rota.
+    if (usuario.tenant_status === 'trial' && !calcularTrialTenant({ ativado_em: usuario.ativado_em }).trialAtivo) {
+      if (!ROTAS_LIVRES_SEM_ASSINATURA.has(rotaAtual)) {
+        await registrarEventoTrialExpiradoUmaVez(request.user.tenantId);
+        return reply.code(403).send({
+          error: 'Seu período de teste terminou. Cadastre um meio de pagamento para continuar usando o Kyvvo.',
+          bloqueio: 'trial_expirado',
+        });
+      }
     }
   });
 
@@ -577,17 +647,20 @@ async function start() {
   fastify.get('/api/tenant/status', { preHandler: [fastify.authenticate] }, async (request) => {
     const { userId, tenantId } = request.user;
     const { rows } = await pool.query(
-      `SELECT u.email, u.email_verified, t.status, t.plano, t.trial_expires_at
+      `SELECT u.email, u.email_verified, t.status, t.plano, t.trial_expires_at, t.ativado_em
        FROM usuarios u JOIN tenants t ON t.id = u.tenant_id
        WHERE u.id = $1`,
       [userId]
     );
     const info = rows[0] || {};
-    let diasRestantes = null;
-    if (info.trial_expires_at) {
-      const ms = new Date(info.trial_expires_at).getTime() - Date.now();
-      diasRestantes = Math.max(0, Math.ceil(ms / (24 * 60 * 60 * 1000)));
-    }
+    // BUG (achado na US52) — `dias_restantes` era calculado a partir de
+    // `trial_expires_at` (fixado no momento do cadastro), enquanto o trial
+    // que de fato vale pra cobrança/bloqueio é `ativado_em + TRIAL_DIAS`
+    // (US31/calcularTrialTenant, `ativado_em` só é setado quando o e-mail é
+    // verificado). Um tenant que demorasse pra verificar via aqui um trial
+    // mais curto (ou já "expirado") do que o que realmente estava valendo.
+    // Unifica no mesmo cálculo usado no resto do sistema.
+    const trial = calcularTrialTenant(info);
     return {
       tenant_id: tenantId,
       email: info.email,
@@ -595,9 +668,24 @@ async function start() {
       email_verified: !!info.email_verified,
       status: info.status,
       plano: info.plano,
-      trial_expires_at: info.trial_expires_at,
-      dias_restantes: diasRestantes,
+      trial_ativo: trial.trialAtivo,
+      dias_restantes: trial.trialDiasRestantes,
+      suporte_email: EMAIL_SUPORTE,
+      suporte_whatsapp: WHATSAPP_SUPORTE,
     };
+  });
+
+  // US52 — endpoint genérico pro frontend registrar impressões do funil de
+  // conversão pós-trial (aviso de vencimento, tela de bloqueio). Sem
+  // requireModulo/ROTAS_LIVRES_SEM_ASSINATURA parcial: fica liberado mesmo
+  // com o tenant bloqueado (é assim que "bloqueio_exibido" é registrado).
+  fastify.post('/api/eventos', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const { tipo } = request.body || {};
+    if (!EVENTOS_ANALYTICS_TIPOS_FRONTEND.has(tipo)) {
+      return reply.code(400).send({ error: 'Tipo de evento inválido.' });
+    }
+    await registrarEvento(request.user.tenantId, tipo);
+    return { ok: true };
   });
 
   // ---------- Agenda ----------
@@ -1671,6 +1759,11 @@ async function start() {
       endereco_uf: tenant.endereco_uf,
       cancelado_em: tenant.cancelado_em,
       acesso_ate: tenant.acesso_ate,
+      // US52 — tela de bloqueio pós-trial (bloqueio.html) explica como falar
+      // com o suporte durante a regularização; reaproveita as mesmas
+      // configurações já usadas em GET /api/tenant/status.
+      suporte_email: EMAIL_SUPORTE,
+      suporte_whatsapp: WHATSAPP_SUPORTE,
       proxima_cobranca: subscription ? { data: subscription.nextDueDate, valor: subscription.value } : null,
       // `meio` (PR5) — a Asaas já devolve billingType (PIX/CREDIT_CARD) em
       // cada cobrança do histórico; não precisa de coluna nova nem de nova
@@ -1854,6 +1947,11 @@ async function start() {
     // mas `telefone` é obrigatório desde a US33; usa o que tiver.
     const contato = tenant.whatsapp || tenant.telefone;
 
+    // US52 — marca a tentativa de cadastro assim que as validações passam,
+    // antes de chamar a Asaas (a conclusão só é registrada depois do UPDATE
+    // no tenant ter sucesso, mais abaixo).
+    await registrarEvento(tenantId, 'pagamento_iniciado');
+
     let customer;
     let subscriptionId;
     try {
@@ -1966,6 +2064,8 @@ async function start() {
         novoStatus,
       ]
     );
+
+    await registrarEvento(tenantId, 'pagamento_concluido');
 
     return montarResumoPagamentos(atualizado[0]);
   });

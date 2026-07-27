@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<script>
+  // Só faz sentido regularizar quem já tem sessão (mesmo padrão de
+  // verificar.html) — sem token não tem o que cadastrar aqui.
+  if (!localStorage.getItem('kyvvo_token')) {
+    window.location.href = '/login.html';
+  }
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Regularize sua conta — Kyvvo</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%237c5cfc'/%3E%3Ctext x='16' y='22' font-family='Arial,sans-serif' font-size='15' font-weight='800' fill='white' text-anchor='middle'%3Evv%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Syne:wght@400;600;700;800&display=swap">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="center-screen">
+  <div class="card card-bloqueio">
+    <div class="logo">ky<span class="logo-vv">vv</span>o</div>
+    <h1 class="cadastro-titulo">Seu período gratuito terminou</h1>
+    <p class="cadastro-sub" id="bloqueio-sub">Cadastre um meio de pagamento para continuar usando o Kyvvo. Seus dados continuam salvos e disponíveis assim que a assinatura for ativada.</p>
+
+    <div id="bloqueio-plano"></div>
+
+    <div class="bloqueio-explicacao" id="bloqueio-explicacao"></div>
+
+    <div id="bloqueio-form"></div>
+
+    <p class="bloqueio-suporte" id="bloqueio-suporte"></p>
+
+    <p class="cadastro-rodape">
+      <a href="#" id="link-sair">Sair da conta</a>
+    </p>
+  </div>
+</div>
+<footer class="rodape-app">
+  <div class="logo">ky<span class="logo-vv">vv</span>o</div>
+  <p class="rodape-app-copy">© 2026 Kyvvo. Todos os direitos reservados.</p>
+</footer>
+<script src="/pagamento-form.js"></script>
+<script>
+  const token = localStorage.getItem('kyvvo_token');
+
+  async function api(path, options = {}) {
+    const res = await fetch(path, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        ...(options.headers || {}),
+      },
+    });
+    if (res.status === 401) {
+      localStorage.removeItem('kyvvo_token');
+      window.location.href = '/login.html';
+      return null;
+    }
+    return res.json();
+  }
+
+  // Toast mínimo, mesmo comportamento visual do painel (app.js) — sem
+  // importar o script inteiro, que assume elementos do painel completo
+  // (menu, abas de agenda) que não existem nesta tela standalone.
+  function mostrarToast(mensagem, tipo = 'sucesso') {
+    let container = document.getElementById('toast-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'toast-container';
+      container.className = 'toast-container';
+      document.body.appendChild(container);
+    }
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${tipo}`;
+    toast.textContent = (tipo === 'sucesso' ? '✅ ' : '❌ ') + mensagem;
+    container.appendChild(toast);
+    setTimeout(() => {
+      toast.classList.add('toast-saindo');
+      setTimeout(() => toast.remove(), 250);
+    }, 4000);
+  }
+
+  document.getElementById('link-sair').addEventListener('click', async (e) => {
+    e.preventDefault();
+    try {
+      await fetch('/api/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+    } catch (err) {
+      // Sem conexão: prossegue com o logout local mesmo assim.
+    }
+    localStorage.removeItem('kyvvo_token');
+    localStorage.removeItem('kyvvo_nome');
+    localStorage.removeItem('kyvvo_email');
+    window.location.href = 'https://kyvvo.com.br';
+  });
+
+  // US52 — dispara em "melhor esforço": perder essa métrica não pode
+  // travar a tela de regularização pro tenant.
+  function registrarEventoAnalytics(tipo) {
+    api('/api/eventos', { method: 'POST', body: JSON.stringify({ tipo }) });
+  }
+
+  async function montarTelaBloqueio() {
+    const dados = await api('/api/pagamentos');
+    if (!dados) return;
+
+    // CA — quem não está realmente bloqueado (trial ainda ativo, ou já
+    // pagante) não tem o que fazer aqui; manda de volta pro painel em vez de
+    // mostrar uma tela de cobrança fora de contexto.
+    const bloqueado = dados.status === 'trial' && dados.trial_ativo === false;
+    if (!bloqueado) {
+      window.location.href = '/painel.html';
+      return;
+    }
+
+    registrarEventoAnalytics('bloqueio_exibido');
+
+    document.getElementById('bloqueio-plano').innerHTML = `
+      <div class="financeiro-resumo-card" style="margin-bottom:16px">
+        <div class="financeiro-resumo-label">Plano a ser contratado</div>
+        <div>${dados.plano_nome || 'Profissional'}${dados.valor_plano != null ? ` — ${formatarPreco(dados.valor_plano)}/mês` : ''}</div>
+      </div>
+    `;
+
+    document.getElementById('bloqueio-explicacao').innerHTML = `
+      <p>Enquanto isso, agenda, clientes, serviços e configurações ficam indisponíveis — seus dados continuam preservados e você recupera o acesso completo assim que o pagamento for confirmado.</p>
+      <p>A cobrança começa a partir da confirmação do cadastro abaixo.</p>
+    `;
+
+    const suporteEmail = dados.suporte_email || 'suporte@kyvvo.com.br';
+    const suporteWhatsapp = dados.suporte_whatsapp;
+    document.getElementById('bloqueio-suporte').textContent = suporteWhatsapp
+      ? `Dúvidas? Fale com o suporte pelo e-mail ${suporteEmail} ou WhatsApp ${suporteWhatsapp}.`
+      : `Dúvidas? Fale com o suporte pelo e-mail ${suporteEmail}.`;
+
+    document.getElementById('bloqueio-form').innerHTML = htmlFormPagamento(dados, { comBotaoCancelar: false });
+    // wireFormPagamento já mostra o toast de sucesso — só falta redirecionar
+    // de volta pro painel, com um respiro pro tenant ler o toast antes da
+    // navegação trocar a tela.
+    wireFormPagamento(dados, {
+      onSucesso: () => {
+        setTimeout(() => { window.location.href = '/painel.html'; }, 1500);
+      },
+    });
+  }
+  montarTelaBloqueio();
+</script>
+</body>
+</html>
