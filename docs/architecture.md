@@ -57,6 +57,10 @@ Cada salão é um tenant isolado via Row Level Security (Supabase).
 
 Todos os serviços rodam via Docker Compose no mesmo host EC2 que já serve a landing page e o painel (`/opt/kyvvo`, ver deploy em `.github/workflows/deploy.yml`).
 
+## Backup do banco
+
+Backup diário automático via `pg_dump` + cron na EC2 — ver `docs/backup.md`.
+
 ## Variáveis de ambiente sensíveis
 
 Nunca commitar no repositório. Configurar direto no `docker-compose.yml`/`.env` do host EC2.
