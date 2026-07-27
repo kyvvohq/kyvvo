@@ -182,13 +182,9 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .topbar .logo { margin: 0; font-size: 20px; }
 .saudacao { font-size: 13px; color: #a1a5c4; }
 
-/* Menu admin (Tenants/WhatsApp/Configurações) agrupado à esquerda, junto do
-   logo — só "Sair" fica à direita, em .topbar-acoes. */
-.topbar-left { display: flex; align-items: center; gap: 32px; }
-.topbar-menu { display: flex; align-items: center; gap: 18px; }
-.topbar-nav-link.ativo { color: #f2f2f7; font-weight: 600; }
-
-.topbar-acoes { display: flex; align-items: center; gap: 16px; }
+/* .topbar-nav-link — desde a US53 o admin não usa mais nav no topbar (virou
+   sidebar, como o painel do tenant); a classe sobrevive só pro link "←
+   Voltar para lista" dentro do detalhe do tenant (tenant-detalhe.js). */
 .topbar-nav-link { color: #a1a5c4; font-size: 14px; text-decoration: none; }
 .topbar-nav-link:hover { color: #f2f2f7; }
 
@@ -205,9 +201,9 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   margin-top: 4px;
 }
 
-/* Menu lateral (painel.html exclusivo — .topbar/.conteudo continuam
-   compartilhados com as páginas admin, por isso só aninhamos os dois dentro
-   deste wrapper novo em vez de mudar as regras deles). */
+/* Menu lateral — compartilhado entre o painel do tenant e todas as páginas
+   admin (US53); .topbar/.conteudo continuam as mesmas classes de sempre, só
+   aninhadas dentro deste wrapper em vez de mudar as regras delas. */
 .painel-shell { flex: 1; display: flex; width: 100%; }
 
 .painel-sidebar {
@@ -350,15 +346,6 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 .inicio-cabecalho h2 { font-size: 20px; }
-
-.sair {
-  background: transparent;
-  border: 1px solid #2a2f52;
-  width: auto;
-  margin: 0;
-  padding: 8px 16px;
-  font-size: 13px;
-}
 
 /* User menu (avatar + dropdown, PR11) — substitui o botão "Sair" solto no
    topbar; Meu Perfil/Minha Empresa/Cobrança/Preferências/Ajuda/Sair vivem
