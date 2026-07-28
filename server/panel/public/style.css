@@ -753,6 +753,21 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   white-space: nowrap;
 }
 
+/* US46.1 — explica as duas formas de conectar o WhatsApp (self-service vs.
+   número pronto) antes do botão de conexão, na tela de onboarding. */
+.whatsapp-planos-info {
+  background: #12162a;
+  border: 1px solid #232847;
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-top: 16px;
+  font-size: 13px;
+  color: #a1a5c4;
+}
+.whatsapp-planos-info p + p { margin-top: 8px; }
+.whatsapp-planos-info strong { color: #f2f2f7; }
+.whatsapp-planos-info a { color: var(--accent-light); }
+
 /* Card de Status sólido (PR5) — fundo claro + texto escuro e maior, ao
    contrário do resto do painel (tema escuro): pedido explícito pra chamar
    mais atenção pro status da assinatura. */
