@@ -460,7 +460,7 @@ function renderResult() {
   // Salva o diagnóstico assim que ele é calculado — não depende de a pessoa
   // clicar no WhatsApp pra virar lead registrado. Falha silenciosa: não
   // deve travar a experiência do usuário se o backend estiver fora.
-  fetch('/diagnostico', {
+  fetch(window.KYVVO_API_ORIGIN + '/diagnostico', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ nome, respostas: answers, score, plano }),

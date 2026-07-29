@@ -10,6 +10,11 @@
 // funil continuar de visita até ativação sem virar duas pessoas diferentes
 // no PostHog.
 (function () {
+  // URL absoluta pra API da landing (server/index.js), que continua na EC2
+  // depois que server/public/** passou a ser servido pelo Amplify Hosting
+  // (domínio diferente) — mesmo padrão do PANEL_ORIGIN em shared.js.
+  window.KYVVO_API_ORIGIN = 'https://api.kyvvo.com.br';
+
   window.kyvvoCapture = function (evento, props) {
     if (window.posthog && window.posthog.__loaded) {
       window.posthog.capture(evento, props);
@@ -31,7 +36,7 @@
     document.head.appendChild(script);
   }
 
-  fetch('/config-publica')
+  fetch(window.KYVVO_API_ORIGIN + '/config-publica')
     .then(function (res) { return res.json(); })
     .then(function (config) {
       if (config && config.posthogKey) carregarPosthog(config.posthogKey, config.posthogHost);
