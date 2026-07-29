@@ -57,9 +57,15 @@ Cada salão é um tenant isolado via Row Level Security (Supabase).
 
 Todos os serviços rodam via Docker Compose no mesmo host EC2 que já serve a landing page e o painel (`/opt/kyvvo`, ver deploy em `.github/workflows/deploy.yml`).
 
-## Backup do banco
+## Backup e restauração do banco
 
-Backup diário automático via `pg_dump` + cron na EC2 — ver `docs/backup.md`.
+Backup diário automático (US14): dump via `pg_dump` + `cron` na EC2, salvo
+localmente e enviado pra um bucket S3 dedicado. Detalhes operacionais
+completos (recursos AWS provisionados, como rodar/verificar manualmente,
+troubleshooting) em `docs/backup.md` e na página
+[Backup do banco de produção](https://app.notion.com/p/3acb5df9cb5d81828d07fcf59f7ec998)
+do Wiki. Procedimento de restauração ainda não testado nem documentado
+formalmente (ST14.4, pendente).
 
 ## Variáveis de ambiente sensíveis
 
