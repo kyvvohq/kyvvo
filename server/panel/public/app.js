@@ -19,12 +19,18 @@ document.getElementById('btn-sair').addEventListener('click', async () => {
 // de sucesso pós-validação (CA08). Falha na chamada de status não bloqueia o
 // portal (fail-open): usuários antigos já são email_verified=true na migration.
 // mostrarToast() é definido mais abaixo (seção Toasts).
+// contaStatus fica disponível pro resto do app.js (ex.: renderWhatsapp)
+// reaproveitar dados já buscados aqui, como o contato de suporte, sem
+// precisar de uma segunda chamada à API.
+let contaStatus = null;
+
 async function verificarStatusConta() {
   let status;
   try {
     const res = await fetch('/api/tenant/status', { headers: { Authorization: `Bearer ${token}` } });
     if (!res.ok) return;
     status = await res.json();
+    contaStatus = status;
   } catch (e) {
     return;
   }
@@ -2385,6 +2391,19 @@ async function renderWhatsapp() {
     linha3 = status.erro;
   }
 
+  // US46.1 — antes de mostrar o botão de self-service, explica que ele é uma
+  // das duas formas de conectar o WhatsApp (a outra, "número pronto", ainda
+  // depende do time da Kyvvo, então não pode ser anunciada como automática).
+  const linkSuporte = contaStatus?.suporte_whatsapp
+    ? `<a href="https://wa.me/${contaStatus.suporte_whatsapp}" target="_blank" rel="noopener">Fale com o suporte</a>`
+    : 'Fale com o nosso suporte';
+  const planosInfo = status.conectado ? '' : `
+    <div class="whatsapp-planos-info">
+      <p><strong>Traga seu número</strong> — disponível agora: conecte o WhatsApp Business que sua empresa já usa clicando no botão abaixo, pelo Embedded Signup oficial da Meta. A ativação depende só da verificação da Meta ser concluída.</p>
+      <p><strong>Número pronto</strong> — sob consulta: prefere que a Kyvvo configure um número novo pra você, sem esforço técnico? ${linkSuporte} pra confirmar disponibilidade — hoje esse caminho ainda é combinado direto com o nosso time, não é automático.</p>
+    </div>
+  `;
+
   conteudo.innerHTML = `
     <h2 class="titulo-detalhe">WhatsApp</h2>
     <div class="financeiro-resumo" style="grid-template-columns: 1fr">
@@ -2394,6 +2413,7 @@ async function renderWhatsapp() {
         <div class="financeiro-resumo-linha3">${escapeHtml(linha3)}</div>
       </div>
     </div>
+    ${planosInfo}
     ${status.conectado ? '' : '<button class="btn-primario" id="btn-conectar-whatsapp" disabled style="margin-top:16px">Carregando conexão...</button>'}
   `;
 
