@@ -3,8 +3,10 @@
 ## O que existe hoje
 
 - `server/scripts/backup-db.sh` — roda `pg_dump` dentro do container Postgres
-  (`docker compose exec`), comprime o resultado (`gzip`) e salva em
-  `/opt/kyvvo/backups/kyvvo_<timestamp>.sql.gz` no host EC2.
+  (`docker compose exec`), comprime o resultado (`gzip`), salva em
+  `/opt/kyvvo/backups/kyvvo_<timestamp>.sql.gz` no host EC2 e, se
+  `BACKUP_S3_BUCKET` estiver configurado, também envia o dump pra esse
+  bucket S3 (via `aws-cli`) logo em seguida.
 - `.github/workflows/deploy-backup.yml` — ao alterar o script na branch
   `main`, copia o arquivo pra EC2 (`/opt/kyvvo/scripts/backup-db.sh`) e
   (re)instala o agendamento via `cron`, rodando todos os dias às 03:15 UTC.
@@ -23,6 +25,18 @@ ajuste via variáveis de ambiente antes de rodar o script, ou defina-as no
 `/opt/kyvvo/.env` (o script carrega esse arquivo automaticamente se existir):
 `POSTGRES_SERVICE`, `POSTGRES_USER`, `POSTGRES_DB`, `BACKUP_DIR`.
 
+### Envio para S3
+
+Para habilitar o envio do backup pro S3, defina no `/opt/kyvvo/.env` do host:
+- `BACKUP_S3_BUCKET` — nome do bucket destino (obrigatório para habilitar o
+  envio; se ausente, o script mantém o backup só localmente).
+- `BACKUP_S3_PREFIX` — prefixo/pasta dentro do bucket (default: `kyvvo-db`).
+
+O script usa `aws s3 cp` e espera que o `aws-cli` esteja instalado no host e
+que existam credenciais AWS válidas disponíveis (idealmente uma IAM role
+anexada à instância EC2 com permissão de `s3:PutObject` no bucket; como
+alternativa, `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` no `.env`).
+
 ## Rodar manualmente na EC2
 
 ```bash
@@ -31,8 +45,6 @@ ajuste via variáveis de ambiente antes de rodar o script, ou defina-as no
 
 ## Pendências (subtasks relacionadas)
 
-- Envio dos dumps gerados para um bucket S3 (ou equivalente durável) —
-  ver task ST14.2.
 - Rotina de retenção, descartando backups locais/remotos além do período
   definido — ver task ST14.3.
 - Teste de restauração real + procedimento documentado — ver task ST14.4.
