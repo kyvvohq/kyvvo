@@ -19,7 +19,7 @@ fi
 
 POSTGRES_SERVICE="${POSTGRES_SERVICE:-postgres}"
 POSTGRES_USER="${POSTGRES_USER:-postgres}"
-POSTGRES_DB="${POSTGRES_DB:-kyvvo}"
+POSTGRES_DB="${POSTGRES_DB:-railway}"
 BACKUP_DIR="${BACKUP_DIR:-/opt/kyvvo/backups}"
 
 TIMESTAMP="$(date -u +%Y%m%d_%H%M%S)"

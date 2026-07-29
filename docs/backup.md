@@ -12,14 +12,16 @@
 
 ## Configuração
 
-O script assume por padrão:
-- Serviço do Postgres no `docker-compose.yml` do host chamado `postgres`.
-- Usuário `postgres` e banco `kyvvo`.
+O script usa por padrão (confirmado contra o `docker-compose.yml` real da
+EC2):
+- Serviço do Postgres chamado `postgres`.
+- Usuário `postgres` e banco `railway` (nome herdado da migração do Railway
+  pra AWS — ver `docs/architecture.md` — não é o nome do projeto).
 
-Se algum desses valores for diferente no `docker-compose.yml`/`.env` reais da
-EC2, ajuste via variáveis de ambiente antes de rodar o script, ou defina-as
-no `/opt/kyvvo/.env` (o script carrega esse arquivo automaticamente se
-existir): `POSTGRES_SERVICE`, `POSTGRES_USER`, `POSTGRES_DB`, `BACKUP_DIR`.
+Se algum desses valores mudar no `docker-compose.yml`/`.env` reais da EC2,
+ajuste via variáveis de ambiente antes de rodar o script, ou defina-as no
+`/opt/kyvvo/.env` (o script carrega esse arquivo automaticamente se existir):
+`POSTGRES_SERVICE`, `POSTGRES_USER`, `POSTGRES_DB`, `BACKUP_DIR`.
 
 ## Rodar manualmente na EC2
 
