@@ -6,7 +6,6 @@ on:
     paths:
       - 'server/index.js'
       - 'server/package.json'
-      - 'server/public/**'
       - 'server/panel/**'
   workflow_dispatch:
 
@@ -25,7 +24,6 @@ jobs:
             landing:
               - 'server/index.js'
               - 'server/package.json'
-              - 'server/public/**'
             panel:
               - 'server/panel/**'
 
