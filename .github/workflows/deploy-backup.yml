@@ -1,0 +1,33 @@
+name: Deploy backup script to EC2
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'server/scripts/backup-db.sh'
+  workflow_dispatch:
+
+jobs:
+  deploy-backup-script:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Copiar script de backup pra EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "server/scripts/backup-db.sh"
+          target: "/opt/kyvvo/scripts"
+          strip_components: 2
+      - name: Instalar permissão e agendamento via cron
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            chmod +x /opt/kyvvo/scripts/backup-db.sh
+            mkdir -p /opt/kyvvo/backups
+            ( crontab -l 2>/dev/null | grep -v 'backup-db.sh' ; echo "15 3 * * * /opt/kyvvo/scripts/backup-db.sh >> /opt/kyvvo/backups/backup.log 2>&1" ) | crontab -
