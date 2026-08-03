@@ -1,3 +1,38 @@
+// CA01/CA03 (US15) — captura de erros em produção (Sentry). Sentry precisa
+// ser exigido antes de qualquer outro módulo pra instrumentar chamadas
+// HTTP/DB automaticamente (guia oficial do SDK Node). Só ativa se
+// SENTRY_DSN estiver configurado no ambiente — sem DSN, a landing roda
+// exatamente como hoje, mesmo raciocínio de "sem credencial, recurso fica
+// inerte" já usado no POSTHOG_KEY (GET /config-publica acima).
+const Sentry = require('@sentry/node');
+// CA03 — nunca manda payload de erro com senha/token em texto puro. Duplicado
+// intencionalmente do mesmo helper em server/panel/index.js — são deploys
+// separados, sem módulo compartilhado entre landing e painel.
+const CAMPOS_SENSIVEIS_SENTRY = /senha|password|token|jwt|authorization|cookie|cvv|numero_cartao|card_number/i;
+function limparDadosSensiveisSentry(event) {
+  const limpar = (obj) => {
+    if (!obj || typeof obj !== 'object') return;
+    for (const chave of Object.keys(obj)) {
+      if (CAMPOS_SENSIVEIS_SENTRY.test(chave)) obj[chave] = '[redacted]';
+      else if (obj[chave] && typeof obj[chave] === 'object') limpar(obj[chave]);
+    }
+  };
+  if (event.request) {
+    limpar(event.request.data);
+    limpar(event.request.headers);
+    delete event.request.cookies;
+  }
+  return event;
+}
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV || 'development',
+    sendDefaultPii: false,
+    beforeSend: limparDadosSensiveisSentry,
+  });
+}
+
 const express = require('express');
 const { Pool } = require('pg');
 const cors = require('cors');
@@ -152,6 +187,12 @@ app.get('/waitlist/count', async (req, res) => {
     return res.json({ count: 0 });
   }
 });
+
+// CA01 (US15) — precisa vir depois de todas as rotas (e antes de qualquer
+// error handler customizado, que não existe aqui) — é o que faz exceções não
+// tratadas em qualquer rota chegarem no Sentry, sem precisar de try/catch
+// manual espalhado pelo código.
+if (process.env.SENTRY_DSN) Sentry.setupExpressErrorHandler(app);
 
 // Iniciar servidor
 initDB().then(() => {
