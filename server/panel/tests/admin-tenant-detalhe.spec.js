@@ -185,6 +185,33 @@ test.describe('Admin — detalhe do tenant (US28)', () => {
     await expect(secao).toContainText('10/07/2026');
   });
 
+  test('pedido de número novo pendente aparece com data e DDD (US39.1)', async ({ page }) => {
+    await entrarNoDetalheDoTenant(page, tenantDetalheMock({
+      novo_numero_solicitado_em: '2026-08-03T14:30:00Z',
+      novo_numero_ddd_preferencia: '34',
+      meta_phone_number_id: null,
+    }));
+
+    const secao = page.locator('.secao-detalhe', { hasText: 'Pedido de número novo' });
+    await expect(secao).toBeVisible();
+    await expect(secao).toContainText(/\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}/);
+    await expect(secao).toContainText('34');
+  });
+
+  test('sem pedido de número novo, a seção não aparece', async ({ page }) => {
+    await entrarNoDetalheDoTenant(page, tenantDetalheMock({ novo_numero_solicitado_em: null }));
+    await expect(page.locator('.secao-detalhe', { hasText: 'Pedido de número novo' })).toHaveCount(0);
+  });
+
+  test('pedido já atendido (número conectado) não mostra mais a seção', async ({ page }) => {
+    await entrarNoDetalheDoTenant(page, tenantDetalheMock({
+      novo_numero_solicitado_em: '2026-08-03T14:30:00Z',
+      novo_numero_ddd_preferencia: '34',
+      meta_phone_number_id: '123456',
+    }));
+    await expect(page.locator('.secao-detalhe', { hasText: 'Pedido de número novo' })).toHaveCount(0);
+  });
+
   test('botão "Voltar para lista" leva de volta à listagem (CA01)', async ({ page }) => {
     await entrarNoDetalheDoTenant(page, tenantDetalheMock());
     await page.click('text=Voltar para lista');

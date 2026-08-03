@@ -2392,15 +2392,19 @@ async function renderWhatsapp() {
   }
 
   // US46.1 — antes de mostrar o botão de self-service, explica que ele é uma
-  // das duas formas de conectar o WhatsApp (a outra, "número pronto", ainda
-  // depende do time da Kyvvo, então não pode ser anunciada como automática).
-  const linkSuporte = contaStatus?.suporte_whatsapp
-    ? `<a href="https://wa.me/${contaStatus.suporte_whatsapp}" target="_blank" rel="noopener">Fale com o suporte</a>`
-    : 'Fale com o nosso suporte';
+  // das duas formas de conectar o WhatsApp. US39.1 trocou o antigo link "fale
+  // com o suporte" pro caminho "Número pronto" por um pedido de verdade
+  // (POST /api/whatsapp/solicitar-numero-novo), registrado no tenant pra a
+  // operação (Bruno) ver quem está esperando — ver checklist da jornada na
+  // task US39.1 do Notion. Continua sem prometer prazo fechado.
+  const pedido = status.pedidoNumeroNovo;
   const planosInfo = status.conectado ? '' : `
     <div class="whatsapp-planos-info">
       <p><strong>Traga seu número</strong> — disponível agora: conecte o WhatsApp Business que sua empresa já usa clicando no botão abaixo, pelo Embedded Signup oficial da Meta. A ativação depende só da verificação da Meta ser concluída.</p>
-      <p><strong>Número pronto</strong> — sob consulta: prefere que a Kyvvo configure um número novo pra você, sem esforço técnico? ${linkSuporte} pra confirmar disponibilidade — hoje esse caminho ainda é combinado direto com o nosso time, não é automático.</p>
+      ${pedido
+        ? `<p><strong>Número pronto</strong> — pedido recebido em ${formatarDataHoraCurta(pedido.solicitadoEm)}. Nossa equipe vai configurar um número novo pra você e avisar assim que estiver pronto (ainda não temos um prazo fechado pra isso).</p>`
+        : `<p><strong>Número pronto</strong> — prefere que a Kyvvo configure um número novo pra você, sem esforço técnico? O time confirma disponibilidade e ativa o número; hoje esse caminho ainda depende de configuração manual, não é automático.</p>
+           <button type="button" class="btn-secundario btn-tabela" id="btn-pedir-numero-novo" style="margin-top:4px">Pedir número novo</button>`}
     </div>
   `;
 
@@ -2419,7 +2423,77 @@ async function renderWhatsapp() {
 
   if (!status.conectado) {
     iniciarConexaoWhatsapp();
+    const btnPedirNumeroNovo = document.getElementById('btn-pedir-numero-novo');
+    if (btnPedirNumeroNovo) btnPedirNumeroNovo.addEventListener('click', abrirModalPedirNumeroNovo);
   }
+}
+
+// Formata timestamp completo (data + hora) em pt-BR curto, ex.: "03/08/2026
+// às 14:30" — usado só no pedido de número novo, distinto de
+// formatarDataCurtaISO (que só recebe "YYYY-MM-DD" sem hora).
+function formatarDataHoraCurta(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  const data = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const hora = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  return `${data} às ${hora}`;
+}
+
+// CA (US39.1) — passos 2/3 da jornada "Novo número": os outros dados mínimos
+// (nome do negócio, telefone, segmento, horário) já foram coletados no
+// cadastro, então o formulário só pede o que ainda falta (preferência de DDD)
+// e a confirmação de que o tenant aceita usar um número novo fornecido pela
+// Kyvvo. Depois de enviar, mostra a mensagem de expectativa (sem prometer
+// prazo) no lugar do formulário.
+function abrirModalPedirNumeroNovo() {
+  abrirModal(
+    '<h3>Pedir número novo</h3>',
+    `
+      <p class="modal-texto">A Kyvvo configura um número de WhatsApp novo pro seu negócio — você não precisa fazer nada técnico. Prazo é confirmado depois que a gente validar disponibilidade.</p>
+      <label for="numero-novo-ddd">DDD de preferência (opcional)</label>
+      <input type="text" id="numero-novo-ddd" placeholder="Ex.: 34" maxlength="3" inputmode="numeric">
+      <label class="dia-checkbox" style="margin-top:12px">
+        <input type="checkbox" id="numero-novo-aceite">
+        Entendo que o número será fornecido pelo time Kyvvo e serei avisado quando estiver pronto.
+      </label>
+      <div class="modal-erro" id="numero-novo-erro"></div>
+      <div class="modal-acoes">
+        <button class="btn-secundario" id="btn-cancelar-numero-novo">Cancelar</button>
+        <button class="btn-primario" id="btn-confirmar-numero-novo">Enviar pedido</button>
+      </div>
+    `
+  );
+
+  document.getElementById('btn-cancelar-numero-novo').addEventListener('click', fecharModal);
+  document.getElementById('btn-confirmar-numero-novo').addEventListener('click', async () => {
+    const erroEl = document.getElementById('numero-novo-erro');
+    erroEl.textContent = '';
+
+    if (!document.getElementById('numero-novo-aceite').checked) {
+      erroEl.textContent = 'Confirme que você entendeu como funciona antes de enviar.';
+      return;
+    }
+
+    const btn = document.getElementById('btn-confirmar-numero-novo');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    const dddPreferencia = document.getElementById('numero-novo-ddd').value.trim();
+    const resultado = await api('/api/whatsapp/solicitar-numero-novo', {
+      method: 'POST',
+      body: JSON.stringify({ ddd_preferencia: dddPreferencia || null }),
+    });
+
+    if (resultado && !resultado.error) {
+      fecharModal();
+      mostrarToast('Pedido enviado! A gente avisa assim que o número estiver pronto.', 'sucesso');
+      renderWhatsapp();
+    } else {
+      erroEl.textContent = (resultado && resultado.error) || 'Erro ao enviar o pedido.';
+      btn.disabled = false;
+      btn.textContent = 'Enviar pedido';
+    }
+  });
 }
 
 async function iniciarConexaoWhatsapp() {

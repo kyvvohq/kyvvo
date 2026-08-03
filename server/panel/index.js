@@ -1432,9 +1432,21 @@ async function start() {
   // usando o META_WHATSAPP_TOKEN compartilhado do Usuário do Sistema.
   fastify.get('/api/whatsapp/status', { preHandler: [fastify.authenticate] }, async (request) => {
     const { tenantId } = request.user;
-    const { rows } = await pool.query('SELECT meta_phone_number_id FROM tenants WHERE id = $1', [tenantId]);
-    const phoneNumberId = rows[0] && rows[0].meta_phone_number_id;
-    const status = { conectado: false, phoneNumberId: phoneNumberId || null };
+    const { rows } = await pool.query(
+      'SELECT meta_phone_number_id, novo_numero_solicitado_em, novo_numero_ddd_preferencia FROM tenants WHERE id = $1',
+      [tenantId]
+    );
+    const tenant = rows[0] || {};
+    const phoneNumberId = tenant.meta_phone_number_id;
+    const status = {
+      conectado: false,
+      phoneNumberId: phoneNumberId || null,
+      // CA (US39.1) — front usa isso pra trocar o botão "Pedir número novo"
+      // por um card de "pedido recebido" sem precisar de outra chamada.
+      pedidoNumeroNovo: tenant.novo_numero_solicitado_em
+        ? { solicitadoEm: tenant.novo_numero_solicitado_em, dddPreferencia: tenant.novo_numero_ddd_preferencia }
+        : null,
+    };
     if (!phoneNumberId) return status;
 
     const metaToken = process.env.META_WHATSAPP_TOKEN;
@@ -1461,6 +1473,41 @@ async function start() {
       status.erro = `Falha ao contatar a Meta: ${err.message}`;
     }
     return status;
+  });
+
+  // CA (US39.1) — pedido de "Novo número": passos 2/3 da jornada (coleta de
+  // dados mínimos + confirmação de expectativa, sem prometer SLA). Os outros
+  // dados mínimos (nome do negócio, telefone, segmento, horário) já foram
+  // coletados no cadastro — só registra a preferência de DDD e o timestamp,
+  // pra a operação ver quem está esperando (aparece em GET
+  // /admin/api/tenants/:id, e o vínculo do número em si já é feito por
+  // /admin/api/numeros-prontos/:id/vincular, ver migration 037).
+  fastify.post('/api/whatsapp/solicitar-numero-novo', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const { tenantId } = request.user;
+    const { ddd_preferencia: dddPreferencia } = request.body || {};
+
+    const { rows } = await pool.query(
+      'SELECT nome, telefone, segmento, horario_abertura, horario_fechamento, meta_phone_number_id, novo_numero_solicitado_em FROM tenants WHERE id = $1',
+      [tenantId]
+    );
+    const tenant = rows[0];
+    if (!tenant) {
+      return reply.code(404).send({ error: 'Tenant não encontrado.' });
+    }
+    if (tenant.meta_phone_number_id) {
+      return reply.code(409).send({ error: 'Este salão já tem um número de WhatsApp conectado.' });
+    }
+    if (tenant.novo_numero_solicitado_em) {
+      return reply.code(409).send({ error: 'Você já pediu um número novo. Nossa equipe vai avisar quando estiver pronto.' });
+    }
+
+    const { rows: atualizadoRows } = await pool.query(
+      `UPDATE tenants SET novo_numero_ddd_preferencia = $2, novo_numero_solicitado_em = now()
+       WHERE id = $1
+       RETURNING nome, telefone, segmento, horario_abertura, horario_fechamento, novo_numero_ddd_preferencia, novo_numero_solicitado_em`,
+      [tenantId, dddPreferencia || null]
+    );
+    return atualizadoRows[0];
   });
 
   // Recebe o resultado do Embedded Signup (code + waba_id + phone_number_id,
