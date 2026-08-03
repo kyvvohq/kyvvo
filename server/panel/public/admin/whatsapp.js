@@ -48,17 +48,50 @@ function formatarDataHora(iso) {
 
 let carregando = false;
 
+// ---------- Números prontos (US39.2 — plano "Novo número") ----------
+const NUMERO_STATUS_LABELS = {
+  disponivel: 'Disponível',
+  reservado: 'Reservado',
+  em_configuracao: 'Em configuração',
+  ativo: 'Ativo',
+  erro: 'Erro',
+};
+const NUMERO_STATUS_CLASSES = {
+  disponivel: 'badge-status-inativo',
+  reservado: 'badge-status-nao-ativado',
+  em_configuracao: 'badge-status-suspenso',
+  ativo: 'badge-status-ativo',
+  erro: 'badge-status-inadimplente',
+};
+
+let numerosProntos = [];
+let tenantsDisponiveis = [];
+let novoFormAberto = false;
+let vinculandoId = null;
+let testandoId = null;
+// Guarda o último status da Meta carregado pra re-renderizar a seção de
+// números prontos (abrir/fechar formulário, trocar de linha em edição) sem
+// precisar rebuscar tudo da API de novo.
+let ultimoStatusCarregado = null;
+
 async function carregar() {
   if (carregando) return;
   carregando = true;
   conteudo.innerHTML = '<div class="vazio">Verificando conexão com a Meta...</div>';
-  const dados = await api('/admin/api/whatsapp/status');
+  const [status, numerosResp, tenantsResp] = await Promise.all([
+    api('/admin/api/whatsapp/status'),
+    api('/admin/api/numeros-prontos'),
+    api('/admin/api/tenants'),
+  ]);
   carregando = false;
-  if (!dados) return;
-  render(dados);
+  if (!status) return;
+  numerosProntos = (numerosResp && numerosResp.numeros) || [];
+  tenantsDisponiveis = (tenantsResp && tenantsResp.tenants) || [];
+  render(status);
 }
 
 function render(dados) {
+  ultimoStatusCarregado = dados;
   const { meta, verificadoEm } = dados;
 
   let metaCardClasse = 'status-card-inativo';
@@ -90,9 +123,216 @@ function render(dados) {
       <p class="vazio-inline">Última verificação: ${formatarDataHora(verificadoEm)}</p>
       <button class="btn-primario btn-tabela" id="btn-atualizar" style="margin-top: 12px;">🔄 Verificar novamente</button>
     </section>
+    ${renderSecaoNumerosProntos()}
   `;
   conteudo.innerHTML = html;
   document.getElementById('btn-atualizar').addEventListener('click', carregar);
+  wireEventosNumerosProntos();
+}
+
+// CA (US39.2) — cadastro/vínculo/teste de números adquiridos manualmente pela
+// operação (plano "Novo número"). O número físico já foi adquirido fora do
+// repositório (ver US40); aqui só registramos os IDs da Meta, vinculamos a um
+// salão e validamos que ele manda mensagem de verdade antes de considerá-lo
+// ativo.
+function renderSecaoNumerosProntos() {
+  return `
+    <section class="secao-detalhe">
+      <h3>Números prontos — plano "Novo número"</h3>
+      <p class="vazio-inline">Números já adquiridos e configurados na Meta pela operação, aguardando vínculo a um salão.</p>
+      ${novoFormAberto ? renderFormNovoNumero() : `<button class="btn-secundario btn-tabela" data-acao="abrir-novo-numero" style="margin: 8px 0 12px;">+ Cadastrar número pronto</button>`}
+      <div class="tabela-wrapper">
+        <table class="tabela-tenants">
+          <thead><tr><th>Telefone</th><th>Status</th><th>Salão</th><th>Último teste</th><th></th></tr></thead>
+          <tbody>
+            ${numerosProntos.length ? numerosProntos.map(renderLinhaNumeroPronto).join('') : '<tr><td colspan="5">Nenhum número pronto cadastrado ainda.</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
+function renderFormNovoNumero() {
+  return `
+    <div class="secao-detalhe" style="padding: 12px; margin: 8px 0 12px;">
+      <p><label>Telefone<br><input type="text" id="novo-numero-telefone" placeholder="(34) 98555-8788"></label></p>
+      <p><label>Phone Number ID (Meta)<br><input type="text" id="novo-numero-phone-id" placeholder="1263829973471596"></label></p>
+      <p><label>WABA ID (Meta)<br><input type="text" id="novo-numero-waba-id"></label></p>
+      <div class="modal-erro" id="novo-numero-erro"></div>
+      <button class="btn-secundario btn-tabela" data-acao="cancelar-novo-numero">Cancelar</button>
+      <button class="btn-primario btn-tabela" data-acao="salvar-novo-numero">Cadastrar</button>
+    </div>
+  `;
+}
+
+function renderLinhaNumeroPronto(n) {
+  const statusLabel = NUMERO_STATUS_LABELS[n.status] || n.status;
+  const statusClasse = NUMERO_STATUS_CLASSES[n.status] || 'badge-status-inativo';
+  const ultimoTeste = n.testado_em
+    ? `${formatarDataHora(n.testado_em)}${n.teste_resultado ? ` — ${escapeHtml(n.teste_resultado)}` : ''}`
+    : '—';
+
+  let acoes = '';
+  if (n.status === 'disponivel') {
+    acoes = vinculandoId === n.id
+      ? `
+        <select id="select-tenant-${n.id}">
+          <option value="">Selecione o salão…</option>
+          ${tenantsDisponiveis.map((t) => `<option value="${t.id}">${escapeHtml(t.nome)}</option>`).join('')}
+        </select>
+        <div class="modal-erro" id="vincular-erro-${n.id}"></div>
+        <button class="btn-secundario btn-tabela" data-acao="cancelar-vincular" data-id="${n.id}">Cancelar</button>
+        <button class="btn-primario btn-tabela" data-acao="confirmar-vincular" data-id="${n.id}">Vincular</button>
+      `
+      : `<button class="btn-secundario btn-tabela" data-acao="abrir-vincular" data-id="${n.id}">Vincular a um salão</button>`;
+  } else if (n.tenant_id) {
+    acoes = testandoId === n.id
+      ? `
+        <input type="text" id="teste-destino-${n.id}" placeholder="Nº de teste (ex.: 5534988887777)">
+        <div class="modal-erro" id="testar-erro-${n.id}"></div>
+        <button class="btn-secundario btn-tabela" data-acao="cancelar-testar" data-id="${n.id}">Cancelar</button>
+        <button class="btn-primario btn-tabela" data-acao="confirmar-testar" data-id="${n.id}">Enviar teste</button>
+      `
+      : `<button class="btn-secundario btn-tabela" data-acao="abrir-testar" data-id="${n.id}">Enviar mensagem de teste</button>`;
+  }
+
+  return `
+    <tr data-numero="${n.id}">
+      <td>${escapeHtml(n.telefone)}</td>
+      <td><span class="badge badge-status ${statusClasse}">${escapeHtml(statusLabel)}</span></td>
+      <td>${n.tenant_nome ? escapeHtml(n.tenant_nome) : '—'}</td>
+      <td>${ultimoTeste}</td>
+      <td class="celula-acoes-plano">${acoes}</td>
+    </tr>
+  `;
+}
+
+function wireEventosNumerosProntos() {
+  const btnAbrirNovo = conteudo.querySelector('[data-acao="abrir-novo-numero"]');
+  if (btnAbrirNovo) btnAbrirNovo.addEventListener('click', () => { novoFormAberto = true; render(ultimoStatusCarregado); });
+
+  const btnCancelarNovo = conteudo.querySelector('[data-acao="cancelar-novo-numero"]');
+  if (btnCancelarNovo) btnCancelarNovo.addEventListener('click', () => { novoFormAberto = false; render(ultimoStatusCarregado); });
+
+  const btnSalvarNovo = conteudo.querySelector('[data-acao="salvar-novo-numero"]');
+  if (btnSalvarNovo) btnSalvarNovo.addEventListener('click', salvarNovoNumero);
+
+  conteudo.querySelectorAll('[data-acao="abrir-vincular"]').forEach((btn) => {
+    btn.addEventListener('click', () => { vinculandoId = btn.dataset.id; render(ultimoStatusCarregado); });
+  });
+  conteudo.querySelectorAll('[data-acao="cancelar-vincular"]').forEach((btn) => {
+    btn.addEventListener('click', () => { vinculandoId = null; render(ultimoStatusCarregado); });
+  });
+  conteudo.querySelectorAll('[data-acao="confirmar-vincular"]').forEach((btn) => {
+    btn.addEventListener('click', () => vincularNumero(btn.dataset.id));
+  });
+
+  conteudo.querySelectorAll('[data-acao="abrir-testar"]').forEach((btn) => {
+    btn.addEventListener('click', () => { testandoId = btn.dataset.id; render(ultimoStatusCarregado); });
+  });
+  conteudo.querySelectorAll('[data-acao="cancelar-testar"]').forEach((btn) => {
+    btn.addEventListener('click', () => { testandoId = null; render(ultimoStatusCarregado); });
+  });
+  conteudo.querySelectorAll('[data-acao="confirmar-testar"]').forEach((btn) => {
+    btn.addEventListener('click', () => testarNumero(btn.dataset.id));
+  });
+}
+
+async function salvarNovoNumero() {
+  const telefone = document.getElementById('novo-numero-telefone').value.trim();
+  const metaPhoneNumberId = document.getElementById('novo-numero-phone-id').value.trim();
+  const metaWabaId = document.getElementById('novo-numero-waba-id').value.trim();
+  const erroEl = document.getElementById('novo-numero-erro');
+  erroEl.textContent = '';
+
+  if (!telefone || !metaPhoneNumberId || !metaWabaId) {
+    erroEl.textContent = 'Preencha telefone, Phone Number ID e WABA ID.';
+    return;
+  }
+
+  const resultado = await api('/admin/api/numeros-prontos', {
+    method: 'POST',
+    body: JSON.stringify({ telefone, meta_phone_number_id: metaPhoneNumberId, meta_waba_id: metaWabaId }),
+  });
+
+  if (resultado && !resultado.error) {
+    novoFormAberto = false;
+    mostrarToast('Número pronto cadastrado.', 'sucesso');
+    await carregar();
+  } else {
+    erroEl.textContent = (resultado && resultado.error) || 'Erro ao cadastrar número.';
+  }
+}
+
+async function vincularNumero(id) {
+  const select = document.getElementById(`select-tenant-${id}`);
+  const tenantId = select.value;
+  const erroEl = document.getElementById(`vincular-erro-${id}`);
+  erroEl.textContent = '';
+
+  if (!tenantId) {
+    erroEl.textContent = 'Selecione um salão.';
+    return;
+  }
+
+  const resultado = await api(`/admin/api/numeros-prontos/${id}/vincular`, {
+    method: 'POST',
+    body: JSON.stringify({ tenant_id: tenantId }),
+  });
+
+  if (resultado && !resultado.error) {
+    vinculandoId = null;
+    mostrarToast('Número vinculado ao salão.', 'sucesso');
+    await carregar();
+  } else {
+    erroEl.textContent = (resultado && resultado.error) || 'Erro ao vincular número.';
+  }
+}
+
+async function testarNumero(id) {
+  const input = document.getElementById(`teste-destino-${id}`);
+  const numeroDestino = input.value.trim();
+  const erroEl = document.getElementById(`testar-erro-${id}`);
+  erroEl.textContent = '';
+
+  if (!numeroDestino) {
+    erroEl.textContent = 'Informe o número de destino do teste.';
+    return;
+  }
+
+  const resultado = await api(`/admin/api/numeros-prontos/${id}/testar`, {
+    method: 'POST',
+    body: JSON.stringify({ numero_destino: numeroDestino }),
+  });
+
+  if (resultado && !resultado.error) {
+    testandoId = null;
+    mostrarToast('Mensagem de teste enviada. Número marcado como ativo.', 'sucesso');
+    await carregar();
+  } else {
+    erroEl.textContent = (resultado && resultado.error) || 'Erro ao enviar mensagem de teste.';
+  }
+}
+
+// ---------- Toast (duplicado intencionalmente, mesmo raciocínio de
+// isolamento entre as telas admin já usado nas demais páginas) ----------
+function mostrarToast(mensagem, tipo = 'sucesso') {
+  let container = document.getElementById('toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    container.className = 'toast-container';
+    document.body.appendChild(container);
+  }
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${tipo}`;
+  toast.textContent = (tipo === 'sucesso' ? '✅ ' : '❌ ') + mensagem;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.classList.add('toast-saindo');
+    setTimeout(() => toast.remove(), 250);
+  }, 4000);
 }
 
 carregar();
