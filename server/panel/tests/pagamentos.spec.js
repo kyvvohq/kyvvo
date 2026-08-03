@@ -542,7 +542,9 @@ test.describe('Cancelamento de assinatura (US35)', () => {
     await abrirDetalhesPagamento(page);
     await page.click('#btn-cancelar-assinatura');
     await expect(page.locator('.modal-card h3')).toHaveText('Cancelar assinatura');
-    await expect(page.locator('.modal-card .modal-texto')).toContainText('inoperantes após a data da próxima cobrança');
+    await expect(page.locator('.modal-card .modal-texto')).toContainText('acesso até 01/08/2026');
+    await expect(page.locator('#btn-manter-assinatura')).toHaveText('Manter assinatura');
+    await expect(page.locator('#btn-confirmar-cancelamento')).toHaveText('Confirmar cancelamento');
 
     await page.click('#btn-confirmar-cancelamento');
 
