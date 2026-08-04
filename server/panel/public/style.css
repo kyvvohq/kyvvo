@@ -347,6 +347,47 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .inicio-cabecalho h2 { font-size: 20px; }
 
+/* Atalhos do dashboard (US63) — botões secundários lado a lado, mesmo
+   tamanho de fonte/altura dos botões de ação já usados no resto do painel. */
+.inicio-atalhos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.inicio-atalhos .btn-secundario { width: auto; margin: 0; }
+
+/* Pendências do dashboard (US63) — resumo compacto (checklist), distinto
+   visualmente do painel de avisos global (#avisos-painel, US59): aqui é
+   contido dentro do card do dashboard, não um banner de largura total. */
+.inicio-pendencias {
+  background: #12162a;
+  border: 1px solid #232847;
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+}
+
+.inicio-pendencias h3 { font-size: 15px; margin-bottom: 10px; }
+
+.inicio-pendencias ul { list-style: none; }
+
+.inicio-pendencias li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid #232847;
+  font-size: 14px;
+  color: #a1a5c4;
+}
+
+.inicio-pendencias li:first-child { border-top: none; padding-top: 0; }
+
+.inicio-pendencias .btn-secundario { width: auto; margin: 0; flex-shrink: 0; }
+
 /* User menu (avatar + dropdown, PR11) — substitui o botão "Sair" solto no
    topbar; Meu Perfil/Minha Empresa/Cobrança/Preferências/Ajuda/Sair vivem
    todos dentro do dropdown. */

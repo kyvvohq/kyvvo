@@ -864,6 +864,14 @@ function renderAgendamentoItem(ag) {
 }
 
 conteudo.addEventListener('click', (e) => {
+  // US63 — atalhos e ações de pendência do dashboard (Início) navegam
+  // direto pro menu de destino.
+  const atalhoInicioBtn = e.target.closest('[data-acao-atalho-inicio]');
+  if (atalhoInicioBtn) {
+    selecionarMenu(atalhoInicioBtn.dataset.acaoAtalhoInicio);
+    return;
+  }
+
   // "+" ao passar o mouse numa linha de horário (Dia/Semana) ou numa
   // célula de dia (Semana/Mês) — abre Novo agendamento pré-preenchido.
   const addHorarioBtn = e.target.closest('[data-add-horario]');
@@ -1410,6 +1418,7 @@ async function render() {
   if (menuAtual === 'pagamentos') return renderPagamentos();
   if (menuAtual === 'servicos') return renderServicos();
   if (menuAtual === 'profissionais') return renderProfissionais();
+  if (menuAtual === 'clientes') return renderClientes();
   if (menuAtual === 'modulo:financeiro') return renderFinanceiro();
   if (menuAtual.startsWith('modulo:')) return renderModuloEmBreve();
 
@@ -1748,6 +1757,33 @@ function abrirModalExcluirProfissional(profissional) {
   });
 }
 
+// ---------- Clientes (US63) ----------
+// Tela só de leitura: clientes nascem automaticamente ao agendar (POST
+// /agendamentos), não existe cadastro manual nem edição/exclusão aqui.
+function renderClienteItem(c) {
+  const qtd = c.total_agendamentos || 0;
+  return `
+    <div class="agendamento-item" data-id="${c.id}">
+      <div class="agendamento-detalhe">Cliente: <strong>${c.nome || 'Sem nome'}</strong></div>
+      <div class="agendamento-detalhe">Telefone: ${c.telefone}</div>
+      <div class="agendamento-detalhe">${qtd} agendamento${qtd === 1 ? '' : 's'} confirmado${qtd === 1 ? '' : 's'}</div>
+    </div>
+  `;
+}
+
+async function renderClientes() {
+  conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
+  const data = await api('/api/clientes');
+  if (!data) return;
+
+  let html = '<div class="nav-periodo"><strong>Clientes</strong></div>';
+  html += data.clientes.length
+    ? data.clientes.map(renderClienteItem).join('')
+    : '<div class="vazio">Nenhum cliente ainda. Os clientes aparecem aqui assim que o primeiro agendamento é feito.</div>';
+
+  conteudo.innerHTML = html;
+}
+
 function renderModuloEmBreve() {
   conteudo.innerHTML = '<div class="vazio">🚧 Em breve — este módulo ainda está em desenvolvimento.</div>';
 }
@@ -1827,25 +1863,117 @@ function renderGradeHorariosDoDia(dataISO, agendamentos) {
 // Cancelar já ligado via delegação em `conteudo`) — não precisa de endpoint
 // nem de componente novo, só filtra pros agendamentos que ainda vão
 // acontecer hoje.
+// US63 — pendências mostradas no dashboard (trial, cobrança, configuração
+// incompleta). Reusa os mesmos campos de GET /api/tenant/status já expostos
+// pros avisos globais (US59); aqui é um resumo específico do dashboard, não
+// o painel de avisos. `status` pode vir null (chamada falhou/não mockada) —
+// degradação graciosa: dashboard funciona normalmente, só sem a seção.
+function construirPendenciasInicio(status) {
+  if (!status) return [];
+  const pendencias = [];
+  if (status.pagamento_pendente) {
+    pendencias.push({
+      id: 'pagamento_pendente',
+      mensagem: 'Pagamento pendente — regularize para evitar a suspensão do acesso.',
+      acaoLabel: 'Ir para Cobrança',
+      acaoMenu: 'pagamentos',
+    });
+  }
+  if (status.status === 'trial' && status.dias_restantes != null) {
+    pendencias.push({
+      id: 'trial',
+      mensagem: status.dias_restantes === 1 ? 'Seu trial acaba amanhã.' : `Seu trial acaba em ${status.dias_restantes} dias.`,
+      acaoLabel: 'Escolher plano',
+      acaoMenu: 'pagamentos',
+    });
+  }
+  const configuracao = status.configuracao || {};
+  if (configuracao.sem_servicos) {
+    pendencias.push({
+      id: 'sem_servicos',
+      mensagem: 'Nenhum serviço cadastrado ainda.',
+      mensagemVazia: 'Cadastre seus serviços para começar a receber agendamentos.',
+      acaoLabel: 'Cadastrar serviços',
+      acaoMenu: 'servicos',
+    });
+  }
+  if (configuracao.sem_profissionais) {
+    pendencias.push({
+      id: 'sem_profissionais',
+      mensagem: 'Nenhum profissional cadastrado ainda.',
+      acaoLabel: 'Cadastrar profissionais',
+      acaoMenu: 'profissionais',
+    });
+  }
+  if (configuracao.whatsapp_desconectado) {
+    pendencias.push({
+      id: 'whatsapp_desconectado',
+      mensagem: 'WhatsApp ainda não conectado.',
+      acaoLabel: 'Conectar WhatsApp',
+      acaoMenu: 'whatsapp',
+    });
+  }
+  return pendencias;
+}
+
 async function renderInicio() {
   conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
   const iso = formatarDataISO(new Date());
-  const data = await api(`/api/agendamentos?view=dia&data=${iso}`);
+  const [data, status, modulosResultado] = await Promise.all([
+    api(`/api/agendamentos?view=dia&data=${iso}`),
+    api('/api/tenant/status').catch(() => null),
+    api('/api/tenant/modulos').catch(() => null),
+  ]);
   if (!data) return;
 
   const agora = Date.now();
   const proximos = data.agendamentos.filter((ag) => ag.status !== 'cancelado' && new Date(ag.data_hora).getTime() >= agora);
   agendamentosAtuais = proximos;
 
-  conteudo.innerHTML = `
+  const pendencias = construirPendenciasInicio(status);
+  const temFinanceiro = ((modulosResultado && modulosResultado.modulos) || []).some((m) => m.key === 'financeiro');
+
+  // CA "estado vazio orienta próxima ação" — se não há agendamento nenhum e
+  // existe uma pendência de configuração conhecida, a mensagem aponta a
+  // causa mais provável em vez de só dizer "não tem nada".
+  const primeiraComMensagemVazia = pendencias.find((p) => p.mensagemVazia);
+  const mensagemVazia = primeiraComMensagemVazia
+    ? primeiraComMensagemVazia.mensagemVazia
+    : 'Nenhum agendamento para o restante de hoje.';
+
+  let html = `
     <div class="inicio-cabecalho">
       <h2>Próximos agendamentos de hoje</h2>
       <button class="btn-novo-agendamento" id="btn-inicio-novo-agendamento">+ Novo agendamento</button>
     </div>
-    ${proximos.length
-      ? proximos.map(renderAgendamentoItem).join('')
-      : '<div class="vazio">Nenhum agendamento para o restante de hoje.</div>'}
+    <div class="inicio-atalhos">
+      <button class="btn-secundario" data-acao-atalho-inicio="servicos">Serviços</button>
+      <button class="btn-secundario" data-acao-atalho-inicio="clientes">Clientes</button>
+      ${temFinanceiro ? '<button class="btn-secundario" data-acao-atalho-inicio="modulo:financeiro">Financeiro</button>' : ''}
+    </div>
   `;
+
+  if (pendencias.length) {
+    html += `
+      <div class="inicio-pendencias">
+        <h3>Pendências</h3>
+        <ul>
+          ${pendencias.map((p) => `
+            <li>
+              <span>${p.mensagem}</span>
+              <button class="btn-secundario" data-acao-atalho-inicio="${p.acaoMenu}">${p.acaoLabel}</button>
+            </li>
+          `).join('')}
+        </ul>
+      </div>
+    `;
+  }
+
+  html += proximos.length
+    ? proximos.map(renderAgendamentoItem).join('')
+    : `<div class="vazio">${mensagemVazia}</div>`;
+
+  conteudo.innerHTML = html;
   document.getElementById('btn-inicio-novo-agendamento').addEventListener('click', () => abrirModalNovoAgendamento());
 }
 
