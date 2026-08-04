@@ -248,6 +248,42 @@
   .fundador-foto-card img{height:320px}
 }
 
+/* Depoimentos (US25) — CA01/CA07 */
+.depoimentos-section{padding:100px 6%;border-top:1px solid var(--border)}
+.depoimentos-header{max-width:680px;margin:0 auto 56px;text-align:center}
+.depoimentos-header .section-eyebrow{justify-content:center}
+.depoimentos-header .section-title{white-space:normal;margin-bottom:0}
+
+/* CA02 — estado vazio, antes dos primeiros depoimentos reais: precisa
+   parecer proposital (identidade visual da seção), não um erro/ausência de
+   conteúdo. */
+.depoimentos-vazio{max-width:480px;margin:0 auto;text-align:center;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:40px 32px}
+.depoimentos-vazio-icone{font-size:2rem;display:block;margin-bottom:16px}
+.depoimentos-vazio p{color:var(--muted);font-size:.9rem;line-height:1.7;margin:0}
+
+/* CA04/CA07 — até 3 por linha no desktop; no mobile vira carrossel por
+   scroll/swipe (scroll-snap, sem JS/lib nenhuma) em vez de empilhar, porque
+   o texto do depoimento some se cortar direto pra 1 coluna estreita. */
+.depoimentos-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;max-width:1080px;margin:0 auto}
+.depoimento-card{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 24px;min-width:0;display:flex;flex-direction:column;gap:14px}
+.depoimento-cabecalho{display:flex;align-items:center;gap:12px}
+.depoimento-avatar,.depoimento-avatar-iniciais{width:48px;height:48px;border-radius:50%;flex-shrink:0}
+.depoimento-avatar{object-fit:cover}
+.depoimento-avatar-iniciais{background:rgba(124,92,252,.16);color:var(--accent-light);display:flex;align-items:center;justify-content:center;font-weight:700;font-family:var(--font-d);font-size:.85rem}
+.depoimento-nome{font-family:var(--font-d);font-weight:700;font-size:.9rem}
+.depoimento-salao{font-size:.78rem;color:var(--muted)}
+.depoimento-estrelas{color:#facc15;font-size:.8rem;letter-spacing:2px}
+.depoimento-texto{font-size:.86rem;color:var(--muted);line-height:1.6;margin:0;cursor:pointer;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden}
+.depoimento-texto.expandido{-webkit-line-clamp:unset;overflow:visible}
+.depoimentos-logos{margin-top:56px;text-align:center}
+.depoimentos-logos-titulo{font-size:.8rem;color:var(--muted);margin-bottom:20px}
+.depoimentos-logos-grid{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:32px}
+.depoimentos-logos-grid img{height:32px;width:auto;opacity:.7;filter:grayscale(1)}
+@media(max-width:900px){
+  .depoimentos-grid{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:16px;max-width:100%;padding-bottom:8px;-webkit-overflow-scrolling:touch}
+  .depoimento-card{scroll-snap-align:center;flex:0 0 85%}
+}
+
 .nav-link{
   font-family:var(--font-b);font-size:.85rem;font-weight:500;
   color:var(--muted);text-decoration:none;transition:color .2s;
@@ -967,6 +1003,15 @@
   </div>
 </section>
 
+<!-- Depoimentos (US25) -->
+<section class="depoimentos-section" id="depoimentos">
+  <div class="depoimentos-header">
+    <div class="section-eyebrow" data-pt="Depoimentos" data-en="Testimonials">Depoimentos</div>
+    <h2 class="section-title" data-pt="O que nossos clientes dizem" data-en="What our clients say">O que nossos clientes dizem</h2>
+  </div>
+  <div id="depoimentos-conteudo"></div>
+</section>
+
 <div id="site-footer"></div>
 
 <script src="/analytics.js"></script>
@@ -1027,6 +1072,7 @@ function onSharedReady() {
       <a class="nav-link" href="#precos" data-pt="Preços" data-en="Pricing">Preços</a>
       <a class="nav-link" href="#faq" data-pt="Perguntas frequentes" data-en="FAQ">Perguntas frequentes</a>
       <a class="nav-link" href="#quem-somos" data-pt="Quem somos" data-en="About us">Quem somos</a>
+      <a class="nav-link" href="#depoimentos" data-pt="Depoimentos" data-en="Testimonials">Depoimentos</a>
       <div class="lang-toggle">
         <button class="lang-btn active" onclick="setLang('pt')" aria-pressed="true">PT</button>
         <button class="lang-btn" onclick="setLang('en')" aria-pressed="false">EN</button>
@@ -1056,6 +1102,66 @@ function filtrarFaq(btn) {
     item.style.display = mostrar ? '' : 'none';
   });
 }
+
+// CA05 (US25) — depoimentos configuráveis aqui, sem CMS: adicionar um novo
+// depoimento é só incluir um objeto neste array e fazer deploy. Vazio até os
+// primeiros clientes piloto autorizarem o uso do relato (CA02 cobre o
+// estado vazio enquanto isso). Formato: { nome, salao, cidade, foto
+// (opcional — sem ela usa iniciais), texto, estrelas (opcional, 1-5) }.
+const DEPOIMENTOS = [];
+
+// CA06 (opcional) — logos de clientes piloto que autorizaram exibição.
+// Formato: { nome, logo }.
+const DEPOIMENTOS_LOGOS = [];
+
+function iniciaisDoNome(nome) {
+  return nome.split(' ').filter(Boolean).slice(0, 2).map((p) => p[0].toUpperCase()).join('');
+}
+
+function renderDepoimentos() {
+  const conteudo = document.getElementById('depoimentos-conteudo');
+  if (!conteudo) return;
+
+  if (!DEPOIMENTOS.length) {
+    conteudo.innerHTML = `
+      <div class="depoimentos-vazio">
+        <span class="depoimentos-vazio-icone" aria-hidden="true">💬</span>
+        <p data-pt="Estamos nos preparando para lançar. Em breve você verá aqui os resultados dos nossos primeiros clientes." data-en="We're getting ready to launch. Soon you'll see our first clients' results here.">Estamos nos preparando para lançar. Em breve você verá aqui os resultados dos nossos primeiros clientes.</p>
+      </div>
+    `;
+    return;
+  }
+
+  conteudo.innerHTML = `
+    <div class="depoimentos-grid">
+      ${DEPOIMENTOS.map((d) => `
+        <div class="depoimento-card">
+          <div class="depoimento-cabecalho">
+            ${d.foto
+              ? `<img class="depoimento-avatar" src="${d.foto}" alt="${d.nome}" loading="lazy">`
+              : `<div class="depoimento-avatar-iniciais" aria-hidden="true">${iniciaisDoNome(d.nome)}</div>`}
+            <div>
+              <div class="depoimento-nome">${d.nome}</div>
+              <div class="depoimento-salao">${d.salao}${d.cidade ? ` · ${d.cidade}` : ''}</div>
+            </div>
+          </div>
+          ${d.estrelas ? `<div class="depoimento-estrelas" aria-label="${d.estrelas} de 5 estrelas">${'★'.repeat(d.estrelas)}${'☆'.repeat(5 - d.estrelas)}</div>` : ''}
+          <p class="depoimento-texto" onclick="this.classList.toggle('expandido')">${d.texto}</p>
+        </div>
+      `).join('')}
+    </div>
+    ${DEPOIMENTOS_LOGOS.length ? `
+      <div class="depoimentos-logos">
+        <p class="depoimentos-logos-titulo" data-pt="Usados por salões em todo o Brasil" data-en="Used by salons across Brazil">Usados por salões em todo o Brasil</p>
+        <div class="depoimentos-logos-grid">
+          ${DEPOIMENTOS_LOGOS.map((l) => `<img src="${l.logo}" alt="${l.nome}" loading="lazy">`).join('')}
+        </div>
+      </div>
+    ` : ''}
+  `;
+}
+
+renderDepoimentos();
 </script>
 </body>
 </html>
