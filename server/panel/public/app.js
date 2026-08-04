@@ -2464,17 +2464,7 @@ async function iniciarConexaoWhatsapp() {
         }
         conectarWhatsapp(code, dadosSignup.waba_id, dadosSignup.phone_number_id);
       },
-      {
-        config_id: config.configId,
-        response_type: 'code',
-        override_default_response_type: true,
-        extras: {
-          featureType: 'whatsapp_business_app_onboarding',
-          sessionInfoVersion: '3',
-          version: 'v4',
-          features: [{ name: 'app_only_install' }],
-        },
-      }
+      { config_id: config.configId, response_type: 'code', override_default_response_type: true, extras: { setup: {} } }
     );
   }, { once: true });
 }
