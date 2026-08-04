@@ -1341,17 +1341,21 @@ async function renderPagamentos() {
   }
 }
 
-// CA02/CA03/CA04 (US35) — modal de confirmação de cancelamento de assinatura,
-// no mesmo padrão de abrirModalExcluirServico/abrirModalCancelar.
+// CA02/CA03/CA04 (US35.2) — modal de confirmação de cancelamento de
+// assinatura, no mesmo padrão de abrirModalExcluirServico/abrirModalCancelar.
+// Mostra a data de fim do período já pago (calculada a partir da próxima
+// cobrança, já que o cancelamento não estorna o período corrente).
 function abrirModalCancelarAssinatura(dados) {
+  const dataAcesso = dados.proxima_cobranca ? formatarDataCurtaISO(dados.proxima_cobranca.data) : 'o fim do período já pago';
+
   abrirModal(
     '<h3>Cancelar assinatura</h3>',
     `
-      <p class="modal-texto">Ao cancelar todos os serviços Kyvvo ficarão inoperantes após a data da próxima cobrança. Deseja cancelar?</p>
+      <p class="modal-texto">Sua assinatura será encerrada. Você continuará com acesso até ${dataAcesso}. Após essa data, seu acesso será suspenso.</p>
       <div class="modal-erro" id="cancelar-assinatura-erro"></div>
       <div class="modal-acoes">
-        <button class="btn-secundario" id="btn-manter-assinatura">Sair</button>
-        <button class="btn-perigo" id="btn-confirmar-cancelamento">Confirmo</button>
+        <button class="btn-secundario" id="btn-manter-assinatura">Manter assinatura</button>
+        <button class="btn-perigo" id="btn-confirmar-cancelamento">Confirmar cancelamento</button>
       </div>
     `
   );
@@ -1366,14 +1370,13 @@ function abrirModalCancelarAssinatura(dados) {
 
     if (resultado && !resultado.error) {
       fecharModal();
-      const dataAcesso = dados.proxima_cobranca ? formatarDataCurtaISO(dados.proxima_cobranca.data) : 'o fim do período já pago';
       const dataFinal = resultado.acesso_ate ? formatarDataCurtaISO(resultado.acesso_ate) : dataAcesso;
       mostrarToast(`Assinatura cancelada. Seu acesso continua até ${dataFinal}.`, 'sucesso');
       renderPagamentos();
     } else {
       document.getElementById('cancelar-assinatura-erro').textContent = (resultado && resultado.error) || 'Erro ao cancelar assinatura.';
       btn.disabled = false;
-      btn.textContent = 'Confirmo';
+      btn.textContent = 'Confirmar cancelamento';
     }
   });
 }
