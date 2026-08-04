@@ -344,7 +344,7 @@ async function start() {
     }
   });
 
-  // Versão do backend atualmente rodando (US54) — lê version.json gravado
+  // Versão do backend atualmente rodando (US56) — lê version.json gravado
   // pelo próprio workflow de deploy (commit + horário), fora de public/ pra
   // não virar arquivo estático público. Comparado no front com
   // window.KYVVO_FRONT_VERSION (admin/version.js) pra detectar quando o

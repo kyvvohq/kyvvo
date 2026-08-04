@@ -1,4 +1,4 @@
-// Página de Versão da área admin (US54) — mostra separadamente a versão do
+// Página de Versão da área admin (US56) — mostra separadamente a versão do
 // front (window.KYVVO_FRONT_VERSION, definida em admin/version.js, gravada
 // no HTML/JS que o navegador já carregou) e a versão do back (GET
 // /admin/api/versao, consultada ao vivo no servidor a cada carregamento).
