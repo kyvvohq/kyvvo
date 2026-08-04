@@ -24,11 +24,13 @@
     <form id="form-login" novalidate>
       <label for="email">E-mail</label>
       <input type="email" id="email" autocomplete="email">
+      <div class="field-error" id="erro-email"></div>
       <label for="senha">Senha</label>
       <div class="senha-wrapper">
         <input type="password" id="senha" autocomplete="current-password">
         <button type="button" id="btn-toggle-senha" class="toggle-senha" aria-label="Mostrar senha" tabindex="-1">👁</button>
       </div>
+      <div class="field-error" id="erro-senha"></div>
       <button type="submit" id="btn-entrar">Entrar</button>
       <div class="erro" id="erro" role="alert"></div>
     </form>
@@ -42,6 +44,35 @@
   const senhaInput = document.getElementById('senha');
   const toggleSenhaBtn = document.getElementById('btn-toggle-senha');
   const inIframe = window.self !== window.top;
+
+  // Mesma regex usada em cadastro.html — validação visual básica de formato,
+  // não substitui a checagem real de credenciais feita pelo backend.
+  const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  const campos = { email: emailInput, senha: senhaInput };
+  const validadores = {
+    email: (v) => (v.trim() && EMAIL_REGEX.test(v.trim()) ? '' : 'Digite um e-mail válido.'),
+    senha: (v) => (v ? '' : 'Digite sua senha.'),
+  };
+
+  function mostrarErroCampo(nome, mensagem) {
+    const input = campos[nome];
+    const alvo = document.getElementById('erro-' + nome);
+    alvo.textContent = mensagem;
+    input.classList.toggle('invalid', !!mensagem);
+    return !mensagem;
+  }
+
+  // CA03 — validação visual ao perder o foco, refeita a cada novo caractere
+  // enquanto o campo já estiver marcado como inválido.
+  Object.keys(campos).forEach((nome) => {
+    campos[nome].addEventListener('blur', () => mostrarErroCampo(nome, validadores[nome](campos[nome].value)));
+    campos[nome].addEventListener('input', () => {
+      if (campos[nome].classList.contains('invalid')) {
+        mostrarErroCampo(nome, validadores[nome](campos[nome].value));
+      }
+    });
+  });
 
   function irParaPainel() {
     if (inIframe) {
@@ -100,9 +131,17 @@
     e.preventDefault();
     erroEl.textContent = '';
 
-    if (!emailInput.value.trim() || !senhaInput.value) {
-      erroEl.textContent = 'Preencha todos os campos.';
-      (!emailInput.value.trim() ? emailInput : senhaInput).focus();
+    let valido = true;
+    let primeiroInvalido = null;
+    Object.keys(campos).forEach((nome) => {
+      const ok = mostrarErroCampo(nome, validadores[nome](campos[nome].value));
+      if (!ok) {
+        valido = false;
+        if (!primeiroInvalido) primeiroInvalido = campos[nome];
+      }
+    });
+    if (!valido) {
+      primeiroInvalido.focus();
       return;
     }
 
@@ -130,6 +169,15 @@
         } else {
           irParaPainel();
         }
+        return;
+      }
+
+      // 403 = credenciais corretas mas tenant desativado (CA02 da US16): erro
+      // real e específico, não faz sentido cair no fallback de admin nem
+      // mostrar a mensagem genérica de "senha incorretos" por cima dele.
+      if (res.status === 403) {
+        const dataTenant = await res.json().catch(() => ({}));
+        erroEl.textContent = dataTenant.error || 'Acesso desativado. Fale com o suporte da Kyvvo.';
         return;
       }
 

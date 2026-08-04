@@ -159,4 +159,59 @@ test.describe('Login (/login.html)', () => {
     await expect(page).toHaveURL(/\/admin\/painel\.html$/);
     expect(await page.evaluate(() => window.localStorage.getItem('kyvvo_admin_token'))).toBe('fake-admin-jwt');
   });
+
+  // US55 — validação visual dos campos (CA03) e mensagem específica de
+  // tenant desativado (CA01/CA06), sem cair no fallback de login admin.
+  test('validação visual: campo vazio ou e-mail com formato inválido marca o input e mostra erro inline', async ({ page }) => {
+    await page.goto('/login.html');
+
+    await page.click('#btn-entrar');
+    await expect(page.locator('#email')).toHaveClass(/invalid/);
+    await expect(page.locator('#erro-email')).toHaveText('Digite um e-mail válido.');
+    await expect(page.locator('#senha')).toHaveClass(/invalid/);
+    await expect(page.locator('#erro-senha')).toHaveText('Digite sua senha.');
+
+    await page.fill('#email', 'nao-e-email');
+    await page.locator('#email').blur();
+    await expect(page.locator('#email')).toHaveClass(/invalid/);
+    await expect(page.locator('#erro-email')).toHaveText('Digite um e-mail válido.');
+
+    await page.fill('#email', 'ana@kyvvo.com');
+    await page.locator('#email').blur();
+    await expect(page.locator('#email')).not.toHaveClass(/invalid/);
+    await expect(page.locator('#erro-email')).toHaveText('');
+  });
+
+  test('mostrar/ocultar senha alterna o tipo do campo e o ícone do botão', async ({ page }) => {
+    await page.goto('/login.html');
+    const senha = page.locator('#senha');
+    const toggle = page.locator('#btn-toggle-senha');
+
+    await expect(senha).toHaveAttribute('type', 'password');
+    await toggle.click();
+    await expect(senha).toHaveAttribute('type', 'text');
+    await expect(toggle).toHaveAttribute('aria-label', 'Ocultar senha');
+    await toggle.click();
+    await expect(senha).toHaveAttribute('type', 'password');
+    await expect(toggle).toHaveAttribute('aria-label', 'Mostrar senha');
+  });
+
+  test('tenant desativado (403) mostra a mensagem específica sem tentar login de admin', async ({ page }) => {
+    let adminChamado = false;
+    await page.route('**/api/auth/login', (route) =>
+      route.fulfill({ status: 403, json: { error: 'Acesso desativado. Fale com o suporte da Kyvvo.' } })
+    );
+    await page.route('**/admin/api/auth/login', (route) => {
+      adminChamado = true;
+      return route.fulfill({ status: 401, json: { error: 'E-mail ou senha inválidos' } });
+    });
+
+    await page.goto('/login.html');
+    await page.fill('#email', 'ana@kyvvo.com');
+    await page.fill('#senha', 'senha-correta');
+    await page.click('#btn-entrar');
+
+    await expect(page.locator('#erro')).toHaveText('Acesso desativado. Fale com o suporte da Kyvvo.');
+    expect(adminChamado).toBe(false);
+  });
 });
