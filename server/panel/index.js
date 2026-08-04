@@ -182,6 +182,25 @@ function dentroDoHorarioFuncionamento(tenant, dataHoraISO, duracaoMinutos = 0) {
   return { valido: true };
 }
 
+// US61 — checa se [dataHoraISO, dataHoraISO + duracaoMinutos) cai dentro de
+// algum bloqueio manual de agenda ativo (profissional_id nulo = bloqueio
+// vale pra agenda inteira). Mesmo padrão de overlap já usado nas queries de
+// conflito de agendamento (a.inicio < fim_novo AND inicio_novo < a.fim).
+// Usada tanto pra criar/reagendar agendamentos quanto pro cálculo de
+// disponibilidade — aplica mesmo em encaixe, já que um bloqueio manual
+// significa "agenda indisponível", não só "já tem algo marcado".
+async function buscarBloqueioConflitante(tenantId, profissionalId, dataHoraISO, duracaoMinutos) {
+  const { rows } = await pool.query(
+    `SELECT motivo FROM bloqueios_agenda
+     WHERE tenant_id = $1 AND (profissional_id IS NULL OR profissional_id = $2)
+       AND inicio < $3::timestamptz + ($4 * interval '1 minute')
+       AND $3::timestamptz < fim
+     LIMIT 1`,
+    [tenantId, profissionalId, dataHoraISO, duracaoMinutos]
+  );
+  return rows[0] || null;
+}
+
 // Data (YYYY-MM-DD) de "agora" em horário de Brasília — usada como fallback
 // quando a view de agenda é consultada sem o parâmetro "data" explícito.
 function dataAtualBrasilia() {
@@ -812,6 +831,14 @@ async function start() {
         return reply.code(400).send({ error: validacao.motivo });
       }
 
+      // Bloqueio manual (US61) — mesma checagem do POST /agendamentos.
+      const bloqueioConflitante = await buscarBloqueioConflitante(tenantId, atual.profissional_id, dataHora, atual.duracao_minutos);
+      if (bloqueioConflitante) {
+        return reply.code(409).send({
+          error: `Agenda bloqueada nesse período${bloqueioConflitante.motivo ? `: ${bloqueioConflitante.motivo}` : '.'}`,
+        });
+      }
+
       const { rows: conflitos } = await pool.query(
         `SELECT a.id
          FROM agendamentos a
@@ -906,6 +933,20 @@ async function start() {
       [tenantId, profissional, data]
     );
 
+    // US61 — bloqueios manuais que tocam esse dia (profissional_id nulo =
+    // agenda inteira). Limites do dia ancorados em Brasília explicitamente
+    // (mesmo padrão do "T00:00:00-03:00" usado no loop de slots abaixo) —
+    // nunca deixar o Postgres inferir o fuso de um cast implícito de data.
+    const inicioDiaISO = `${data}T00:00:00-03:00`;
+    const fimDiaISO = new Date(new Date(inicioDiaISO).getTime() + 24 * 60 * 60000).toISOString();
+    const { rows: bloqueios } = await pool.query(
+      `SELECT inicio, fim, motivo FROM bloqueios_agenda
+       WHERE tenant_id = $1 AND (profissional_id IS NULL OR profissional_id = $2)
+         AND inicio < $4::timestamptz
+         AND $3::timestamptz < fim`,
+      [tenantId, profissional, inicioDiaISO, fimDiaISO]
+    );
+
     const duracaoMinutos = servicoInfo.duracao_minutos;
     const slots = [];
     for (
@@ -935,7 +976,13 @@ async function start() {
         return inicioSlot < fimOcupado && inicioOcupado < fimSlot;
       });
 
-      slots.push({ hora: inicioSlot.toISOString(), disponivel: !conflita });
+      const bloqueado = bloqueios.some((b) => {
+        const inicioBloqueio = new Date(b.inicio);
+        const fimBloqueio = new Date(b.fim);
+        return inicioSlot < fimBloqueio && inicioBloqueio < fimSlot;
+      });
+
+      slots.push({ hora: inicioSlot.toISOString(), disponivel: !conflita && !bloqueado });
     }
 
     return { data, profissional, servico, duracaoMinutos, slots };
@@ -1145,6 +1192,88 @@ async function start() {
     return { ok: true };
   });
 
+  // ---------- Bloqueios manuais de agenda (US61) ----------
+  fastify.get('/api/bloqueios', { preHandler: [fastify.authenticate] }, async (request) => {
+    const { tenantId } = request.user;
+    const { rows } = await pool.query(
+      `SELECT b.id, b.profissional_id, p.nome AS profissional, b.inicio, b.fim, b.motivo
+       FROM bloqueios_agenda b
+       LEFT JOIN profissionais p ON p.id = b.profissional_id
+       WHERE b.tenant_id = $1
+       ORDER BY b.inicio`,
+      [tenantId]
+    );
+    return { bloqueios: rows };
+  });
+
+  fastify.post('/api/bloqueios', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const { tenantId } = request.user;
+    const { inicio, fim, motivo, profissional_id: profissionalId } = request.body || {};
+
+    if (!inicio || !fim) {
+      return reply.code(400).send({ error: 'Campos "inicio" e "fim" são obrigatórios' });
+    }
+    const inicioData = new Date(inicio);
+    const fimData = new Date(fim);
+    if (Number.isNaN(inicioData.getTime()) || Number.isNaN(fimData.getTime())) {
+      return reply.code(400).send({ error: 'Datas inválidas' });
+    }
+    if (fimData <= inicioData) {
+      return reply.code(400).send({ error: 'O fim do bloqueio deve ser depois do início' });
+    }
+
+    if (profissionalId) {
+      const { rows: profissionalRows } = await pool.query(
+        'SELECT id FROM profissionais WHERE id = $1 AND tenant_id = $2',
+        [profissionalId, tenantId]
+      );
+      if (!profissionalRows[0]) {
+        return reply.code(404).send({ error: 'Profissional não encontrado' });
+      }
+    }
+
+    // Sobreposição inválida (CA04): não deixa bloquear um período que já tem
+    // agendamento confirmado — o dono precisa cancelar/reagendar esses
+    // atendimentos antes de bloquear o horário, em vez do bloqueio silenciar
+    // um conflito que já existe.
+    const { rows: conflitos } = await pool.query(
+      `SELECT COUNT(*)::int AS total
+       FROM agendamentos a
+       JOIN servicos s ON s.id = a.servico_id
+       WHERE a.tenant_id = $1
+         AND a.status = 'confirmado'
+         AND ($2::uuid IS NULL OR a.profissional_id = $2)
+         AND a.data_hora < $4::timestamptz
+         AND $3::timestamptz < a.data_hora + (s.duracao_minutos * interval '1 minute')`,
+      [tenantId, profissionalId || null, inicio, fim]
+    );
+    if (conflitos[0].total > 0) {
+      return reply.code(409).send({
+        error: `Não é possível bloquear: há ${conflitos[0].total} agendamento(s) confirmado(s) nesse período.`,
+      });
+    }
+
+    const { rows } = await pool.query(
+      `INSERT INTO bloqueios_agenda (tenant_id, profissional_id, inicio, fim, motivo)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, profissional_id, inicio, fim, motivo`,
+      [tenantId, profissionalId || null, inicio, fim, motivo ? motivo.trim() : null]
+    );
+    reply.code(201);
+    return rows[0];
+  });
+
+  fastify.delete('/api/bloqueios/:id', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const { tenantId } = request.user;
+    const { id } = request.params;
+
+    const { rowCount } = await pool.query('DELETE FROM bloqueios_agenda WHERE id = $1 AND tenant_id = $2', [id, tenantId]);
+    if (!rowCount) {
+      return reply.code(404).send({ error: 'Bloqueio não encontrado' });
+    }
+    return { ok: true };
+  });
+
   fastify.post('/api/agendamentos', { preHandler: [fastify.authenticate] }, async (request, reply) => {
     const { tenantId } = request.user;
     const {
@@ -1206,6 +1335,16 @@ async function start() {
     const validacaoHorario = dentroDoHorarioFuncionamento(tenantRows[0], dataHora, servicoInfo.duracao_minutos);
     if (!validacaoHorario.valido) {
       return reply.code(400).send({ error: validacaoHorario.motivo });
+    }
+
+    // Bloqueio manual (US61) vale mesmo pra encaixe: diferente de "já tem
+    // algo marcado" (o que encaixe explicitamente ignora), um bloqueio
+    // significa que a agenda não está disponível nesse período.
+    const bloqueioConflitante = await buscarBloqueioConflitante(tenantId, profissionalId, dataHora, servicoInfo.duracao_minutos);
+    if (bloqueioConflitante) {
+      return reply.code(409).send({
+        error: `Agenda bloqueada nesse período${bloqueioConflitante.motivo ? `: ${bloqueioConflitante.motivo}` : '.'}`,
+      });
     }
 
     // Encaixe é uma exceção manual feita pela dona do salão: sobrepor um

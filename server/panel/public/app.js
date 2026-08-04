@@ -920,6 +920,15 @@ conteudo.addEventListener('click', (e) => {
     if (acaoProfissionalBtn.dataset.acaoProfissional === 'editar') abrirModalProfissional(profissional);
     if (acaoProfissionalBtn.dataset.acaoProfissional === 'excluir') abrirModalExcluirProfissional(profissional);
   }
+
+  // US61 — exclusão de bloqueio manual de agenda.
+  const acaoBloqueioBtn = e.target.closest('[data-acao-bloqueio]');
+  if (acaoBloqueioBtn) {
+    document.querySelectorAll('.menu-acoes.aberto').forEach((m) => m.classList.remove('aberto'));
+    const bloqueio = bloqueiosAtuais.find((b) => b.id === acaoBloqueioBtn.dataset.id);
+    if (!bloqueio) return;
+    if (acaoBloqueioBtn.dataset.acaoBloqueio === 'excluir') abrirModalExcluirBloqueio(bloqueio);
+  }
 });
 
 document.addEventListener('click', (e) => {
@@ -1410,6 +1419,7 @@ async function render() {
   if (menuAtual === 'pagamentos') return renderPagamentos();
   if (menuAtual === 'servicos') return renderServicos();
   if (menuAtual === 'profissionais') return renderProfissionais();
+  if (menuAtual === 'bloqueios') return renderBloqueios();
   if (menuAtual === 'modulo:financeiro') return renderFinanceiro();
   if (menuAtual.startsWith('modulo:')) return renderModuloEmBreve();
 
@@ -1742,6 +1752,165 @@ function abrirModalExcluirProfissional(profissional) {
       renderProfissionais();
     } else {
       document.getElementById('excluir-profissional-erro').textContent = (resultado && resultado.error) || 'Erro ao excluir profissional.';
+      btn.disabled = false;
+      btn.textContent = 'Excluir';
+    }
+  });
+}
+
+// ---------- Bloqueios manuais de agenda (US61) ----------
+let bloqueiosAtuais = [];
+
+function renderBloqueioItem(b) {
+  const periodo = `${formatarDataCurta(b.inicio)} ${formatarHora(b.inicio)} – ${formatarDataCurta(b.fim)} ${formatarHora(b.fim)}`;
+  return `
+    <div class="agendamento-item servico-item" data-id="${b.id}">
+      <div class="servico-info">
+        <div class="agendamento-detalhe">Período: <strong>${periodo}</strong></div>
+        <div class="agendamento-detalhe">${b.profissional ? `Profissional: ${b.profissional}` : 'Toda a agenda'}</div>
+        ${b.motivo ? `<div class="agendamento-detalhe">${b.motivo}</div>` : ''}
+      </div>
+      <div class="servico-acoes">
+        <button class="btn-secundario acao-perigo" data-acao-bloqueio="excluir" data-id="${b.id}">Excluir</button>
+      </div>
+    </div>
+  `;
+}
+
+async function renderBloqueios() {
+  conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
+  const dataBloqueios = await api('/api/bloqueios');
+  if (!dataBloqueios) return;
+  bloqueiosAtuais = dataBloqueios.bloqueios;
+
+  let html = `
+    <div class="nav-periodo">
+      <strong>Bloqueios</strong>
+      <button class="btn-novo-agendamento" id="btn-novo-bloqueio">+ Novo bloqueio</button>
+    </div>
+  `;
+  html += bloqueiosAtuais.length
+    ? bloqueiosAtuais.map(renderBloqueioItem).join('')
+    : '<div class="vazio">Nenhum bloqueio cadastrado ainda.</div>';
+
+  conteudo.innerHTML = html;
+  document.getElementById('btn-novo-bloqueio').addEventListener('click', () => abrirModalBloqueio());
+}
+
+function abrirModalBloqueio() {
+  const hoje = formatarDataISO(new Date());
+  abrirModal(
+    '<h3>Novo bloqueio</h3>',
+    `
+      <form id="form-bloqueio">
+        <div class="modal-erro" id="bloqueio-erro"></div>
+        <label for="bloqueio-data-inicio">Data de início *</label>
+        <input type="date" id="bloqueio-data-inicio" data-obrigatorio min="${hoje}" value="${hoje}">
+        <label for="bloqueio-hora-inicio">Hora de início *</label>
+        <input type="time" id="bloqueio-hora-inicio" data-obrigatorio>
+        <label for="bloqueio-data-fim">Data de fim *</label>
+        <input type="date" id="bloqueio-data-fim" data-obrigatorio min="${hoje}" value="${hoje}">
+        <label for="bloqueio-hora-fim">Hora de fim *</label>
+        <input type="time" id="bloqueio-hora-fim" data-obrigatorio>
+        <label for="bloqueio-profissional">Profissional (opcional)</label>
+        <select id="bloqueio-profissional"><option value="">Toda a agenda</option></select>
+        <label for="bloqueio-motivo">Motivo (opcional)</label>
+        <input type="text" id="bloqueio-motivo" placeholder="Ex: Férias, Feriado, Compromisso pessoal">
+        <div class="modal-acoes">
+          <button type="button" class="btn-secundario" id="btn-cancelar-bloqueio">Cancelar</button>
+          <button type="submit" class="btn-primario" id="btn-salvar-bloqueio">Criar bloqueio</button>
+        </div>
+      </form>
+    `
+  );
+
+  document.getElementById('btn-cancelar-bloqueio').addEventListener('click', fecharModal);
+
+  api('/api/profissionais').then((resultado) => {
+    const select = document.getElementById('bloqueio-profissional');
+    if (!resultado || !resultado.profissionais) return;
+    select.innerHTML = '<option value="">Toda a agenda</option>' +
+      resultado.profissionais.map((p) => `<option value="${p.id}">${p.nome}</option>`).join('');
+  });
+
+  const form = document.getElementById('form-bloqueio');
+  form.querySelectorAll('[data-obrigatorio]').forEach((campo) => {
+    campo.addEventListener('input', () => campo.classList.remove('campo-invalido'));
+  });
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const erroEl = document.getElementById('bloqueio-erro');
+    erroEl.textContent = '';
+    const invalido = validarObrigatorios(form);
+    if (invalido) {
+      erroEl.textContent = 'Preencha os campos obrigatórios destacados em vermelho.';
+      invalido.focus();
+      return;
+    }
+
+    // Ancorado em Brasília (-03:00), mesmo padrão do resto do sistema —
+    // nunca deixar o fuso do navegador do usuário influenciar o horário.
+    const inicioISO = new Date(`${document.getElementById('bloqueio-data-inicio').value}T${document.getElementById('bloqueio-hora-inicio').value}:00-03:00`).toISOString();
+    const fimISO = new Date(`${document.getElementById('bloqueio-data-fim').value}T${document.getElementById('bloqueio-hora-fim').value}:00-03:00`).toISOString();
+
+    if (fimISO <= inicioISO) {
+      erroEl.textContent = 'O fim do bloqueio deve ser depois do início.';
+      return;
+    }
+
+    const btn = document.getElementById('btn-salvar-bloqueio');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    const payload = {
+      inicio: inicioISO,
+      fim: fimISO,
+      profissional_id: document.getElementById('bloqueio-profissional').value || null,
+      motivo: document.getElementById('bloqueio-motivo').value.trim() || null,
+    };
+
+    const resultado = await api('/api/bloqueios', { method: 'POST', body: JSON.stringify(payload) });
+
+    if (resultado && !resultado.error) {
+      fecharModal();
+      mostrarToast('Bloqueio criado com sucesso.', 'sucesso');
+      renderBloqueios();
+    } else {
+      erroEl.textContent = (resultado && resultado.error) || 'Erro ao criar bloqueio.';
+      btn.disabled = false;
+      btn.textContent = 'Criar bloqueio';
+    }
+  });
+}
+
+function abrirModalExcluirBloqueio(bloqueio) {
+  abrirModal(
+    '<h3>Excluir bloqueio</h3>',
+    `
+      <p class="modal-texto">Tem certeza que deseja excluir esse bloqueio? A agenda volta a ficar disponível nesse período.</p>
+      <div class="modal-erro" id="excluir-bloqueio-erro"></div>
+      <div class="modal-acoes">
+        <button class="btn-secundario" id="btn-voltar-excluir-bloqueio">Cancelar</button>
+        <button class="btn-perigo" id="btn-confirmar-excluir-bloqueio">Excluir</button>
+      </div>
+    `
+  );
+
+  document.getElementById('btn-voltar-excluir-bloqueio').addEventListener('click', fecharModal);
+  document.getElementById('btn-confirmar-excluir-bloqueio').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-confirmar-excluir-bloqueio');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    const resultado = await api(`/api/bloqueios/${bloqueio.id}`, { method: 'DELETE' });
+
+    if (resultado && !resultado.error) {
+      fecharModal();
+      mostrarToast('Bloqueio excluído com sucesso.', 'sucesso');
+      renderBloqueios();
+    } else {
+      document.getElementById('excluir-bloqueio-erro').textContent = (resultado && resultado.error) || 'Erro ao excluir bloqueio.';
       btn.disabled = false;
       btn.textContent = 'Excluir';
     }
