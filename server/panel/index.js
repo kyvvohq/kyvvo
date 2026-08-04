@@ -6,6 +6,7 @@ const jwt = require('@fastify/jwt');
 const cors = require('@fastify/cors');
 const staticPlugin = require('@fastify/static');
 const path = require('path');
+const fsPromises = require('fs/promises');
 const bcrypt = require('bcryptjs');
 const { Pool } = require('pg');
 const tokenService = require('./token-service');
@@ -340,6 +341,20 @@ async function start() {
       await request.adminJwtVerify();
     } catch (err) {
       return reply.code(401).send({ error: 'Não autenticado' });
+    }
+  });
+
+  // Versão do backend atualmente rodando (US54) — lê version.json gravado
+  // pelo próprio workflow de deploy (commit + horário), fora de public/ pra
+  // não virar arquivo estático público. Comparado no front com
+  // window.KYVVO_FRONT_VERSION (admin/version.js) pra detectar quando o
+  // navegador está com JS em cache desatualizado em relação ao backend.
+  fastify.get('/admin/api/versao', { preHandler: [fastify.authenticateAdmin] }, async () => {
+    try {
+      const conteudo = await fsPromises.readFile(path.join(__dirname, 'version.json'), 'utf8');
+      return JSON.parse(conteudo);
+    } catch {
+      return { commit: null, deployedAt: null };
     }
   });
 
