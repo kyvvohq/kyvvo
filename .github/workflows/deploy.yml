@@ -56,6 +56,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Gravar versão do deploy (US54)
+        run: |
+          COMMIT_CURTO="${GITHUB_SHA::7}"
+          echo "{\"commit\":\"${COMMIT_CURTO}\",\"deployedAt\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" > server/panel/version.json
+          sed -i "s/__COMMIT_SHA__/${COMMIT_CURTO}/" server/panel/public/admin/version.js
       - name: Copiar arquivos do painel pra EC2
         uses: appleboy/scp-action@v0.1.7
         with:
