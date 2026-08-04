@@ -66,7 +66,114 @@ async function verificarStatusConta() {
     document.body.classList.add('com-trial-banner');
     registrarEventoAnalytics('aviso_trial_exibido');
   }
+
+  // US59 — avisos contextuais de cobrança pendente e configuração
+  // incompleta. Separados do #trial-banner de propósito: aquele é um único
+  // aviso crítico não-dispensável (CA09/US52); estes podem se acumular (mais
+  // de uma pendência de configuração ao mesmo tempo) e alguns são
+  // dispensáveis pelo usuário.
+  renderAvisos(construirAvisos(status));
 }
+
+// Mensagem + rótulo/destino do botão de ação de cada tipo de aviso. `critico:
+// true` = sem botão de dispensar, some só quando a pendência é resolvida
+// (CA "avisos críticos permanecem visíveis enquanto pendência existir").
+function construirAvisos(status) {
+  const avisos = [];
+  if (status.pagamento_pendente) {
+    avisos.push({
+      id: 'pagamento_pendente',
+      critico: true,
+      mensagem: '⚠️ Não conseguimos confirmar seu último pagamento. Atualize sua forma de pagamento para evitar a suspensão do acesso.',
+      acaoLabel: 'Resolver agora',
+      acaoMenu: 'pagamentos',
+    });
+  }
+  const configuracao = status.configuracao || {};
+  if (configuracao.sem_servicos) {
+    avisos.push({
+      id: 'sem_servicos',
+      critico: false,
+      mensagem: 'Cadastre seus serviços para começar a receber agendamentos.',
+      acaoLabel: 'Cadastrar serviços',
+      acaoMenu: 'servicos',
+    });
+  }
+  if (configuracao.sem_profissionais) {
+    avisos.push({
+      id: 'sem_profissionais',
+      critico: false,
+      mensagem: 'Cadastre seus profissionais para organizar a agenda.',
+      acaoLabel: 'Cadastrar profissionais',
+      acaoMenu: 'profissionais',
+    });
+  }
+  if (configuracao.whatsapp_desconectado) {
+    avisos.push({
+      id: 'whatsapp_desconectado',
+      critico: false,
+      mensagem: 'Conecte seu WhatsApp para receber agendamentos automaticamente pelo bot.',
+      acaoLabel: 'Conectar WhatsApp',
+      acaoMenu: 'whatsapp',
+    });
+  }
+  return avisos;
+}
+
+let avisosAtuais = [];
+
+function idsAvisosDispensados() {
+  try {
+    return JSON.parse(localStorage.getItem('kyvvo_avisos_dispensados') || '[]');
+  } catch (e) {
+    return [];
+  }
+}
+
+// Auto-recupera avisos dispensados cuja pendência já não existe mais nesta
+// consulta — assim, se o usuário excluir todos os serviços de novo no
+// futuro, o aviso de "sem_servicos" volta a aparecer em vez de ficar
+// escondido pra sempre pela dispensa antiga.
+function renderAvisos(avisos) {
+  const idsAtuais = new Set(avisos.map((a) => a.id));
+  const dispensadosValidos = idsAvisosDispensados().filter((id) => idsAtuais.has(id));
+  localStorage.setItem('kyvvo_avisos_dispensados', JSON.stringify(dispensadosValidos));
+  avisosAtuais = avisos;
+  renderAvisosNaTela();
+}
+
+function renderAvisosNaTela() {
+  const painel = document.getElementById('avisos-painel');
+  if (!painel) return;
+  const dispensados = new Set(idsAvisosDispensados());
+  const visiveis = avisosAtuais.filter((a) => a.critico || !dispensados.has(a.id));
+  painel.innerHTML = visiveis.map((a) => `
+    <div class="aviso-item ${a.critico ? 'aviso-critico' : 'aviso-info'}" data-aviso-id="${a.id}">
+      <span>${a.mensagem}</span>
+      <div class="aviso-acoes">
+        ${a.acaoMenu ? `<button class="aviso-acao" data-acao-aviso-menu="${a.acaoMenu}">${a.acaoLabel}</button>` : ''}
+        ${a.critico ? '' : `<button class="aviso-dispensar" data-acao-dispensar-aviso="${a.id}" aria-label="Dispensar aviso">×</button>`}
+      </div>
+    </div>
+  `).join('');
+}
+
+function dispensarAviso(id) {
+  const atuais = idsAvisosDispensados();
+  if (!atuais.includes(id)) atuais.push(id);
+  localStorage.setItem('kyvvo_avisos_dispensados', JSON.stringify(atuais));
+  renderAvisosNaTela();
+}
+
+document.getElementById('avisos-painel').addEventListener('click', (e) => {
+  const dispensarBtn = e.target.closest('[data-acao-dispensar-aviso]');
+  if (dispensarBtn) {
+    dispensarAviso(dispensarBtn.dataset.acaoDispensarAviso);
+    return;
+  }
+  const acaoBtn = e.target.closest('[data-acao-aviso-menu]');
+  if (acaoBtn) selecionarMenu(acaoBtn.dataset.acaoAvisoMenu);
+});
 
 // US52 — funil de conversão pós-trial: dispara em "melhor esforço", sem
 // travar a UI nem exigir tratamento de erro (perder uma métrica de
