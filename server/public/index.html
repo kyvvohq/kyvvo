@@ -259,10 +259,16 @@
 .precos-header .section-title{white-space:normal;margin-bottom:16px}
 .precos-header .section-sub{white-space:normal;margin-bottom:0;margin-left:auto;margin-right:auto}
 .precos-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;max-width:1080px;margin:0 auto}
+.precos-grid-matriz{grid-template-columns:repeat(4,1fr);max-width:1200px}
 .plano-card{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:32px 28px;transition:transform .2s,border-color .2s;min-width:0;display:flex;flex-direction:column}
 .plano-card:hover{transform:translateY(-4px);border-color:rgba(124,92,252,.4)}
 .plano-card.destaque{border-color:rgba(124,92,252,.55);box-shadow:0 20px 40px -20px rgba(124,92,252,.35)}
 .plano-selo{align-self:flex-start;background:rgba(124,92,252,.16);color:var(--accent-light);font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;border-radius:100px;padding:5px 14px;margin-bottom:16px}
+/* Combinações que ainda não existem no produto (bot Smart/LLM) — mesmo
+   raciocínio visual da roadmap-section pra "em breve", mas dentro do selo do
+   card em vez de badge full-width, já que aqui o "em breve" é só uma
+   dimensão do combo, não o card inteiro. */
+.plano-selo-combo{background:rgba(161,165,196,.14);color:var(--muted)}
 .plano-nome{font-family:var(--font-d);font-size:1.1rem;font-weight:700;margin-bottom:8px}
 .plano-preco{font-family:var(--font-d);font-size:2rem;font-weight:800;letter-spacing:-.02em;margin-bottom:4px}
 .plano-preco span{font-family:var(--font-b);font-size:.85rem;font-weight:400;color:var(--muted)}
@@ -273,6 +279,8 @@
 .plano-card:not(.destaque) .plano-cta{color:var(--text);background:transparent;border:1px solid var(--border)}
 .plano-card:not(.destaque) .plano-cta:hover{border-color:rgba(124,92,252,.5)}
 .precos-nota{text-align:center;color:var(--muted);font-size:.85rem;margin-top:32px}
+.precos-nota + .precos-nota{margin-top:8px}
+@media(max-width:1100px){.precos-grid-matriz{grid-template-columns:repeat(2,1fr);max-width:600px}}
 @media(max-width:900px){.precos-grid{grid-template-columns:1fr;max-width:420px}}
 
 /* FAQ */
@@ -676,31 +684,37 @@
 <section class="precos-section" id="precos">
   <div class="precos-header">
     <div class="section-eyebrow" data-pt="Preços" data-en="Pricing">Preços</div>
-    <h2 class="section-title" data-pt="Um plano pra cada tamanho de negócio" data-en="A plan for every size of business">Um plano pra cada tamanho de negócio</h2>
-    <p class="section-sub" data-pt="14 dias grátis em qualquer plano, sem cartão de crédito. Cancele quando quiser." data-en="14 days free on any plan, no credit card required. Cancel anytime.">14 dias grátis em qualquer plano, sem cartão de crédito. Cancele quando quiser.</p>
+    <h2 class="section-title" data-pt="Um plano pro seu jeito de atender no WhatsApp" data-en="A plan for how you serve on WhatsApp">Um plano pro seu jeito de atender no WhatsApp</h2>
+    <p class="section-sub" data-pt="Bot de agendamento, agenda, financeiro, serviços e profissionais já vêm em todos os planos. 14 dias grátis pra testar. Cancele quando quiser." data-en="Booking bot, schedule, finances, services and staff come in every plan. 14 days free to try. Cancel anytime.">Bot de agendamento, agenda, financeiro, serviços e profissionais já vêm em todos os planos. 14 dias grátis pra testar. Cancele quando quiser.</p>
   </div>
-  <div class="precos-grid">
-    <div class="plano-card">
-      <div class="plano-nome" data-pt="Starter" data-en="Starter">Starter</div>
-      <div class="plano-preco">R$&nbsp;147<span data-pt="/mês" data-en="/mo">/mês</span></div>
-      <p class="plano-desc" data-pt="Acesso web + bot de agendamento no WhatsApp. Ideal pra quem está começando." data-en="Web access + WhatsApp booking bot. Ideal for getting started.">Acesso web + bot de agendamento no WhatsApp. Ideal pra quem está começando.</p>
-      <a class="plano-cta" data-panel-path="/cadastro.html" href="#" data-pt="Começar grátis" data-en="Start free">Começar grátis</a>
-    </div>
+  <div class="precos-grid precos-grid-matriz">
     <div class="plano-card destaque">
-      <div class="plano-selo" data-pt="Mais popular" data-en="Most popular">Mais popular</div>
-      <div class="plano-nome" data-pt="Profissional" data-en="Professional">Profissional</div>
-      <div class="plano-preco">R$&nbsp;247<span data-pt="/mês" data-en="/mo">/mês</span></div>
-      <p class="plano-desc" data-pt="Painel web + app mobile + até 500 disparos de WhatsApp por mês." data-en="Web dashboard + mobile app + up to 500 WhatsApp messages a month.">Painel web + app mobile + até 500 disparos de WhatsApp por mês.</p>
+      <div class="plano-selo" data-pt="Traga seu número" data-en="Bring your number">Traga seu número</div>
+      <div class="plano-nome" data-pt="Essencial" data-en="Essential">Essencial</div>
+      <p class="plano-desc" data-pt="Conecte o WhatsApp que seu negócio já usa, direto pelo painel. Bot com fluxo guiado por listas de opções." data-en="Connect the WhatsApp your business already uses, straight from the dashboard. Bot guided by option lists.">Conecte o WhatsApp que seu negócio já usa, direto pelo painel. Bot com fluxo guiado por listas de opções.</p>
       <a class="plano-cta" data-panel-path="/cadastro.html" href="#" data-pt="Começar grátis" data-en="Start free">Começar grátis</a>
     </div>
     <div class="plano-card">
-      <div class="plano-nome" data-pt="Empresarial" data-en="Business">Empresarial</div>
-      <div class="plano-preco">R$&nbsp;447<span data-pt="/mês" data-en="/mo">/mês</span></div>
-      <p class="plano-desc" data-pt="Tudo do Profissional, mais multi-unidades e disparos de WhatsApp ilimitados." data-en="Everything in Professional, plus multiple locations and unlimited WhatsApp messages.">Tudo do Profissional, mais multi-unidades e disparos de WhatsApp ilimitados.</p>
+      <div class="plano-selo plano-selo-combo" data-pt="Traga seu número · Em breve" data-en="Bring your number · Coming soon">Traga seu número · Em breve</div>
+      <div class="plano-nome" data-pt="Smart" data-en="Smart">Smart</div>
+      <p class="plano-desc" data-pt="Conecte o WhatsApp que seu negócio já usa. Bot com inteligência artificial, conversa em linguagem natural." data-en="Connect the WhatsApp your business already uses. AI-powered bot with natural-language conversation.">Conecte o WhatsApp que seu negócio já usa. Bot com inteligência artificial, conversa em linguagem natural.</p>
+      <a class="plano-cta" data-panel-path="/cadastro.html" href="#" data-pt="Começar grátis" data-en="Start free">Começar grátis</a>
+    </div>
+    <div class="plano-card">
+      <div class="plano-selo" data-pt="Novo número" data-en="New number">Novo número</div>
+      <div class="plano-nome" data-pt="Essencial" data-en="Essential">Essencial</div>
+      <p class="plano-desc" data-pt="A Kyvvo fornece um número novo, já configurado e pronto pra usar. Bot com fluxo guiado por listas de opções." data-en="Kyvvo provides a new, already set-up number, ready to use. Bot guided by option lists.">A Kyvvo fornece um número novo, já configurado e pronto pra usar. Bot com fluxo guiado por listas de opções.</p>
+      <a class="plano-cta" data-panel-path="/cadastro.html" href="#" data-pt="Começar grátis" data-en="Start free">Começar grátis</a>
+    </div>
+    <div class="plano-card">
+      <div class="plano-selo plano-selo-combo" data-pt="Novo número · Em breve" data-en="New number · Coming soon">Novo número · Em breve</div>
+      <div class="plano-nome" data-pt="Smart" data-en="Smart">Smart</div>
+      <p class="plano-desc" data-pt="A Kyvvo fornece um número novo, já configurado. Bot com inteligência artificial, conversa em linguagem natural." data-en="Kyvvo provides a new, already set-up number. AI-powered bot with natural-language conversation.">A Kyvvo fornece um número novo, já configurado. Bot com inteligência artificial, conversa em linguagem natural.</p>
       <a class="plano-cta" data-panel-path="/cadastro.html" href="#" data-pt="Começar grátis" data-en="Start free">Começar grátis</a>
     </div>
   </div>
-  <p class="precos-nota" data-pt="Todos os planos já incluem um número de WhatsApp configurado pelo Kyvvo, pronto pra usar. Nesta fase do MVP ainda não é possível conectar seu próprio número." data-en="All plans already include a WhatsApp number set up by Kyvvo, ready to use. In this MVP phase, connecting your own number isn't available yet.">Todos os planos já incluem um número de WhatsApp configurado pelo Kyvvo, pronto pra usar. Nesta fase do MVP ainda não é possível conectar seu próprio número.</p>
+  <p class="precos-nota" data-pt="Bot, agenda, financeiro, serviços e profissionais estão disponíveis em todos os planos — a diferença é só o modelo de número (traga o seu ou receba um novo já configurado) e o nível de inteligência do bot. Planos a partir de R$&nbsp;247/mês, com limite mensal de mensagens do bot e acréscimo por excedente; o valor final de cada combinação ainda está em validação." data-en="Booking bot, schedule, finances, services and staff are available in every plan — the difference is just the number model (bring your own or get a new one already set up) and the bot's intelligence level. Plans start at R$&nbsp;247/month, with a monthly bot-message limit and an extra charge for overage; the final price of each combination is still being validated.">Bot, agenda, financeiro, serviços e profissionais estão disponíveis em todos os planos — a diferença é só o modelo de número (traga o seu ou receba um novo já configurado) e o nível de inteligência do bot. Planos a partir de R$&nbsp;247/mês, com limite mensal de mensagens do bot e acréscimo por excedente; o valor final de cada combinação ainda está em validação.</p>
+  <p class="precos-nota" data-pt="Cartão de crédito é exigido principalmente no caminho Novo número; nos pilotos iniciais, esse custo pode ser absorvido pela Kyvvo — fale com a gente pra confirmar sua condição." data-en="A credit card is required mainly for the New number path; in initial pilots, this cost may be absorbed by Kyvvo — talk to us to confirm your situation.">Cartão de crédito é exigido principalmente no caminho Novo número; nos pilotos iniciais, esse custo pode ser absorvido pela Kyvvo — fale com a gente pra confirmar sua condição.</p>
   <p class="precos-nota" data-pt="Preços sujeitos a alteração. Assinaturas em andamento não são afetadas por mudanças de preço." data-en="Prices subject to change. Existing subscriptions aren't affected by price changes.">Preços sujeitos a alteração. Assinaturas em andamento não são afetadas por mudanças de preço.</p>
 </section>
 
@@ -830,7 +844,7 @@
             <span class="faq-icon" aria-hidden="true"></span>
           </button>
           <div class="faq-answer" id="faq-answer-6">
-            <div class="faq-answer-inner" data-pt="A partir de R$ 147/mês no plano Starter. Veja todos os planos na seção de preços." data-en="From R$ 147/month on the Starter plan. See all plans in the pricing section.">A partir de R$ 147/mês no plano Starter. Veja todos os planos na seção de preços.</div>
+            <div class="faq-answer-inner" data-pt="A partir de R$ 247/mês, variando conforme o modelo de número de WhatsApp e o nível de inteligência do bot escolhidos. Veja todos os planos na seção de preços." data-en="From R$ 247/month, depending on the WhatsApp number model and bot intelligence level you choose. See all plans in the pricing section.">A partir de R$ 247/mês, variando conforme o modelo de número de WhatsApp e o nível de inteligência do bot escolhidos. Veja todos os planos na seção de preços.</div>
           </div>
         </div>
 
