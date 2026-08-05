@@ -1,4 +1,4 @@
-// Versão do front (US56) — o commit é substituído pelo workflow de deploy
+// Versão do front (US66) — o commit é substituído pelo workflow de deploy
 // (.github/workflows/deploy.yml) antes do arquivo ser copiado pra EC2.
 // Fora do deploy (dev local), fica com o placeholder mesmo — versao.js trata
 // esse caso como "não implantado via pipeline".
