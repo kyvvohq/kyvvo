@@ -395,6 +395,94 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .inicio-pendencias .btn-secundario { width: auto; margin: 0; flex-shrink: 0; }
 
+/* ---------- US56 — Onboarding guiado (tela "Primeiros passos") ---------- */
+.onboarding-cabecalho { margin-bottom: 20px; }
+.onboarding-cabecalho h2 { font-size: 20px; margin-bottom: 6px; }
+.onboarding-cabecalho p { color: #a1a5c4; font-size: 14px; margin-bottom: 16px; }
+
+.onboarding-progresso {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.onboarding-progresso-barra {
+  flex: 1;
+  height: 8px;
+  border-radius: 100px;
+  background: #232847;
+  overflow: hidden;
+}
+
+.onboarding-progresso-preenchido {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--cyan));
+  border-radius: 100px;
+  transition: width 0.3s ease;
+}
+
+.onboarding-progresso span { font-size: 13px; color: #a1a5c4; white-space: nowrap; }
+
+.onboarding-lista { list-style: none; display: flex; flex-direction: column; gap: 12px; }
+
+.onboarding-passo {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  background: #12162a;
+  border: 1px solid #232847;
+  border-radius: 12px;
+  padding: 16px 20px;
+}
+
+.onboarding-passo-recomendado { border-color: var(--accent); background: rgba(124, 92, 252, 0.08); }
+
+.onboarding-passo-feito { opacity: 0.6; }
+
+.onboarding-passo-check {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid #2a2f52;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  margin-top: 2px;
+}
+
+.onboarding-passo-feito .onboarding-passo-check { background: var(--accent); border-color: var(--accent); color: white; }
+
+.onboarding-passo-texto { flex: 1; min-width: 0; }
+.onboarding-passo-texto strong { display: block; font-size: 15px; margin-bottom: 4px; }
+.onboarding-passo-texto p { color: #a1a5c4; font-size: 13px; line-height: 1.5; }
+
+.onboarding-passo-tag {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent-light);
+}
+
+.onboarding-passo .btn-secundario { width: auto; margin: 0; flex-shrink: 0; align-self: center; }
+
+.link-pular-onboarding {
+  width: auto;
+  margin: 20px 0 0;
+  padding: 0;
+  background: transparent;
+  color: #a1a5c4;
+  font-size: 13px;
+  text-decoration: underline;
+}
+
+.link-pular-onboarding:hover { background: transparent; color: #f2f2f7; }
+
 /* User menu (avatar + dropdown, PR11) — substitui o botão "Sair" solto no
    topbar; Meu Perfil/Minha Empresa/Cobrança/Preferências/Ajuda/Sair vivem
    todos dentro do dropdown. */
