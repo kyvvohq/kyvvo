@@ -176,6 +176,10 @@
 .how-step-info{padding-top:20px}
 .how-step-num{font-family:var(--font-d);font-size:.75rem;font-weight:700;color:var(--accent-light);letter-spacing:.05em;display:block;margin-bottom:6px}
 @media(max-width:900px){.how-steps{grid-template-columns:1fr;gap:36px}}
+/* CA04 (US22) — CTA logo abaixo da demonstração dos 3 passos, mesmo padrão
+   visual do CTA do hero (.btn-whatsapp/.hero-cta-sub), só centralizado. */
+.how-cta{text-align:center;margin-top:48px}
+.how-cta .hero-cta-sub{margin-top:12px}
 
 .niches-section{padding:80px 6%}
 .niches-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:16px;margin-top:40px}
@@ -244,6 +248,42 @@
   .fundador-foto-card img{height:320px}
 }
 
+/* Depoimentos (US25) — CA01/CA07 */
+.depoimentos-section{padding:100px 6%;border-top:1px solid var(--border)}
+.depoimentos-header{max-width:680px;margin:0 auto 56px;text-align:center}
+.depoimentos-header .section-eyebrow{justify-content:center}
+.depoimentos-header .section-title{white-space:normal;margin-bottom:0}
+
+/* CA02 — estado vazio, antes dos primeiros depoimentos reais: precisa
+   parecer proposital (identidade visual da seção), não um erro/ausência de
+   conteúdo. */
+.depoimentos-vazio{max-width:480px;margin:0 auto;text-align:center;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:40px 32px}
+.depoimentos-vazio-icone{font-size:2rem;display:block;margin-bottom:16px}
+.depoimentos-vazio p{color:var(--muted);font-size:.9rem;line-height:1.7;margin:0}
+
+/* CA04/CA07 — até 3 por linha no desktop; no mobile vira carrossel por
+   scroll/swipe (scroll-snap, sem JS/lib nenhuma) em vez de empilhar, porque
+   o texto do depoimento some se cortar direto pra 1 coluna estreita. */
+.depoimentos-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;max-width:1080px;margin:0 auto}
+.depoimento-card{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 24px;min-width:0;display:flex;flex-direction:column;gap:14px}
+.depoimento-cabecalho{display:flex;align-items:center;gap:12px}
+.depoimento-avatar,.depoimento-avatar-iniciais{width:48px;height:48px;border-radius:50%;flex-shrink:0}
+.depoimento-avatar{object-fit:cover}
+.depoimento-avatar-iniciais{background:rgba(124,92,252,.16);color:var(--accent-light);display:flex;align-items:center;justify-content:center;font-weight:700;font-family:var(--font-d);font-size:.85rem}
+.depoimento-nome{font-family:var(--font-d);font-weight:700;font-size:.9rem}
+.depoimento-salao{font-size:.78rem;color:var(--muted)}
+.depoimento-estrelas{color:#facc15;font-size:.8rem;letter-spacing:2px}
+.depoimento-texto{font-size:.86rem;color:var(--muted);line-height:1.6;margin:0;cursor:pointer;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden}
+.depoimento-texto.expandido{-webkit-line-clamp:unset;overflow:visible}
+.depoimentos-logos{margin-top:56px;text-align:center}
+.depoimentos-logos-titulo{font-size:.8rem;color:var(--muted);margin-bottom:20px}
+.depoimentos-logos-grid{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:32px}
+.depoimentos-logos-grid img{height:32px;width:auto;opacity:.7;filter:grayscale(1)}
+@media(max-width:900px){
+  .depoimentos-grid{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:16px;max-width:100%;padding-bottom:8px;-webkit-overflow-scrolling:touch}
+  .depoimento-card{scroll-snap-align:center;flex:0 0 85%}
+}
+
 .nav-link{
   font-family:var(--font-b);font-size:.85rem;font-weight:500;
   color:var(--muted);text-decoration:none;transition:color .2s;
@@ -259,10 +299,16 @@
 .precos-header .section-title{white-space:normal;margin-bottom:16px}
 .precos-header .section-sub{white-space:normal;margin-bottom:0;margin-left:auto;margin-right:auto}
 .precos-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;max-width:1080px;margin:0 auto}
+.precos-grid-matriz{grid-template-columns:repeat(4,1fr);max-width:1200px}
 .plano-card{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:32px 28px;transition:transform .2s,border-color .2s;min-width:0;display:flex;flex-direction:column}
 .plano-card:hover{transform:translateY(-4px);border-color:rgba(124,92,252,.4)}
 .plano-card.destaque{border-color:rgba(124,92,252,.55);box-shadow:0 20px 40px -20px rgba(124,92,252,.35)}
 .plano-selo{align-self:flex-start;background:rgba(124,92,252,.16);color:var(--accent-light);font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;border-radius:100px;padding:5px 14px;margin-bottom:16px}
+/* Combinações que ainda não existem no produto (bot Smart/LLM) — mesmo
+   raciocínio visual da roadmap-section pra "em breve", mas dentro do selo do
+   card em vez de badge full-width, já que aqui o "em breve" é só uma
+   dimensão do combo, não o card inteiro. */
+.plano-selo-combo{background:rgba(161,165,196,.14);color:var(--muted)}
 .plano-nome{font-family:var(--font-d);font-size:1.1rem;font-weight:700;margin-bottom:8px}
 .plano-preco{font-family:var(--font-d);font-size:2rem;font-weight:800;letter-spacing:-.02em;margin-bottom:4px}
 .plano-preco span{font-family:var(--font-b);font-size:.85rem;font-weight:400;color:var(--muted)}
@@ -273,6 +319,8 @@
 .plano-card:not(.destaque) .plano-cta{color:var(--text);background:transparent;border:1px solid var(--border)}
 .plano-card:not(.destaque) .plano-cta:hover{border-color:rgba(124,92,252,.5)}
 .precos-nota{text-align:center;color:var(--muted);font-size:.85rem;margin-top:32px}
+.precos-nota + .precos-nota{margin-top:8px}
+@media(max-width:1100px){.precos-grid-matriz{grid-template-columns:repeat(2,1fr);max-width:600px}}
 @media(max-width:900px){.precos-grid{grid-template-columns:1fr;max-width:420px}}
 
 /* FAQ */
@@ -602,6 +650,10 @@
       </div>
     </div>
   </div>
+  <div class="how-cta">
+    <a class="btn-whatsapp" data-panel-path="/cadastro.html" href="#" data-pt="Quero experimentar grátis →" data-en="I want to try it free →">Quero experimentar grátis →</a>
+    <p class="hero-cta-sub" data-pt="14 dias grátis. Sem cartão de crédito." data-en="14 days free. No credit card.">14 dias grátis. Sem cartão de crédito.</p>
+  </div>
 </section>
 
 <section class="niches-section" id="segmentos">
@@ -676,31 +728,37 @@
 <section class="precos-section" id="precos">
   <div class="precos-header">
     <div class="section-eyebrow" data-pt="Preços" data-en="Pricing">Preços</div>
-    <h2 class="section-title" data-pt="Um plano pra cada tamanho de negócio" data-en="A plan for every size of business">Um plano pra cada tamanho de negócio</h2>
-    <p class="section-sub" data-pt="14 dias grátis em qualquer plano, sem cartão de crédito. Cancele quando quiser." data-en="14 days free on any plan, no credit card required. Cancel anytime.">14 dias grátis em qualquer plano, sem cartão de crédito. Cancele quando quiser.</p>
+    <h2 class="section-title" data-pt="Um plano pro seu jeito de atender no WhatsApp" data-en="A plan for how you serve on WhatsApp">Um plano pro seu jeito de atender no WhatsApp</h2>
+    <p class="section-sub" data-pt="Bot de agendamento, agenda, financeiro, serviços e profissionais já vêm em todos os planos. 14 dias grátis pra testar. Cancele quando quiser." data-en="Booking bot, schedule, finances, services and staff come in every plan. 14 days free to try. Cancel anytime.">Bot de agendamento, agenda, financeiro, serviços e profissionais já vêm em todos os planos. 14 dias grátis pra testar. Cancele quando quiser.</p>
   </div>
-  <div class="precos-grid">
-    <div class="plano-card">
-      <div class="plano-nome" data-pt="Starter" data-en="Starter">Starter</div>
-      <div class="plano-preco">R$&nbsp;147<span data-pt="/mês" data-en="/mo">/mês</span></div>
-      <p class="plano-desc" data-pt="Acesso web + bot de agendamento no WhatsApp. Ideal pra quem está começando." data-en="Web access + WhatsApp booking bot. Ideal for getting started.">Acesso web + bot de agendamento no WhatsApp. Ideal pra quem está começando.</p>
-      <a class="plano-cta" data-panel-path="/cadastro.html" href="#" data-pt="Começar grátis" data-en="Start free">Começar grátis</a>
-    </div>
+  <div class="precos-grid precos-grid-matriz">
     <div class="plano-card destaque">
-      <div class="plano-selo" data-pt="Mais popular" data-en="Most popular">Mais popular</div>
-      <div class="plano-nome" data-pt="Profissional" data-en="Professional">Profissional</div>
-      <div class="plano-preco">R$&nbsp;247<span data-pt="/mês" data-en="/mo">/mês</span></div>
-      <p class="plano-desc" data-pt="Painel web + app mobile + até 500 disparos de WhatsApp por mês." data-en="Web dashboard + mobile app + up to 500 WhatsApp messages a month.">Painel web + app mobile + até 500 disparos de WhatsApp por mês.</p>
+      <div class="plano-selo" data-pt="Traga seu número" data-en="Bring your number">Traga seu número</div>
+      <div class="plano-nome" data-pt="Essencial" data-en="Essential">Essencial</div>
+      <p class="plano-desc" data-pt="Conecte o WhatsApp que seu negócio já usa, direto pelo painel. Bot com fluxo guiado por listas de opções." data-en="Connect the WhatsApp your business already uses, straight from the dashboard. Bot guided by option lists.">Conecte o WhatsApp que seu negócio já usa, direto pelo painel. Bot com fluxo guiado por listas de opções.</p>
       <a class="plano-cta" data-panel-path="/cadastro.html" href="#" data-pt="Começar grátis" data-en="Start free">Começar grátis</a>
     </div>
     <div class="plano-card">
-      <div class="plano-nome" data-pt="Empresarial" data-en="Business">Empresarial</div>
-      <div class="plano-preco">R$&nbsp;447<span data-pt="/mês" data-en="/mo">/mês</span></div>
-      <p class="plano-desc" data-pt="Tudo do Profissional, mais multi-unidades e disparos de WhatsApp ilimitados." data-en="Everything in Professional, plus multiple locations and unlimited WhatsApp messages.">Tudo do Profissional, mais multi-unidades e disparos de WhatsApp ilimitados.</p>
+      <div class="plano-selo plano-selo-combo" data-pt="Traga seu número · Em breve" data-en="Bring your number · Coming soon">Traga seu número · Em breve</div>
+      <div class="plano-nome" data-pt="Smart" data-en="Smart">Smart</div>
+      <p class="plano-desc" data-pt="Conecte o WhatsApp que seu negócio já usa. Bot com inteligência artificial, conversa em linguagem natural." data-en="Connect the WhatsApp your business already uses. AI-powered bot with natural-language conversation.">Conecte o WhatsApp que seu negócio já usa. Bot com inteligência artificial, conversa em linguagem natural.</p>
+      <a class="plano-cta" data-panel-path="/cadastro.html" href="#" data-pt="Começar grátis" data-en="Start free">Começar grátis</a>
+    </div>
+    <div class="plano-card">
+      <div class="plano-selo" data-pt="Novo número" data-en="New number">Novo número</div>
+      <div class="plano-nome" data-pt="Essencial" data-en="Essential">Essencial</div>
+      <p class="plano-desc" data-pt="A Kyvvo fornece um número novo, já configurado e pronto pra usar. Bot com fluxo guiado por listas de opções." data-en="Kyvvo provides a new, already set-up number, ready to use. Bot guided by option lists.">A Kyvvo fornece um número novo, já configurado e pronto pra usar. Bot com fluxo guiado por listas de opções.</p>
+      <a class="plano-cta" data-panel-path="/cadastro.html" href="#" data-pt="Começar grátis" data-en="Start free">Começar grátis</a>
+    </div>
+    <div class="plano-card">
+      <div class="plano-selo plano-selo-combo" data-pt="Novo número · Em breve" data-en="New number · Coming soon">Novo número · Em breve</div>
+      <div class="plano-nome" data-pt="Smart" data-en="Smart">Smart</div>
+      <p class="plano-desc" data-pt="A Kyvvo fornece um número novo, já configurado. Bot com inteligência artificial, conversa em linguagem natural." data-en="Kyvvo provides a new, already set-up number. AI-powered bot with natural-language conversation.">A Kyvvo fornece um número novo, já configurado. Bot com inteligência artificial, conversa em linguagem natural.</p>
       <a class="plano-cta" data-panel-path="/cadastro.html" href="#" data-pt="Começar grátis" data-en="Start free">Começar grátis</a>
     </div>
   </div>
-  <p class="precos-nota" data-pt="Todos os planos já incluem um número de WhatsApp configurado pelo Kyvvo, pronto pra usar. Nesta fase do MVP ainda não é possível conectar seu próprio número." data-en="All plans already include a WhatsApp number set up by Kyvvo, ready to use. In this MVP phase, connecting your own number isn't available yet.">Todos os planos já incluem um número de WhatsApp configurado pelo Kyvvo, pronto pra usar. Nesta fase do MVP ainda não é possível conectar seu próprio número.</p>
+  <p class="precos-nota" data-pt="Bot, agenda, financeiro, serviços e profissionais estão disponíveis em todos os planos — a diferença é só o modelo de número (traga o seu ou receba um novo já configurado) e o nível de inteligência do bot. Planos a partir de R$&nbsp;247/mês, com limite mensal de mensagens do bot e acréscimo por excedente; o valor final de cada combinação ainda está em validação." data-en="Booking bot, schedule, finances, services and staff are available in every plan — the difference is just the number model (bring your own or get a new one already set up) and the bot's intelligence level. Plans start at R$&nbsp;247/month, with a monthly bot-message limit and an extra charge for overage; the final price of each combination is still being validated.">Bot, agenda, financeiro, serviços e profissionais estão disponíveis em todos os planos — a diferença é só o modelo de número (traga o seu ou receba um novo já configurado) e o nível de inteligência do bot. Planos a partir de R$&nbsp;247/mês, com limite mensal de mensagens do bot e acréscimo por excedente; o valor final de cada combinação ainda está em validação.</p>
+  <p class="precos-nota" data-pt="Cartão de crédito é exigido principalmente no caminho Novo número; nos pilotos iniciais, esse custo pode ser absorvido pela Kyvvo — fale com a gente pra confirmar sua condição." data-en="A credit card is required mainly for the New number path; in initial pilots, this cost may be absorbed by Kyvvo — talk to us to confirm your situation.">Cartão de crédito é exigido principalmente no caminho Novo número; nos pilotos iniciais, esse custo pode ser absorvido pela Kyvvo — fale com a gente pra confirmar sua condição.</p>
   <p class="precos-nota" data-pt="Preços sujeitos a alteração. Assinaturas em andamento não são afetadas por mudanças de preço." data-en="Prices subject to change. Existing subscriptions aren't affected by price changes.">Preços sujeitos a alteração. Assinaturas em andamento não são afetadas por mudanças de preço.</p>
 </section>
 
@@ -830,7 +888,7 @@
             <span class="faq-icon" aria-hidden="true"></span>
           </button>
           <div class="faq-answer" id="faq-answer-6">
-            <div class="faq-answer-inner" data-pt="A partir de R$ 147/mês no plano Starter. Veja todos os planos na seção de preços." data-en="From R$ 147/month on the Starter plan. See all plans in the pricing section.">A partir de R$ 147/mês no plano Starter. Veja todos os planos na seção de preços.</div>
+            <div class="faq-answer-inner" data-pt="A partir de R$ 247/mês, variando conforme o modelo de número de WhatsApp e o nível de inteligência do bot escolhidos. Veja todos os planos na seção de preços." data-en="From R$ 247/month, depending on the WhatsApp number model and bot intelligence level you choose. See all plans in the pricing section.">A partir de R$ 247/mês, variando conforme o modelo de número de WhatsApp e o nível de inteligência do bot escolhidos. Veja todos os planos na seção de preços.</div>
           </div>
         </div>
 
@@ -945,6 +1003,15 @@
   </div>
 </section>
 
+<!-- Depoimentos (US25) -->
+<section class="depoimentos-section" id="depoimentos">
+  <div class="depoimentos-header">
+    <div class="section-eyebrow" data-pt="Depoimentos" data-en="Testimonials">Depoimentos</div>
+    <h2 class="section-title" data-pt="O que nossos clientes dizem" data-en="What our clients say">O que nossos clientes dizem</h2>
+  </div>
+  <div id="depoimentos-conteudo"></div>
+</section>
+
 <div id="site-footer"></div>
 
 <script src="/analytics.js"></script>
@@ -1005,6 +1072,7 @@ function onSharedReady() {
       <a class="nav-link" href="#precos" data-pt="Preços" data-en="Pricing">Preços</a>
       <a class="nav-link" href="#faq" data-pt="Perguntas frequentes" data-en="FAQ">Perguntas frequentes</a>
       <a class="nav-link" href="#quem-somos" data-pt="Quem somos" data-en="About us">Quem somos</a>
+      <a class="nav-link" href="#depoimentos" data-pt="Depoimentos" data-en="Testimonials">Depoimentos</a>
       <div class="lang-toggle">
         <button class="lang-btn active" onclick="setLang('pt')" aria-pressed="true">PT</button>
         <button class="lang-btn" onclick="setLang('en')" aria-pressed="false">EN</button>
@@ -1034,6 +1102,66 @@ function filtrarFaq(btn) {
     item.style.display = mostrar ? '' : 'none';
   });
 }
+
+// CA05 (US25) — depoimentos configuráveis aqui, sem CMS: adicionar um novo
+// depoimento é só incluir um objeto neste array e fazer deploy. Vazio até os
+// primeiros clientes piloto autorizarem o uso do relato (CA02 cobre o
+// estado vazio enquanto isso). Formato: { nome, salao, cidade, foto
+// (opcional — sem ela usa iniciais), texto, estrelas (opcional, 1-5) }.
+const DEPOIMENTOS = [];
+
+// CA06 (opcional) — logos de clientes piloto que autorizaram exibição.
+// Formato: { nome, logo }.
+const DEPOIMENTOS_LOGOS = [];
+
+function iniciaisDoNome(nome) {
+  return nome.split(' ').filter(Boolean).slice(0, 2).map((p) => p[0].toUpperCase()).join('');
+}
+
+function renderDepoimentos() {
+  const conteudo = document.getElementById('depoimentos-conteudo');
+  if (!conteudo) return;
+
+  if (!DEPOIMENTOS.length) {
+    conteudo.innerHTML = `
+      <div class="depoimentos-vazio">
+        <span class="depoimentos-vazio-icone" aria-hidden="true">💬</span>
+        <p data-pt="Estamos nos preparando para lançar. Em breve você verá aqui os resultados dos nossos primeiros clientes." data-en="We're getting ready to launch. Soon you'll see our first clients' results here.">Estamos nos preparando para lançar. Em breve você verá aqui os resultados dos nossos primeiros clientes.</p>
+      </div>
+    `;
+    return;
+  }
+
+  conteudo.innerHTML = `
+    <div class="depoimentos-grid">
+      ${DEPOIMENTOS.map((d) => `
+        <div class="depoimento-card">
+          <div class="depoimento-cabecalho">
+            ${d.foto
+              ? `<img class="depoimento-avatar" src="${d.foto}" alt="${d.nome}" loading="lazy">`
+              : `<div class="depoimento-avatar-iniciais" aria-hidden="true">${iniciaisDoNome(d.nome)}</div>`}
+            <div>
+              <div class="depoimento-nome">${d.nome}</div>
+              <div class="depoimento-salao">${d.salao}${d.cidade ? ` · ${d.cidade}` : ''}</div>
+            </div>
+          </div>
+          ${d.estrelas ? `<div class="depoimento-estrelas" aria-label="${d.estrelas} de 5 estrelas">${'★'.repeat(d.estrelas)}${'☆'.repeat(5 - d.estrelas)}</div>` : ''}
+          <p class="depoimento-texto" onclick="this.classList.toggle('expandido')">${d.texto}</p>
+        </div>
+      `).join('')}
+    </div>
+    ${DEPOIMENTOS_LOGOS.length ? `
+      <div class="depoimentos-logos">
+        <p class="depoimentos-logos-titulo" data-pt="Usados por salões em todo o Brasil" data-en="Used by salons across Brazil">Usados por salões em todo o Brasil</p>
+        <div class="depoimentos-logos-grid">
+          ${DEPOIMENTOS_LOGOS.map((l) => `<img src="${l.logo}" alt="${l.nome}" loading="lazy">`).join('')}
+        </div>
+      </div>
+    ` : ''}
+  `;
+}
+
+renderDepoimentos();
 </script>
 </body>
 </html>

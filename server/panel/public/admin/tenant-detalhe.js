@@ -93,6 +93,23 @@ function renderSecaoNegocio(t) {
   `;
 }
 
+// CA (US39.1) — pedido de "Novo número" ainda não atendido: o tenant já
+// confirmou que quer um número fornecido pela Kyvvo (POST
+// /api/whatsapp/solicitar-numero-novo) e ainda não tem meta_phone_number_id
+// (i.e., nenhum número foi vinculado ainda via /admin/whatsapp.html — ver
+// migration 037/US39.2). Só aparece enquanto o pedido está pendente.
+function renderSecaoNumeroNovo(t) {
+  if (!t.novo_numero_solicitado_em || t.meta_phone_number_id) return '';
+  return `
+    <section class="secao-detalhe">
+      <h3>Pedido de número novo</h3>
+      <p><strong>Solicitado em:</strong> ${formatarDataHora(t.novo_numero_solicitado_em)}</p>
+      <p><strong>DDD de preferência:</strong> ${t.novo_numero_ddd_preferencia ? escapeHtml(t.novo_numero_ddd_preferencia) : 'Sem preferência'}</p>
+      <p class="vazio-inline">Vincule um número em <a class="topbar-nav-link" href="/admin/whatsapp.html">Admin → WhatsApp → Números prontos</a> quando houver um disponível.</p>
+    </section>
+  `;
+}
+
 function renderSecaoResponsavel(t) {
   const email = t.responsavel ? escapeHtml(t.responsavel.email) : null;
   return `
@@ -186,6 +203,7 @@ async function renderDetalhe() {
     <a class="topbar-nav-link" href="/admin/painel.html">← Voltar para lista</a>
     <h2 class="titulo-detalhe">${escapeHtml(data.nome)}</h2>
     ${renderSecaoNegocio(data)}
+    ${renderSecaoNumeroNovo(data)}
     ${renderSecaoResponsavel(data)}
     ${renderSecaoStatus(data)}
     ${renderSecaoModulos(data)}

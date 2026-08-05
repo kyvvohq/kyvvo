@@ -66,7 +66,114 @@ async function verificarStatusConta() {
     document.body.classList.add('com-trial-banner');
     registrarEventoAnalytics('aviso_trial_exibido');
   }
+
+  // US59 — avisos contextuais de cobrança pendente e configuração
+  // incompleta. Separados do #trial-banner de propósito: aquele é um único
+  // aviso crítico não-dispensável (CA09/US52); estes podem se acumular (mais
+  // de uma pendência de configuração ao mesmo tempo) e alguns são
+  // dispensáveis pelo usuário.
+  renderAvisos(construirAvisos(status));
 }
+
+// Mensagem + rótulo/destino do botão de ação de cada tipo de aviso. `critico:
+// true` = sem botão de dispensar, some só quando a pendência é resolvida
+// (CA "avisos críticos permanecem visíveis enquanto pendência existir").
+function construirAvisos(status) {
+  const avisos = [];
+  if (status.pagamento_pendente) {
+    avisos.push({
+      id: 'pagamento_pendente',
+      critico: true,
+      mensagem: '⚠️ Não conseguimos confirmar seu último pagamento. Atualize sua forma de pagamento para evitar a suspensão do acesso.',
+      acaoLabel: 'Resolver agora',
+      acaoMenu: 'pagamentos',
+    });
+  }
+  const configuracao = status.configuracao || {};
+  if (configuracao.sem_servicos) {
+    avisos.push({
+      id: 'sem_servicos',
+      critico: false,
+      mensagem: 'Cadastre seus serviços para começar a receber agendamentos.',
+      acaoLabel: 'Cadastrar serviços',
+      acaoMenu: 'servicos',
+    });
+  }
+  if (configuracao.sem_profissionais) {
+    avisos.push({
+      id: 'sem_profissionais',
+      critico: false,
+      mensagem: 'Cadastre seus profissionais para organizar a agenda.',
+      acaoLabel: 'Cadastrar profissionais',
+      acaoMenu: 'profissionais',
+    });
+  }
+  if (configuracao.whatsapp_desconectado) {
+    avisos.push({
+      id: 'whatsapp_desconectado',
+      critico: false,
+      mensagem: 'Conecte seu WhatsApp para receber agendamentos automaticamente pelo bot.',
+      acaoLabel: 'Conectar WhatsApp',
+      acaoMenu: 'whatsapp',
+    });
+  }
+  return avisos;
+}
+
+let avisosAtuais = [];
+
+function idsAvisosDispensados() {
+  try {
+    return JSON.parse(localStorage.getItem('kyvvo_avisos_dispensados') || '[]');
+  } catch (e) {
+    return [];
+  }
+}
+
+// Auto-recupera avisos dispensados cuja pendência já não existe mais nesta
+// consulta — assim, se o usuário excluir todos os serviços de novo no
+// futuro, o aviso de "sem_servicos" volta a aparecer em vez de ficar
+// escondido pra sempre pela dispensa antiga.
+function renderAvisos(avisos) {
+  const idsAtuais = new Set(avisos.map((a) => a.id));
+  const dispensadosValidos = idsAvisosDispensados().filter((id) => idsAtuais.has(id));
+  localStorage.setItem('kyvvo_avisos_dispensados', JSON.stringify(dispensadosValidos));
+  avisosAtuais = avisos;
+  renderAvisosNaTela();
+}
+
+function renderAvisosNaTela() {
+  const painel = document.getElementById('avisos-painel');
+  if (!painel) return;
+  const dispensados = new Set(idsAvisosDispensados());
+  const visiveis = avisosAtuais.filter((a) => a.critico || !dispensados.has(a.id));
+  painel.innerHTML = visiveis.map((a) => `
+    <div class="aviso-item ${a.critico ? 'aviso-critico' : 'aviso-info'}" data-aviso-id="${a.id}">
+      <span>${a.mensagem}</span>
+      <div class="aviso-acoes">
+        ${a.acaoMenu ? `<button class="aviso-acao" data-acao-aviso-menu="${a.acaoMenu}">${a.acaoLabel}</button>` : ''}
+        ${a.critico ? '' : `<button class="aviso-dispensar" data-acao-dispensar-aviso="${a.id}" aria-label="Dispensar aviso">×</button>`}
+      </div>
+    </div>
+  `).join('');
+}
+
+function dispensarAviso(id) {
+  const atuais = idsAvisosDispensados();
+  if (!atuais.includes(id)) atuais.push(id);
+  localStorage.setItem('kyvvo_avisos_dispensados', JSON.stringify(atuais));
+  renderAvisosNaTela();
+}
+
+document.getElementById('avisos-painel').addEventListener('click', (e) => {
+  const dispensarBtn = e.target.closest('[data-acao-dispensar-aviso]');
+  if (dispensarBtn) {
+    dispensarAviso(dispensarBtn.dataset.acaoDispensarAviso);
+    return;
+  }
+  const acaoBtn = e.target.closest('[data-acao-aviso-menu]');
+  if (acaoBtn) selecionarMenu(acaoBtn.dataset.acaoAvisoMenu);
+});
 
 // US52 — funil de conversão pós-trial: dispara em "melhor esforço", sem
 // travar a UI nem exigir tratamento de erro (perder uma métrica de
@@ -84,8 +191,14 @@ function saudacaoPorHorario() {
   return 'Boa noite';
 }
 
-const nomeUsuario = (localStorage.getItem('kyvvo_nome') || '').split(' ')[0] || '';
-document.getElementById('saudacao').textContent = `${saudacaoPorHorario()}${nomeUsuario ? ', ' + nomeUsuario : ''}!`;
+// US57 — extraído em função pra poder re-renderizar a saudação assim que o
+// nome muda em "Meu Perfil", sem precisar de logout/login pra refletir
+// (antes só `kyvvo_nome` no localStorage era lido, e só uma vez, no load).
+function atualizarSaudacao() {
+  const nomeUsuario = (localStorage.getItem('kyvvo_nome') || '').split(' ')[0] || '';
+  document.getElementById('saudacao').textContent = `${saudacaoPorHorario()}${nomeUsuario ? ', ' + nomeUsuario : ''}!`;
+}
+atualizarSaudacao();
 
 const conteudo = document.getElementById('conteudo');
 const menuEl = document.querySelector('.menu');
@@ -928,6 +1041,15 @@ conteudo.addEventListener('click', (e) => {
     if (acaoProfissionalBtn.dataset.acaoProfissional === 'editar') abrirModalProfissional(profissional);
     if (acaoProfissionalBtn.dataset.acaoProfissional === 'excluir') abrirModalExcluirProfissional(profissional);
   }
+
+  // US61 — exclusão de bloqueio manual de agenda.
+  const acaoBloqueioBtn = e.target.closest('[data-acao-bloqueio]');
+  if (acaoBloqueioBtn) {
+    document.querySelectorAll('.menu-acoes.aberto').forEach((m) => m.classList.remove('aberto'));
+    const bloqueio = bloqueiosAtuais.find((b) => b.id === acaoBloqueioBtn.dataset.id);
+    if (!bloqueio) return;
+    if (acaoBloqueioBtn.dataset.acaoBloqueio === 'excluir') abrirModalExcluirBloqueio(bloqueio);
+  }
 });
 
 document.addEventListener('click', (e) => {
@@ -1349,17 +1471,21 @@ async function renderPagamentos() {
   }
 }
 
-// CA02/CA03/CA04 (US35) — modal de confirmação de cancelamento de assinatura,
-// no mesmo padrão de abrirModalExcluirServico/abrirModalCancelar.
+// CA02/CA03/CA04 (US35.2) — modal de confirmação de cancelamento de
+// assinatura, no mesmo padrão de abrirModalExcluirServico/abrirModalCancelar.
+// Mostra a data de fim do período já pago (calculada a partir da próxima
+// cobrança, já que o cancelamento não estorna o período corrente).
 function abrirModalCancelarAssinatura(dados) {
+  const dataAcesso = dados.proxima_cobranca ? formatarDataCurtaISO(dados.proxima_cobranca.data) : 'o fim do período já pago';
+
   abrirModal(
     '<h3>Cancelar assinatura</h3>',
     `
-      <p class="modal-texto">Ao cancelar todos os serviços Kyvvo ficarão inoperantes após a data da próxima cobrança. Deseja cancelar?</p>
+      <p class="modal-texto">Sua assinatura será encerrada. Você continuará com acesso até ${dataAcesso}. Após essa data, seu acesso será suspenso.</p>
       <div class="modal-erro" id="cancelar-assinatura-erro"></div>
       <div class="modal-acoes">
-        <button class="btn-secundario" id="btn-manter-assinatura">Sair</button>
-        <button class="btn-perigo" id="btn-confirmar-cancelamento">Confirmo</button>
+        <button class="btn-secundario" id="btn-manter-assinatura">Manter assinatura</button>
+        <button class="btn-perigo" id="btn-confirmar-cancelamento">Confirmar cancelamento</button>
       </div>
     `
   );
@@ -1374,14 +1500,13 @@ function abrirModalCancelarAssinatura(dados) {
 
     if (resultado && !resultado.error) {
       fecharModal();
-      const dataAcesso = dados.proxima_cobranca ? formatarDataCurtaISO(dados.proxima_cobranca.data) : 'o fim do período já pago';
       const dataFinal = resultado.acesso_ate ? formatarDataCurtaISO(resultado.acesso_ate) : dataAcesso;
       mostrarToast(`Assinatura cancelada. Seu acesso continua até ${dataFinal}.`, 'sucesso');
       renderPagamentos();
     } else {
       document.getElementById('cancelar-assinatura-erro').textContent = (resultado && resultado.error) || 'Erro ao cancelar assinatura.';
       btn.disabled = false;
-      btn.textContent = 'Confirmo';
+      btn.textContent = 'Confirmar cancelamento';
     }
   });
 }
@@ -1419,6 +1544,7 @@ async function render() {
   if (menuAtual === 'servicos') return renderServicos();
   if (menuAtual === 'profissionais') return renderProfissionais();
   if (menuAtual === 'clientes') return renderClientes();
+  if (menuAtual === 'bloqueios') return renderBloqueios();
   if (menuAtual === 'modulo:financeiro') return renderFinanceiro();
   if (menuAtual.startsWith('modulo:')) return renderModuloEmBreve();
 
@@ -1441,6 +1567,7 @@ function renderServicoItem(s, nomeProfissionalPreferencial) {
         <div class="agendamento-detalhe">Serviço: <strong>${s.nome}</strong></div>
         <div class="agendamento-detalhe">Duração: ${s.duracao_minutos} min</div>
         <div class="agendamento-detalhe">Valor: ${formatarPreco(s.preco)}</div>
+        ${s.descricao ? `<div class="agendamento-detalhe servico-descricao">${s.descricao}</div>` : ''}
         ${nomeProfissionalPreferencial ? `<div class="agendamento-detalhe">Profissional preferencial: ${nomeProfissionalPreferencial}</div>` : ''}
         ${desabilitado ? '<span class="badge badge-status-inativo">Desabilitado</span>' : ''}
       </div>
@@ -1500,6 +1627,8 @@ function abrirModalServico(servico) {
         <input type="number" id="servico-duracao" data-obrigatorio min="1" value="${editando ? servico.duracao_minutos : ''}">
         <label for="servico-preco">Preço em R$ (opcional)</label>
         <input type="number" id="servico-preco" min="0" step="0.01" value="${editando && servico.preco != null ? servico.preco : ''}">
+        <label for="servico-descricao">Descrição curta (opcional)</label>
+        <textarea id="servico-descricao" rows="2" maxlength="280" placeholder="Ex: inclui lavagem e finalização">${editando && servico.descricao ? servico.descricao : ''}</textarea>
         <label for="servico-profissional-preferencial">Profissional preferencial (opcional)</label>
         <select id="servico-profissional-preferencial"><option value="">Carregando profissionais...</option></select>
         <div class="modal-acoes">
@@ -1548,6 +1677,7 @@ function abrirModalServico(servico) {
       nome: document.getElementById('servico-nome').value.trim(),
       duracao_minutos: parseInt(document.getElementById('servico-duracao').value, 10),
       preco: precoValor ? parseFloat(precoValor) : null,
+      descricao: document.getElementById('servico-descricao').value.trim() || null,
       profissional_preferencial_id: document.getElementById('servico-profissional-preferencial').value || null,
     };
 
@@ -1782,6 +1912,165 @@ async function renderClientes() {
     : '<div class="vazio">Nenhum cliente ainda. Os clientes aparecem aqui assim que o primeiro agendamento é feito.</div>';
 
   conteudo.innerHTML = html;
+}
+
+// ---------- Bloqueios manuais de agenda (US61) ----------
+let bloqueiosAtuais = [];
+
+function renderBloqueioItem(b) {
+  const periodo = `${formatarDataCurta(b.inicio)} ${formatarHora(b.inicio)} – ${formatarDataCurta(b.fim)} ${formatarHora(b.fim)}`;
+  return `
+    <div class="agendamento-item servico-item" data-id="${b.id}">
+      <div class="servico-info">
+        <div class="agendamento-detalhe">Período: <strong>${periodo}</strong></div>
+        <div class="agendamento-detalhe">${b.profissional ? `Profissional: ${b.profissional}` : 'Toda a agenda'}</div>
+        ${b.motivo ? `<div class="agendamento-detalhe">${b.motivo}</div>` : ''}
+      </div>
+      <div class="servico-acoes">
+        <button class="btn-secundario acao-perigo" data-acao-bloqueio="excluir" data-id="${b.id}">Excluir</button>
+      </div>
+    </div>
+  `;
+}
+
+async function renderBloqueios() {
+  conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
+  const dataBloqueios = await api('/api/bloqueios');
+  if (!dataBloqueios) return;
+  bloqueiosAtuais = dataBloqueios.bloqueios;
+
+  let html = `
+    <div class="nav-periodo">
+      <strong>Bloqueios</strong>
+      <button class="btn-novo-agendamento" id="btn-novo-bloqueio">+ Novo bloqueio</button>
+    </div>
+  `;
+  html += bloqueiosAtuais.length
+    ? bloqueiosAtuais.map(renderBloqueioItem).join('')
+    : '<div class="vazio">Nenhum bloqueio cadastrado ainda.</div>';
+
+  conteudo.innerHTML = html;
+  document.getElementById('btn-novo-bloqueio').addEventListener('click', () => abrirModalBloqueio());
+}
+
+function abrirModalBloqueio() {
+  const hoje = formatarDataISO(new Date());
+  abrirModal(
+    '<h3>Novo bloqueio</h3>',
+    `
+      <form id="form-bloqueio">
+        <div class="modal-erro" id="bloqueio-erro"></div>
+        <label for="bloqueio-data-inicio">Data de início *</label>
+        <input type="date" id="bloqueio-data-inicio" data-obrigatorio min="${hoje}" value="${hoje}">
+        <label for="bloqueio-hora-inicio">Hora de início *</label>
+        <input type="time" id="bloqueio-hora-inicio" data-obrigatorio>
+        <label for="bloqueio-data-fim">Data de fim *</label>
+        <input type="date" id="bloqueio-data-fim" data-obrigatorio min="${hoje}" value="${hoje}">
+        <label for="bloqueio-hora-fim">Hora de fim *</label>
+        <input type="time" id="bloqueio-hora-fim" data-obrigatorio>
+        <label for="bloqueio-profissional">Profissional (opcional)</label>
+        <select id="bloqueio-profissional"><option value="">Toda a agenda</option></select>
+        <label for="bloqueio-motivo">Motivo (opcional)</label>
+        <input type="text" id="bloqueio-motivo" placeholder="Ex: Férias, Feriado, Compromisso pessoal">
+        <div class="modal-acoes">
+          <button type="button" class="btn-secundario" id="btn-cancelar-bloqueio">Cancelar</button>
+          <button type="submit" class="btn-primario" id="btn-salvar-bloqueio">Criar bloqueio</button>
+        </div>
+      </form>
+    `
+  );
+
+  document.getElementById('btn-cancelar-bloqueio').addEventListener('click', fecharModal);
+
+  api('/api/profissionais').then((resultado) => {
+    const select = document.getElementById('bloqueio-profissional');
+    if (!resultado || !resultado.profissionais) return;
+    select.innerHTML = '<option value="">Toda a agenda</option>' +
+      resultado.profissionais.map((p) => `<option value="${p.id}">${p.nome}</option>`).join('');
+  });
+
+  const form = document.getElementById('form-bloqueio');
+  form.querySelectorAll('[data-obrigatorio]').forEach((campo) => {
+    campo.addEventListener('input', () => campo.classList.remove('campo-invalido'));
+  });
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const erroEl = document.getElementById('bloqueio-erro');
+    erroEl.textContent = '';
+    const invalido = validarObrigatorios(form);
+    if (invalido) {
+      erroEl.textContent = 'Preencha os campos obrigatórios destacados em vermelho.';
+      invalido.focus();
+      return;
+    }
+
+    // Ancorado em Brasília (-03:00), mesmo padrão do resto do sistema —
+    // nunca deixar o fuso do navegador do usuário influenciar o horário.
+    const inicioISO = new Date(`${document.getElementById('bloqueio-data-inicio').value}T${document.getElementById('bloqueio-hora-inicio').value}:00-03:00`).toISOString();
+    const fimISO = new Date(`${document.getElementById('bloqueio-data-fim').value}T${document.getElementById('bloqueio-hora-fim').value}:00-03:00`).toISOString();
+
+    if (fimISO <= inicioISO) {
+      erroEl.textContent = 'O fim do bloqueio deve ser depois do início.';
+      return;
+    }
+
+    const btn = document.getElementById('btn-salvar-bloqueio');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    const payload = {
+      inicio: inicioISO,
+      fim: fimISO,
+      profissional_id: document.getElementById('bloqueio-profissional').value || null,
+      motivo: document.getElementById('bloqueio-motivo').value.trim() || null,
+    };
+
+    const resultado = await api('/api/bloqueios', { method: 'POST', body: JSON.stringify(payload) });
+
+    if (resultado && !resultado.error) {
+      fecharModal();
+      mostrarToast('Bloqueio criado com sucesso.', 'sucesso');
+      renderBloqueios();
+    } else {
+      erroEl.textContent = (resultado && resultado.error) || 'Erro ao criar bloqueio.';
+      btn.disabled = false;
+      btn.textContent = 'Criar bloqueio';
+    }
+  });
+}
+
+function abrirModalExcluirBloqueio(bloqueio) {
+  abrirModal(
+    '<h3>Excluir bloqueio</h3>',
+    `
+      <p class="modal-texto">Tem certeza que deseja excluir esse bloqueio? A agenda volta a ficar disponível nesse período.</p>
+      <div class="modal-erro" id="excluir-bloqueio-erro"></div>
+      <div class="modal-acoes">
+        <button class="btn-secundario" id="btn-voltar-excluir-bloqueio">Cancelar</button>
+        <button class="btn-perigo" id="btn-confirmar-excluir-bloqueio">Excluir</button>
+      </div>
+    `
+  );
+
+  document.getElementById('btn-voltar-excluir-bloqueio').addEventListener('click', fecharModal);
+  document.getElementById('btn-confirmar-excluir-bloqueio').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-confirmar-excluir-bloqueio');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    const resultado = await api(`/api/bloqueios/${bloqueio.id}`, { method: 'DELETE' });
+
+    if (resultado && !resultado.error) {
+      fecharModal();
+      mostrarToast('Bloqueio excluído com sucesso.', 'sucesso');
+      renderBloqueios();
+    } else {
+      document.getElementById('excluir-bloqueio-erro').textContent = (resultado && resultado.error) || 'Erro ao excluir bloqueio.';
+      btn.disabled = false;
+      btn.textContent = 'Excluir';
+    }
+  });
 }
 
 function renderModuloEmBreve() {
@@ -2290,6 +2579,11 @@ async function renderPerfil() {
     if (resultado && !resultado.error) {
       mostrarToast('Perfil atualizado com sucesso.', 'sucesso');
       preencherUserMenu(resultado);
+      // US57 — sem isso, a saudação do topo ("Bom dia, {nome antigo}!")
+      // ficava com o nome desatualizado até um novo login, mesmo com o
+      // resto da tela (user menu) já refletindo o nome novo.
+      localStorage.setItem('kyvvo_nome', resultado.nome_responsavel || '');
+      atualizarSaudacao();
       renderPerfil();
     } else {
       mostrarToast((resultado && resultado.error) || 'Erro ao salvar. Tente novamente.', 'erro');
@@ -2520,15 +2814,19 @@ async function renderWhatsapp() {
   }
 
   // US46.1 — antes de mostrar o botão de self-service, explica que ele é uma
-  // das duas formas de conectar o WhatsApp (a outra, "número pronto", ainda
-  // depende do time da Kyvvo, então não pode ser anunciada como automática).
-  const linkSuporte = contaStatus?.suporte_whatsapp
-    ? `<a href="https://wa.me/${contaStatus.suporte_whatsapp}" target="_blank" rel="noopener">Fale com o suporte</a>`
-    : 'Fale com o nosso suporte';
+  // das duas formas de conectar o WhatsApp. US39.1 trocou o antigo link "fale
+  // com o suporte" pro caminho "Número pronto" por um pedido de verdade
+  // (POST /api/whatsapp/solicitar-numero-novo), registrado no tenant pra a
+  // operação (Bruno) ver quem está esperando — ver checklist da jornada na
+  // task US39.1 do Notion. Continua sem prometer prazo fechado.
+  const pedido = status.pedidoNumeroNovo;
   const planosInfo = status.conectado ? '' : `
     <div class="whatsapp-planos-info">
       <p><strong>Traga seu número</strong> — disponível agora: conecte o WhatsApp Business que sua empresa já usa clicando no botão abaixo, pelo Embedded Signup oficial da Meta. A ativação depende só da verificação da Meta ser concluída.</p>
-      <p><strong>Número pronto</strong> — sob consulta: prefere que a Kyvvo configure um número novo pra você, sem esforço técnico? ${linkSuporte} pra confirmar disponibilidade — hoje esse caminho ainda é combinado direto com o nosso time, não é automático.</p>
+      ${pedido
+        ? `<p><strong>Número pronto</strong> — pedido recebido em ${formatarDataHoraCurta(pedido.solicitadoEm)}. Nossa equipe vai configurar um número novo pra você e avisar assim que estiver pronto (ainda não temos um prazo fechado pra isso).</p>`
+        : `<p><strong>Número pronto</strong> — prefere que a Kyvvo configure um número novo pra você, sem esforço técnico? O time confirma disponibilidade e ativa o número; hoje esse caminho ainda depende de configuração manual, não é automático.</p>
+           <button type="button" class="btn-secundario btn-tabela" id="btn-pedir-numero-novo" style="margin-top:4px">Pedir número novo</button>`}
     </div>
   `;
 
@@ -2547,7 +2845,77 @@ async function renderWhatsapp() {
 
   if (!status.conectado) {
     iniciarConexaoWhatsapp();
+    const btnPedirNumeroNovo = document.getElementById('btn-pedir-numero-novo');
+    if (btnPedirNumeroNovo) btnPedirNumeroNovo.addEventListener('click', abrirModalPedirNumeroNovo);
   }
+}
+
+// Formata timestamp completo (data + hora) em pt-BR curto, ex.: "03/08/2026
+// às 14:30" — usado só no pedido de número novo, distinto de
+// formatarDataCurtaISO (que só recebe "YYYY-MM-DD" sem hora).
+function formatarDataHoraCurta(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  const data = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const hora = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  return `${data} às ${hora}`;
+}
+
+// CA (US39.1) — passos 2/3 da jornada "Novo número": os outros dados mínimos
+// (nome do negócio, telefone, segmento, horário) já foram coletados no
+// cadastro, então o formulário só pede o que ainda falta (preferência de DDD)
+// e a confirmação de que o tenant aceita usar um número novo fornecido pela
+// Kyvvo. Depois de enviar, mostra a mensagem de expectativa (sem prometer
+// prazo) no lugar do formulário.
+function abrirModalPedirNumeroNovo() {
+  abrirModal(
+    '<h3>Pedir número novo</h3>',
+    `
+      <p class="modal-texto">A Kyvvo configura um número de WhatsApp novo pro seu negócio — você não precisa fazer nada técnico. Prazo é confirmado depois que a gente validar disponibilidade.</p>
+      <label for="numero-novo-ddd">DDD de preferência (opcional)</label>
+      <input type="text" id="numero-novo-ddd" placeholder="Ex.: 34" maxlength="3" inputmode="numeric">
+      <label class="dia-checkbox" style="margin-top:12px">
+        <input type="checkbox" id="numero-novo-aceite">
+        Entendo que o número será fornecido pelo time Kyvvo e serei avisado quando estiver pronto.
+      </label>
+      <div class="modal-erro" id="numero-novo-erro"></div>
+      <div class="modal-acoes">
+        <button class="btn-secundario" id="btn-cancelar-numero-novo">Cancelar</button>
+        <button class="btn-primario" id="btn-confirmar-numero-novo">Enviar pedido</button>
+      </div>
+    `
+  );
+
+  document.getElementById('btn-cancelar-numero-novo').addEventListener('click', fecharModal);
+  document.getElementById('btn-confirmar-numero-novo').addEventListener('click', async () => {
+    const erroEl = document.getElementById('numero-novo-erro');
+    erroEl.textContent = '';
+
+    if (!document.getElementById('numero-novo-aceite').checked) {
+      erroEl.textContent = 'Confirme que você entendeu como funciona antes de enviar.';
+      return;
+    }
+
+    const btn = document.getElementById('btn-confirmar-numero-novo');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    const dddPreferencia = document.getElementById('numero-novo-ddd').value.trim();
+    const resultado = await api('/api/whatsapp/solicitar-numero-novo', {
+      method: 'POST',
+      body: JSON.stringify({ ddd_preferencia: dddPreferencia || null }),
+    });
+
+    if (resultado && !resultado.error) {
+      fecharModal();
+      mostrarToast('Pedido enviado! A gente avisa assim que o número estiver pronto.', 'sucesso');
+      renderWhatsapp();
+    } else {
+      erroEl.textContent = (resultado && resultado.error) || 'Erro ao enviar o pedido.';
+      btn.disabled = false;
+      btn.textContent = 'Enviar pedido';
+    }
+  });
 }
 
 async function iniciarConexaoWhatsapp() {

@@ -1,7 +1,46 @@
+// CA01/CA03 (US15) — captura de erros em produção (Sentry). Sentry precisa
+// ser exigido antes de qualquer outro módulo pra instrumentar chamadas
+// HTTP/DB automaticamente (guia oficial do SDK Node). Só ativa se
+// SENTRY_DSN estiver configurado no ambiente — sem DSN, o painel roda
+// exatamente como hoje, mesmo raciocínio de "sem credencial, recurso fica
+// inerte" já usado em META_WHATSAPP_TOKEN/POSTHOG_KEY.
+const Sentry = require('@sentry/node');
+// CA03 — nunca manda payload de erro com senha/token/cartão em texto puro.
+// Aplica recursivamente porque `event.request.data` pode aninhar o corpo da
+// requisição (ex.: `usuario.senha` no POST /admin/api/tenants).
+const CAMPOS_SENSIVEIS_SENTRY = /senha|password|token|jwt|authorization|cookie|cvv|numero_cartao|card_number/i;
+function limparDadosSensiveisSentry(event) {
+  const limpar = (obj) => {
+    if (!obj || typeof obj !== 'object') return;
+    for (const chave of Object.keys(obj)) {
+      if (CAMPOS_SENSIVEIS_SENTRY.test(chave)) obj[chave] = '[redacted]';
+      else if (obj[chave] && typeof obj[chave] === 'object') limpar(obj[chave]);
+    }
+  };
+  if (event.request) {
+    limpar(event.request.data);
+    limpar(event.request.headers);
+    delete event.request.cookies;
+  }
+  return event;
+}
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV || 'development',
+    sendDefaultPii: false,
+    beforeSend: limparDadosSensiveisSentry,
+  });
+}
+
 // trustProxy: nginx (na frente do processo) já repassa X-Forwarded-For real —
 // necessário pra `request.ip` refletir o IP do cliente, não o do proxy
 // interno. Usado pelo `remoteIp` exigido na tokenização de cartão (US32).
 const fastify = require('fastify')({ logger: true, trustProxy: true });
+// Precisa vir logo após criar a instância, antes de registrar plugins/rotas —
+// é o que faz exceções não tratadas em qualquer rota chegarem no Sentry
+// (CA01), sem precisar de try/catch manual espalhado pelo código.
+if (process.env.SENTRY_DSN) Sentry.setupFastifyErrorHandler(fastify);
 const jwt = require('@fastify/jwt');
 const cors = require('@fastify/cors');
 const staticPlugin = require('@fastify/static');
@@ -180,6 +219,25 @@ function dentroDoHorarioFuncionamento(tenant, dataHoraISO, duracaoMinutos = 0) {
   }
 
   return { valido: true };
+}
+
+// US61 — checa se [dataHoraISO, dataHoraISO + duracaoMinutos) cai dentro de
+// algum bloqueio manual de agenda ativo (profissional_id nulo = bloqueio
+// vale pra agenda inteira). Mesmo padrão de overlap já usado nas queries de
+// conflito de agendamento (a.inicio < fim_novo AND inicio_novo < a.fim).
+// Usada tanto pra criar/reagendar agendamentos quanto pro cálculo de
+// disponibilidade — aplica mesmo em encaixe, já que um bloqueio manual
+// significa "agenda indisponível", não só "já tem algo marcado".
+async function buscarBloqueioConflitante(tenantId, profissionalId, dataHoraISO, duracaoMinutos) {
+  const { rows } = await pool.query(
+    `SELECT motivo FROM bloqueios_agenda
+     WHERE tenant_id = $1 AND (profissional_id IS NULL OR profissional_id = $2)
+       AND inicio < $3::timestamptz + ($4 * interval '1 minute')
+       AND $3::timestamptz < fim
+     LIMIT 1`,
+    [tenantId, profissionalId, dataHoraISO, duracaoMinutos]
+  );
+  return rows[0] || null;
 }
 
 // Data (YYYY-MM-DD) de "agora" em horário de Brasília — usada como fallback
@@ -687,6 +745,20 @@ async function start() {
     // mais curto (ou já "expirado") do que o que realmente estava valendo.
     // Unifica no mesmo cálculo usado no resto do sistema.
     const trial = calcularTrialTenant(info);
+
+    // US59 — dados pros avisos contextuais do painel (CA "trial, configuração
+    // incompleta e cobrança pendente"): sem serviço/profissional cadastrado
+    // ou WhatsApp desconectado, o tenant não consegue receber agendamento
+    // nenhum pelo bot, então vale nudge mesmo fora do dashboard.
+    const { rows: contagem } = await pool.query(
+      `SELECT
+         (SELECT COUNT(*)::int FROM servicos WHERE tenant_id = $1 AND ativo = true AND excluido_em IS NULL) AS servicos,
+         (SELECT COUNT(*)::int FROM profissionais WHERE tenant_id = $1) AS profissionais,
+         (SELECT meta_phone_number_id FROM tenants WHERE id = $1) AS meta_phone_number_id`,
+      [tenantId]
+    );
+    const configInfo = contagem[0];
+
     return {
       tenant_id: tenantId,
       email: info.email,
@@ -698,6 +770,12 @@ async function start() {
       dias_restantes: trial.trialDiasRestantes,
       suporte_email: EMAIL_SUPORTE,
       suporte_whatsapp: WHATSAPP_SUPORTE,
+      pagamento_pendente: info.status === 'inadimplente',
+      configuracao: {
+        sem_servicos: configInfo.servicos === 0,
+        sem_profissionais: configInfo.profissionais === 0,
+        whatsapp_desconectado: !configInfo.meta_phone_number_id,
+      },
     };
   });
 
@@ -812,6 +890,14 @@ async function start() {
         return reply.code(400).send({ error: validacao.motivo });
       }
 
+      // Bloqueio manual (US61) — mesma checagem do POST /agendamentos.
+      const bloqueioConflitante = await buscarBloqueioConflitante(tenantId, atual.profissional_id, dataHora, atual.duracao_minutos);
+      if (bloqueioConflitante) {
+        return reply.code(409).send({
+          error: `Agenda bloqueada nesse período${bloqueioConflitante.motivo ? `: ${bloqueioConflitante.motivo}` : '.'}`,
+        });
+      }
+
       const { rows: conflitos } = await pool.query(
         `SELECT a.id
          FROM agendamentos a
@@ -906,6 +992,20 @@ async function start() {
       [tenantId, profissional, data]
     );
 
+    // US61 — bloqueios manuais que tocam esse dia (profissional_id nulo =
+    // agenda inteira). Limites do dia ancorados em Brasília explicitamente
+    // (mesmo padrão do "T00:00:00-03:00" usado no loop de slots abaixo) —
+    // nunca deixar o Postgres inferir o fuso de um cast implícito de data.
+    const inicioDiaISO = `${data}T00:00:00-03:00`;
+    const fimDiaISO = new Date(new Date(inicioDiaISO).getTime() + 24 * 60 * 60000).toISOString();
+    const { rows: bloqueios } = await pool.query(
+      `SELECT inicio, fim, motivo FROM bloqueios_agenda
+       WHERE tenant_id = $1 AND (profissional_id IS NULL OR profissional_id = $2)
+         AND inicio < $4::timestamptz
+         AND $3::timestamptz < fim`,
+      [tenantId, profissional, inicioDiaISO, fimDiaISO]
+    );
+
     const duracaoMinutos = servicoInfo.duracao_minutos;
     const slots = [];
     for (
@@ -935,7 +1035,13 @@ async function start() {
         return inicioSlot < fimOcupado && inicioOcupado < fimSlot;
       });
 
-      slots.push({ hora: inicioSlot.toISOString(), disponivel: !conflita });
+      const bloqueado = bloqueios.some((b) => {
+        const inicioBloqueio = new Date(b.inicio);
+        const fimBloqueio = new Date(b.fim);
+        return inicioSlot < fimBloqueio && inicioBloqueio < fimSlot;
+      });
+
+      slots.push({ hora: inicioSlot.toISOString(), disponivel: !conflita && !bloqueado });
     }
 
     return { data, profissional, servico, duracaoMinutos, slots };
@@ -944,17 +1050,21 @@ async function start() {
   fastify.get('/api/servicos', { preHandler: [fastify.authenticate] }, async (request) => {
     const { tenantId } = request.user;
     const { rows } = await pool.query(
-      `SELECT id, nome, duracao_minutos, preco, ativo, profissional_preferencial_id
+      `SELECT id, nome, duracao_minutos, preco, descricao, ativo, profissional_preferencial_id
        FROM servicos WHERE tenant_id = $1 AND excluido_em IS NULL ORDER BY nome`,
       [tenantId]
     );
     return { servicos: rows };
   });
 
+  // Descrição curta do serviço (US60/CA02) — limite pra não virar um texto
+  // longo dentro do card da listagem.
+  const DESCRICAO_SERVICO_MAX = 280;
+
   // ---------- CRUD de serviços (US17/ST17.1) ----------
   fastify.post('/api/servicos', { preHandler: [fastify.authenticate] }, async (request, reply) => {
     const { tenantId } = request.user;
-    const { nome, duracao_minutos: duracaoMinutos, preco, profissional_preferencial_id: profissionalPreferencialId } = request.body || {};
+    const { nome, duracao_minutos: duracaoMinutos, preco, descricao, profissional_preferencial_id: profissionalPreferencialId } = request.body || {};
 
     if (!nome || !nome.trim()) {
       return reply.code(400).send({ error: 'Campo "nome" é obrigatório' });
@@ -965,12 +1075,15 @@ async function start() {
     if (preco !== undefined && preco !== null && (!Number.isFinite(preco) || preco < 0)) {
       return reply.code(400).send({ error: 'Campo "preco" deve ser um número maior ou igual a zero' });
     }
+    if (descricao && descricao.length > DESCRICAO_SERVICO_MAX) {
+      return reply.code(400).send({ error: `Campo "descricao" deve ter no máximo ${DESCRICAO_SERVICO_MAX} caracteres` });
+    }
 
     const { rows } = await pool.query(
-      `INSERT INTO servicos (tenant_id, nome, duracao_minutos, preco, profissional_preferencial_id)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, nome, duracao_minutos, preco, ativo, profissional_preferencial_id`,
-      [tenantId, nome.trim(), duracaoMinutos, preco ?? null, profissionalPreferencialId || null]
+      `INSERT INTO servicos (tenant_id, nome, duracao_minutos, preco, descricao, profissional_preferencial_id)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, nome, duracao_minutos, preco, descricao, ativo, profissional_preferencial_id`,
+      [tenantId, nome.trim(), duracaoMinutos, preco ?? null, descricao ? descricao.trim() : null, profissionalPreferencialId || null]
     );
     reply.code(201);
     return rows[0];
@@ -979,7 +1092,7 @@ async function start() {
   fastify.patch('/api/servicos/:id', { preHandler: [fastify.authenticate] }, async (request, reply) => {
     const { tenantId } = request.user;
     const { id } = request.params;
-    const { nome, duracao_minutos: duracaoMinutos, preco, ativo, profissional_preferencial_id: profissionalPreferencialId } = request.body || {};
+    const { nome, duracao_minutos: duracaoMinutos, preco, descricao, ativo, profissional_preferencial_id: profissionalPreferencialId } = request.body || {};
 
     if (nome !== undefined && !nome.trim()) {
       return reply.code(400).send({ error: 'Campo "nome" não pode ficar vazio' });
@@ -990,18 +1103,23 @@ async function start() {
     if (preco !== undefined && preco !== null && (!Number.isFinite(preco) || preco < 0)) {
       return reply.code(400).send({ error: 'Campo "preco" deve ser um número maior ou igual a zero' });
     }
+    if (descricao && descricao.length > DESCRICAO_SERVICO_MAX) {
+      return reply.code(400).send({ error: `Campo "descricao" deve ter no máximo ${DESCRICAO_SERVICO_MAX} caracteres` });
+    }
 
     const { rows } = await pool.query(
       `UPDATE servicos SET
          nome = COALESCE($3, nome),
          duracao_minutos = COALESCE($4, duracao_minutos),
          preco = CASE WHEN $5 THEN $6 ELSE preco END,
-         ativo = COALESCE($7, ativo),
-         profissional_preferencial_id = CASE WHEN $8 THEN $9 ELSE profissional_preferencial_id END
+         descricao = CASE WHEN $7 THEN $8 ELSE descricao END,
+         ativo = COALESCE($9, ativo),
+         profissional_preferencial_id = CASE WHEN $10 THEN $11 ELSE profissional_preferencial_id END
        WHERE id = $1 AND tenant_id = $2 AND excluido_em IS NULL
-       RETURNING id, nome, duracao_minutos, preco, ativo, profissional_preferencial_id`,
+       RETURNING id, nome, duracao_minutos, preco, descricao, ativo, profissional_preferencial_id`,
       [
         id, tenantId, nome ? nome.trim() : null, duracaoMinutos ?? null, preco !== undefined, preco ?? null,
+        descricao !== undefined, descricao ? descricao.trim() : null,
         ativo ?? null, profissionalPreferencialId !== undefined, profissionalPreferencialId || null,
       ]
     );
@@ -1164,6 +1282,88 @@ async function start() {
     return { ok: true };
   });
 
+  // ---------- Bloqueios manuais de agenda (US61) ----------
+  fastify.get('/api/bloqueios', { preHandler: [fastify.authenticate] }, async (request) => {
+    const { tenantId } = request.user;
+    const { rows } = await pool.query(
+      `SELECT b.id, b.profissional_id, p.nome AS profissional, b.inicio, b.fim, b.motivo
+       FROM bloqueios_agenda b
+       LEFT JOIN profissionais p ON p.id = b.profissional_id
+       WHERE b.tenant_id = $1
+       ORDER BY b.inicio`,
+      [tenantId]
+    );
+    return { bloqueios: rows };
+  });
+
+  fastify.post('/api/bloqueios', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const { tenantId } = request.user;
+    const { inicio, fim, motivo, profissional_id: profissionalId } = request.body || {};
+
+    if (!inicio || !fim) {
+      return reply.code(400).send({ error: 'Campos "inicio" e "fim" são obrigatórios' });
+    }
+    const inicioData = new Date(inicio);
+    const fimData = new Date(fim);
+    if (Number.isNaN(inicioData.getTime()) || Number.isNaN(fimData.getTime())) {
+      return reply.code(400).send({ error: 'Datas inválidas' });
+    }
+    if (fimData <= inicioData) {
+      return reply.code(400).send({ error: 'O fim do bloqueio deve ser depois do início' });
+    }
+
+    if (profissionalId) {
+      const { rows: profissionalRows } = await pool.query(
+        'SELECT id FROM profissionais WHERE id = $1 AND tenant_id = $2',
+        [profissionalId, tenantId]
+      );
+      if (!profissionalRows[0]) {
+        return reply.code(404).send({ error: 'Profissional não encontrado' });
+      }
+    }
+
+    // Sobreposição inválida (CA04): não deixa bloquear um período que já tem
+    // agendamento confirmado — o dono precisa cancelar/reagendar esses
+    // atendimentos antes de bloquear o horário, em vez do bloqueio silenciar
+    // um conflito que já existe.
+    const { rows: conflitos } = await pool.query(
+      `SELECT COUNT(*)::int AS total
+       FROM agendamentos a
+       JOIN servicos s ON s.id = a.servico_id
+       WHERE a.tenant_id = $1
+         AND a.status = 'confirmado'
+         AND ($2::uuid IS NULL OR a.profissional_id = $2)
+         AND a.data_hora < $4::timestamptz
+         AND $3::timestamptz < a.data_hora + (s.duracao_minutos * interval '1 minute')`,
+      [tenantId, profissionalId || null, inicio, fim]
+    );
+    if (conflitos[0].total > 0) {
+      return reply.code(409).send({
+        error: `Não é possível bloquear: há ${conflitos[0].total} agendamento(s) confirmado(s) nesse período.`,
+      });
+    }
+
+    const { rows } = await pool.query(
+      `INSERT INTO bloqueios_agenda (tenant_id, profissional_id, inicio, fim, motivo)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, profissional_id, inicio, fim, motivo`,
+      [tenantId, profissionalId || null, inicio, fim, motivo ? motivo.trim() : null]
+    );
+    reply.code(201);
+    return rows[0];
+  });
+
+  fastify.delete('/api/bloqueios/:id', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const { tenantId } = request.user;
+    const { id } = request.params;
+
+    const { rowCount } = await pool.query('DELETE FROM bloqueios_agenda WHERE id = $1 AND tenant_id = $2', [id, tenantId]);
+    if (!rowCount) {
+      return reply.code(404).send({ error: 'Bloqueio não encontrado' });
+    }
+    return { ok: true };
+  });
+
   fastify.post('/api/agendamentos', { preHandler: [fastify.authenticate] }, async (request, reply) => {
     const { tenantId } = request.user;
     const {
@@ -1225,6 +1425,16 @@ async function start() {
     const validacaoHorario = dentroDoHorarioFuncionamento(tenantRows[0], dataHora, servicoInfo.duracao_minutos);
     if (!validacaoHorario.valido) {
       return reply.code(400).send({ error: validacaoHorario.motivo });
+    }
+
+    // Bloqueio manual (US61) vale mesmo pra encaixe: diferente de "já tem
+    // algo marcado" (o que encaixe explicitamente ignora), um bloqueio
+    // significa que a agenda não está disponível nesse período.
+    const bloqueioConflitante = await buscarBloqueioConflitante(tenantId, profissionalId, dataHora, servicoInfo.duracao_minutos);
+    if (bloqueioConflitante) {
+      return reply.code(409).send({
+        error: `Agenda bloqueada nesse período${bloqueioConflitante.motivo ? `: ${bloqueioConflitante.motivo}` : '.'}`,
+      });
     }
 
     // Encaixe é uma exceção manual feita pela dona do salão: sobrepor um
@@ -1466,9 +1676,21 @@ async function start() {
   // usando o META_WHATSAPP_TOKEN compartilhado do Usuário do Sistema.
   fastify.get('/api/whatsapp/status', { preHandler: [fastify.authenticate] }, async (request) => {
     const { tenantId } = request.user;
-    const { rows } = await pool.query('SELECT meta_phone_number_id FROM tenants WHERE id = $1', [tenantId]);
-    const phoneNumberId = rows[0] && rows[0].meta_phone_number_id;
-    const status = { conectado: false, phoneNumberId: phoneNumberId || null };
+    const { rows } = await pool.query(
+      'SELECT meta_phone_number_id, novo_numero_solicitado_em, novo_numero_ddd_preferencia FROM tenants WHERE id = $1',
+      [tenantId]
+    );
+    const tenant = rows[0] || {};
+    const phoneNumberId = tenant.meta_phone_number_id;
+    const status = {
+      conectado: false,
+      phoneNumberId: phoneNumberId || null,
+      // CA (US39.1) — front usa isso pra trocar o botão "Pedir número novo"
+      // por um card de "pedido recebido" sem precisar de outra chamada.
+      pedidoNumeroNovo: tenant.novo_numero_solicitado_em
+        ? { solicitadoEm: tenant.novo_numero_solicitado_em, dddPreferencia: tenant.novo_numero_ddd_preferencia }
+        : null,
+    };
     if (!phoneNumberId) return status;
 
     const metaToken = process.env.META_WHATSAPP_TOKEN;
@@ -1495,6 +1717,41 @@ async function start() {
       status.erro = `Falha ao contatar a Meta: ${err.message}`;
     }
     return status;
+  });
+
+  // CA (US39.1) — pedido de "Novo número": passos 2/3 da jornada (coleta de
+  // dados mínimos + confirmação de expectativa, sem prometer SLA). Os outros
+  // dados mínimos (nome do negócio, telefone, segmento, horário) já foram
+  // coletados no cadastro — só registra a preferência de DDD e o timestamp,
+  // pra a operação ver quem está esperando (aparece em GET
+  // /admin/api/tenants/:id, e o vínculo do número em si já é feito por
+  // /admin/api/numeros-prontos/:id/vincular, ver migration 037).
+  fastify.post('/api/whatsapp/solicitar-numero-novo', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const { tenantId } = request.user;
+    const { ddd_preferencia: dddPreferencia } = request.body || {};
+
+    const { rows } = await pool.query(
+      'SELECT nome, telefone, segmento, horario_abertura, horario_fechamento, meta_phone_number_id, novo_numero_solicitado_em FROM tenants WHERE id = $1',
+      [tenantId]
+    );
+    const tenant = rows[0];
+    if (!tenant) {
+      return reply.code(404).send({ error: 'Tenant não encontrado.' });
+    }
+    if (tenant.meta_phone_number_id) {
+      return reply.code(409).send({ error: 'Este salão já tem um número de WhatsApp conectado.' });
+    }
+    if (tenant.novo_numero_solicitado_em) {
+      return reply.code(409).send({ error: 'Você já pediu um número novo. Nossa equipe vai avisar quando estiver pronto.' });
+    }
+
+    const { rows: atualizadoRows } = await pool.query(
+      `UPDATE tenants SET novo_numero_ddd_preferencia = $2, novo_numero_solicitado_em = now()
+       WHERE id = $1
+       RETURNING nome, telefone, segmento, horario_abertura, horario_fechamento, novo_numero_ddd_preferencia, novo_numero_solicitado_em`,
+      [tenantId, dddPreferencia || null]
+    );
+    return atualizadoRows[0];
   });
 
   // Recebe o resultado do Embedded Signup (code + waba_id + phone_number_id,
@@ -2664,6 +2921,143 @@ async function start() {
     }
 
     return { meta, verificadoEm: new Date().toISOString() };
+  });
+
+  // ---------- Números prontos (US39.2 — plano "Novo número") ----------
+  // Inventário de números adquiridos manualmente pela operação (fora do
+  // repositório, ver US40) que um admin cadastra aqui, vincula a um salão e
+  // testa antes de considerar operacional. Vincular só copia
+  // meta_phone_number_id/meta_waba_id pra tenants — o resto (status/webhook
+  // via Cloud API) já funciona igual ao self-service (Embedded Signup).
+  fastify.get('/admin/api/numeros-prontos', { preHandler: [fastify.authenticateAdmin] }, async () => {
+    const { rows } = await pool.query(
+      `SELECT n.*, t.nome AS tenant_nome
+       FROM numeros_prontos n
+       LEFT JOIN tenants t ON t.id = n.tenant_id
+       ORDER BY n.criado_em DESC`
+    );
+    return { numeros: rows };
+  });
+
+  fastify.post('/admin/api/numeros-prontos', { preHandler: [fastify.authenticateAdmin] }, async (request, reply) => {
+    const { telefone, meta_phone_number_id: metaPhoneNumberId, meta_waba_id: metaWabaId } = request.body || {};
+    if (!telefone || !metaPhoneNumberId || !metaWabaId) {
+      return reply.code(400).send({ error: 'Informe telefone, meta_phone_number_id e meta_waba_id.' });
+    }
+
+    try {
+      const { rows } = await pool.query(
+        `INSERT INTO numeros_prontos (telefone, meta_phone_number_id, meta_waba_id, criado_por)
+         VALUES ($1, $2, $3, $4) RETURNING *`,
+        [telefone.trim(), metaPhoneNumberId.trim(), metaWabaId.trim(), request.admin.adminId]
+      );
+      reply.code(201);
+      return rows[0];
+    } catch (erro) {
+      if (erro.code === '23505') {
+        return reply.code(409).send({ error: 'Esse Phone Number ID já está cadastrado.' });
+      }
+      throw erro;
+    }
+  });
+
+  // CA (US39.2) — vincula um número disponível a um salão: grava o tenant no
+  // registro do número e propaga meta_phone_number_id/meta_waba_id pra
+  // tenants, mesmas colunas usadas pelo self-service (033/034), pra todo o
+  // resto da integração (status, webhook) funcionar sem distinção.
+  fastify.post('/admin/api/numeros-prontos/:id/vincular', { preHandler: [fastify.authenticateAdmin] }, async (request, reply) => {
+    const { id } = request.params;
+    const { tenant_id: tenantId } = request.body || {};
+    if (!tenantId) {
+      return reply.code(400).send({ error: 'Informe tenant_id.' });
+    }
+
+    const { rows: numeroRows } = await pool.query('SELECT * FROM numeros_prontos WHERE id = $1', [id]);
+    const numero = numeroRows[0];
+    if (!numero) {
+      return reply.code(404).send({ error: 'Número não encontrado.' });
+    }
+    if (numero.status !== 'disponivel') {
+      return reply.code(409).send({ error: `Número não está disponível (status atual: ${numero.status}).` });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const { rows: tenantRows } = await client.query('SELECT id FROM tenants WHERE id = $1', [tenantId]);
+      if (!tenantRows[0]) {
+        await client.query('ROLLBACK');
+        return reply.code(404).send({ error: 'Salão (tenant) não encontrado.' });
+      }
+
+      await client.query(
+        `UPDATE numeros_prontos
+         SET tenant_id = $2, status = 'em_configuracao', vinculado_em = now(), vinculado_por = $3
+         WHERE id = $1`,
+        [id, tenantId, request.admin.adminId]
+      );
+      await client.query('UPDATE tenants SET meta_waba_id = $2, meta_phone_number_id = $3 WHERE id = $1', [
+        tenantId,
+        numero.meta_waba_id,
+        numero.meta_phone_number_id,
+      ]);
+      await client.query('COMMIT');
+    } catch (erro) {
+      await client.query('ROLLBACK');
+      if (erro.code === '23505') {
+        return reply.code(409).send({ error: 'Esse número já está conectado a outro salão.' });
+      }
+      throw erro;
+    } finally {
+      client.release();
+    }
+
+    const { rows } = await pool.query(
+      `SELECT n.*, t.nome AS tenant_nome FROM numeros_prontos n LEFT JOIN tenants t ON t.id = n.tenant_id WHERE n.id = $1`,
+      [id]
+    );
+    return rows[0];
+  });
+
+  // CA (US39.2) — envia mensagem de teste pro número vinculado; sucesso marca
+  // o número como "ativo" (operacional de fato, não só configurado), erro
+  // marca como "erro" e guarda o motivo pra investigação.
+  fastify.post('/admin/api/numeros-prontos/:id/testar', { preHandler: [fastify.authenticateAdmin] }, async (request, reply) => {
+    const { id } = request.params;
+    const { numero_destino: numeroDestino } = request.body || {};
+    if (!numeroDestino) {
+      return reply.code(400).send({ error: 'Informe numero_destino.' });
+    }
+
+    const { rows: numeroRows } = await pool.query('SELECT * FROM numeros_prontos WHERE id = $1', [id]);
+    const numero = numeroRows[0];
+    if (!numero) {
+      return reply.code(404).send({ error: 'Número não encontrado.' });
+    }
+    if (!numero.tenant_id) {
+      return reply.code(409).send({ error: 'Vincule o número a um salão antes de testar.' });
+    }
+
+    let status;
+    let resultado;
+    try {
+      await metaWhatsappService.enviarMensagemTeste(numero.meta_phone_number_id, numeroDestino);
+      status = 'ativo';
+      resultado = `Mensagem de teste enviada com sucesso para ${numeroDestino}.`;
+    } catch (erro) {
+      status = 'erro';
+      resultado = erro.message;
+    }
+
+    const { rows } = await pool.query(
+      `UPDATE numeros_prontos SET status = $2, testado_em = now(), teste_resultado = $3
+       WHERE id = $1 RETURNING *`,
+      [id, status, resultado]
+    );
+    if (status === 'erro') {
+      return reply.code(400).send({ error: resultado, numero: rows[0] });
+    }
+    return rows[0];
   });
 
   // CA09 — carrega os valores configuráveis do banco antes de aceitar

@@ -76,8 +76,29 @@ async function registrarNumero(phoneNumberId) {
   });
 }
 
+// CA (US39.2) — envia uma mensagem de teste pra validar que um "número
+// pronto" recém-vinculado a um tenant está mesmo operacional na Cloud API.
+// Usa o template "hello_world" (aprovado por padrão em toda WABA, sem
+// precisar de aprovação prévia) em vez de texto livre, porque texto livre só
+// funciona dentro da janela de 24h de uma conversa já iniciada pelo
+// destinatário — o número recém-vinculado nunca teve conversa nenhuma ainda.
+async function enviarMensagemTeste(phoneNumberId, numeroDestino) {
+  const token = process.env.META_WHATSAPP_TOKEN;
+  if (!token) throw new Error('META_WHATSAPP_TOKEN não configurado no servidor.');
+  return chamar('POST', `/${phoneNumberId}/messages`, {
+    token,
+    body: {
+      messaging_product: 'whatsapp',
+      to: numeroDestino,
+      type: 'template',
+      template: { name: 'hello_world', language: { code: 'en_US' } },
+    },
+  });
+}
+
 module.exports = {
   trocarCodePorToken,
   assinarWebhooks,
   registrarNumero,
+  enviarMensagemTeste,
 };

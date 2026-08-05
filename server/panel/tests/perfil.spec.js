@@ -96,6 +96,26 @@ test.describe('Meu Perfil (US33/PR12)', () => {
     expect(corpoEnviado).not.toHaveProperty('endereco');
   });
 
+  // US57 — antes, a saudação do topo ("Bom dia, Ana!") ficava com o nome
+  // antigo até logout/login, mesmo com o resto da tela (user menu) já
+  // atualizado, porque só lia `kyvvo_nome` do localStorage uma vez no load.
+  test('salvar com nome novo atualiza a saudação do topo e o localStorage na hora', async ({ page }) => {
+    await entrarNoPainel(page);
+    await expect(page.locator('#saudacao')).toContainText('Ana!');
+
+    await page.route('**/api/perfil', (route) => {
+      if (route.request().method() !== 'PATCH') return route.fallback();
+      return route.fulfill({ json: { ...PERFIL_BASE, nome_responsavel: 'Beatriz Souza' } });
+    });
+
+    await page.fill('#nome_responsavel', 'Beatriz Souza');
+    await page.click('#btn-salvar-perfil');
+
+    await expect(page.locator('.toast-sucesso')).toHaveText(/Perfil atualizado com sucesso/);
+    await expect(page.locator('#saudacao')).toContainText('Beatriz!');
+    expect(await page.evaluate(() => window.localStorage.getItem('kyvvo_nome'))).toBe('Beatriz Souza');
+  });
+
   test('marcar "é WhatsApp" envia telefone_e_whatsapp: true', async ({ page }) => {
     await entrarNoPainel(page);
     let corpoEnviado = null;
