@@ -1148,6 +1148,25 @@ async function start() {
     return { ok: true };
   });
 
+  // US63 — listagem simples de clientes (nome, telefone e quantos
+  // agendamentos confirmados já tiveram), pro atalho "Clientes" do
+  // dashboard. Clientes são criados automaticamente ao agendar (ON CONFLICT
+  // em POST /agendamentos) — não existe cadastro manual, então essa tela é
+  // só leitura, sem editar/excluir.
+  fastify.get('/api/clientes', { preHandler: [fastify.authenticate] }, async (request) => {
+    const { tenantId } = request.user;
+    const { rows } = await pool.query(
+      `SELECT c.id, c.nome, c.telefone, COUNT(a.id) FILTER (WHERE a.status = 'confirmado')::int AS total_agendamentos
+       FROM clientes c
+       LEFT JOIN agendamentos a ON a.cliente_id = c.id
+       WHERE c.tenant_id = $1
+       GROUP BY c.id, c.nome, c.telefone
+       ORDER BY c.nome NULLS LAST, c.telefone`,
+      [tenantId]
+    );
+    return { clientes: rows };
+  });
+
   // Lista de profissionais do tenant, usada para popular o dropdown do
   // formulário de novo agendamento (ST09.2 / US09). Inclui os ids dos
   // serviços que cada um atende, usado na tela de gestão (US17/ST17.4).
