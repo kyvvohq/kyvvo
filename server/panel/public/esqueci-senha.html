@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Recuperar acesso — Kyvvo</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%237c5cfc'/%3E%3Ctext x='16' y='22' font-family='Arial,sans-serif' font-size='15' font-weight='800' fill='white' text-anchor='middle'%3Evv%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Syne:wght@400;600;700;800&display=swap">
+<link rel="stylesheet" href="/style.css">
+<script src="/analytics.js"></script>
+</head>
+<body>
+<div class="center-screen">
+  <div class="card">
+    <div class="logo">ky<span class="logo-vv">vv</span>o</div>
+    <h1 class="cadastro-titulo">Recuperar acesso</h1>
+    <p class="cadastro-sub">Informe seu e-mail e enviaremos um código para redefinir sua senha.</p>
+
+    <form id="form-esqueci" novalidate>
+      <label for="email">E-mail</label>
+      <input type="email" id="email" autocomplete="email">
+      <div class="field-error" id="erro-email"></div>
+      <button type="submit" id="btn-enviar">Enviar código</button>
+      <div class="erro" id="erro" role="alert"></div>
+    </form>
+
+    <div id="sucesso" class="sucesso" role="status" hidden></div>
+
+    <p class="cadastro-rodape"><a href="/login.html">Voltar para o login</a></p>
+  </div>
+</div>
+<footer class="rodape-app">
+  <div class="logo">ky<span class="logo-vv">vv</span>o</div>
+  <p class="rodape-app-copy">© 2026 Kyvvo. Todos os direitos reservados.</p>
+</footer>
+<script>
+  const form = document.getElementById('form-esqueci');
+  const emailInput = document.getElementById('email');
+  const erroEl = document.getElementById('erro');
+  const erroEmailEl = document.getElementById('erro-email');
+  const sucessoEl = document.getElementById('sucesso');
+  const btn = document.getElementById('btn-enviar');
+
+  const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  emailInput.addEventListener('input', () => {
+    if (emailInput.classList.contains('invalid')) {
+      erroEmailEl.textContent = '';
+      emailInput.classList.remove('invalid');
+    }
+  });
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    erroEl.textContent = '';
+
+    const email = emailInput.value.trim();
+    if (!EMAIL_REGEX.test(email)) {
+      erroEmailEl.textContent = 'Digite um e-mail válido.';
+      emailInput.classList.add('invalid');
+      emailInput.focus();
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Enviando...';
+
+    try {
+      const res = await fetch('/api/auth/esqueci-senha', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok) {
+        form.hidden = true;
+        sucessoEl.hidden = false;
+        sucessoEl.textContent = data.message
+          || 'Se este e-mail estiver cadastrado, enviamos um código de recuperação.';
+        // Leva pra tela de redefinição já com o e-mail preenchido — o
+        // usuário só precisa copiar o código que chegou por e-mail.
+        setTimeout(() => {
+          window.location.href = '/redefinir-senha.html?email=' + encodeURIComponent(email);
+        }, 1800);
+        return;
+      }
+
+      erroEl.textContent = data.error || 'Não foi possível enviar o código. Tente novamente.';
+    } catch (err) {
+      erroEl.textContent = 'Erro de conexão. Tente novamente.';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Enviar código';
+    }
+  });
+</script>
+</body>
+</html>

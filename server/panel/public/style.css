@@ -169,6 +169,13 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   min-height: 16px;
 }
 
+.sucesso {
+  color: #4ade80;
+  font-size: 13px;
+  margin-top: 12px;
+  min-height: 16px;
+}
+
 /* Painel */
 .topbar {
   display: flex;
@@ -387,6 +394,94 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .inicio-pendencias li:first-child { border-top: none; padding-top: 0; }
 
 .inicio-pendencias .btn-secundario { width: auto; margin: 0; flex-shrink: 0; }
+
+/* ---------- US56 — Onboarding guiado (tela "Primeiros passos") ---------- */
+.onboarding-cabecalho { margin-bottom: 20px; }
+.onboarding-cabecalho h2 { font-size: 20px; margin-bottom: 6px; }
+.onboarding-cabecalho p { color: #a1a5c4; font-size: 14px; margin-bottom: 16px; }
+
+.onboarding-progresso {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.onboarding-progresso-barra {
+  flex: 1;
+  height: 8px;
+  border-radius: 100px;
+  background: #232847;
+  overflow: hidden;
+}
+
+.onboarding-progresso-preenchido {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--cyan));
+  border-radius: 100px;
+  transition: width 0.3s ease;
+}
+
+.onboarding-progresso span { font-size: 13px; color: #a1a5c4; white-space: nowrap; }
+
+.onboarding-lista { list-style: none; display: flex; flex-direction: column; gap: 12px; }
+
+.onboarding-passo {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  background: #12162a;
+  border: 1px solid #232847;
+  border-radius: 12px;
+  padding: 16px 20px;
+}
+
+.onboarding-passo-recomendado { border-color: var(--accent); background: rgba(124, 92, 252, 0.08); }
+
+.onboarding-passo-feito { opacity: 0.6; }
+
+.onboarding-passo-check {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid #2a2f52;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  margin-top: 2px;
+}
+
+.onboarding-passo-feito .onboarding-passo-check { background: var(--accent); border-color: var(--accent); color: white; }
+
+.onboarding-passo-texto { flex: 1; min-width: 0; }
+.onboarding-passo-texto strong { display: block; font-size: 15px; margin-bottom: 4px; }
+.onboarding-passo-texto p { color: #a1a5c4; font-size: 13px; line-height: 1.5; }
+
+.onboarding-passo-tag {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent-light);
+}
+
+.onboarding-passo .btn-secundario { width: auto; margin: 0; flex-shrink: 0; align-self: center; }
+
+.link-pular-onboarding {
+  width: auto;
+  margin: 20px 0 0;
+  padding: 0;
+  background: transparent;
+  color: #a1a5c4;
+  font-size: 13px;
+  text-decoration: underline;
+}
+
+.link-pular-onboarding:hover { background: transparent; color: #f2f2f7; }
 
 /* User menu (avatar + dropdown, PR11) — substitui o botão "Sair" solto no
    topbar; Meu Perfil/Minha Empresa/Cobrança/Preferências/Ajuda/Sair vivem
@@ -1200,9 +1295,19 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .badge-encaixe { background: rgba(0, 212, 255, 0.15); color: var(--cyan); }
 .badge-cancelado { background: rgba(255, 107, 107, 0.15); color: #ff6b6b; }
+/* US64 — status do agendamento (Concluído) e do lançamento financeiro de
+   agendamento (Previsto/Realizado, reaproveita .badge-cancelado). */
+.badge-concluido { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
+.badge-previsto { background: rgba(250, 204, 21, 0.15); color: #facc15; }
+.badge-realizado { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
 
 .agendamento-cancelado { opacity: 0.55; }
 .agendamento-cancelado .agendamento-hora { text-decoration: line-through; }
+
+/* Marca "Agendamento" ao lado de cliente num lançamento financeiro
+   originado de agendamento (US64/CA "Cenário 8") — texto simples em vez de
+   .badge (que já é usado pro status logo acima, no mesmo título). */
+.badge-origem-agendamento { color: #6b7099; font-weight: 600; }
 
 /* Listagem de tenants (US26) */
 .badge-status { margin-left: 0; }

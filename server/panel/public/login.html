@@ -33,17 +33,27 @@
       <div class="field-error" id="erro-senha"></div>
       <button type="submit" id="btn-entrar">Entrar</button>
       <div class="erro" id="erro" role="alert"></div>
+      <div class="sucesso" id="sucesso" role="status" hidden></div>
     </form>
+    <p class="cadastro-rodape"><a href="/esqueci-senha.html">Esqueci minha senha</a></p>
   </div>
 </div>
 <script>
   const form = document.getElementById('form-login');
   const erroEl = document.getElementById('erro');
+  const sucessoEl = document.getElementById('sucesso');
   const btn = document.getElementById('btn-entrar');
   const emailInput = document.getElementById('email');
   const senhaInput = document.getElementById('senha');
   const toggleSenhaBtn = document.getElementById('btn-toggle-senha');
   const inIframe = window.self !== window.top;
+
+  // US54 — avisa que a senha foi redefinida com sucesso (redirect de
+  // /redefinir-senha.html).
+  if (new URLSearchParams(window.location.search).get('senha_redefinida') === '1') {
+    sucessoEl.hidden = false;
+    sucessoEl.textContent = 'Senha redefinida com sucesso. Faça login com a nova senha.';
+  }
 
   // Mesma regex usada em cadastro.html — validação visual básica de formato,
   // não substitui a checagem real de credenciais feita pelo backend.

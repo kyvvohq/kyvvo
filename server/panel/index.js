@@ -241,6 +241,45 @@ async function buscarBloqueioConflitante(tenantId, profissionalId, dataHoraISO, 
   return rows[0] || null;
 }
 
+// US64 — cria/atualiza o lançamento financeiro vinculado a um agendamento
+// com serviço pago (CA "Cenário 1/3/4/5/6/7"). `client` pode ser o pool do
+// módulo ou um client de transação já aberto pelo chamador — POST/PATCH
+// /api/agendamentos precisam que a mudança no agendamento e no financeiro
+// aconteçam atomicamente, senão um crash no meio deixaria os dois lados
+// inconsistentes.
+//
+// Sempre um UPDATE em cima do lançamento existente do agendamento (nunca um
+// segundo INSERT): o ON CONFLICT usa o índice único uq_lancamentos_agendamento,
+// que também garante isso numa corrida (CA "Cenário 7", evitar duplicidade).
+async function sincronizarLancamentoFinanceiro(client, {
+  tenantId, agendamentoId, servicoNome, servicoPreco, dataHora, statusAgendamento,
+}) {
+  // Serviço sem preço (ou preço zero) nunca gera lançamento automático (CA
+  // "Cenário 2") — nem na criação nem numa atualização: hoje não existe
+  // jeito de mudar o serviço/preço de um agendamento já criado (servico_id é
+  // fixo, e servicos.preco não tem endpoint de edição), então um agendamento
+  // que nasceu sem lançamento nunca precisa ganhar um depois.
+  const preco = servicoPreco != null ? Number(servicoPreco) : 0;
+  if (!(preco > 0)) return;
+
+  // 'reagendado' nunca é de fato setado por nenhum código hoje (reagendar só
+  // muda data_hora no mesmo registro) — trata como 'confirmado' por
+  // segurança, caso isso mude no futuro.
+  const statusFinanceiro = statusAgendamento === 'concluido'
+    ? 'realizado'
+    : statusAgendamento === 'cancelado'
+      ? 'cancelado'
+      : 'previsto';
+
+  await client.query(
+    `INSERT INTO lancamentos_financeiros (tenant_id, agendamento_id, tipo, valor, descricao, data, status)
+     VALUES ($1, $2, 'entrada', $3, $4, ($5::timestamptz AT TIME ZONE 'America/Sao_Paulo')::date, $6)
+     ON CONFLICT (agendamento_id) WHERE agendamento_id IS NOT NULL
+     DO UPDATE SET valor = EXCLUDED.valor, data = EXCLUDED.data, status = EXCLUDED.status, descricao = EXCLUDED.descricao`,
+    [tenantId, agendamentoId, preco, servicoNome, dataHora, statusFinanceiro]
+  );
+}
+
 // Data (YYYY-MM-DD) de "agora" em horário de Brasília — usada como fallback
 // quando a view de agenda é consultada sem o parâmetro "data" explícito.
 function dataAtualBrasilia() {
@@ -518,6 +557,105 @@ async function start() {
     return { ok: true };
   });
 
+  // ---------- Recuperação de senha (US54) ----------
+  // Solicita o código de recuperação por e-mail. Sem preHandler: quem
+  // esqueceu a senha não tem sessão. Resposta sempre genérica (CA02): não
+  // revela se o e-mail existe, senão o endpoint vira um jeito de enumerar
+  // contas cadastradas.
+  fastify.post('/api/auth/esqueci-senha', async (request, reply) => {
+    const email = ((request.body || {}).email || '').toLowerCase().trim();
+    if (!EMAIL_REGEX.test(email)) {
+      return reply.code(400).send({ error: 'Digite um e-mail válido.' });
+    }
+
+    const respostaGenerica = {
+      ok: true,
+      message: 'Se este e-mail estiver cadastrado, enviamos um código de recuperação.',
+    };
+
+    const { rows } = await pool.query('SELECT id, nome FROM usuarios WHERE email = $1', [email]);
+    const usuario = rows[0];
+    if (!usuario) {
+      return respostaGenerica;
+    }
+
+    // Mesmo cooldown de 60s do reenvio de verificação de e-mail (CA11) —
+    // evita disparar um e-mail novo a cada re-submit do formulário, sem
+    // precisar de infra extra de rate limit.
+    const { rows: ultimoRows } = await pool.query(
+      `SELECT criado_em FROM tokens_validacao
+       WHERE user_id = $1 AND tipo = 'recuperacao_senha'
+       ORDER BY criado_em DESC LIMIT 1`,
+      [usuario.id]
+    );
+    const emCooldown = ultimoRows[0]
+      && Date.now() - new Date(ultimoRows[0].criado_em).getTime() < REENVIO_COOLDOWN_SEGUNDOS * 1000;
+    if (emCooldown) {
+      return respostaGenerica;
+    }
+
+    const codigo = await tokenService.criarToken(pool, { userId: usuario.id, tipo: 'recuperacao_senha' });
+    tokenService.enviarPorCanais({ token: codigo, canais: ['email'], email, nome: usuario.nome });
+
+    return respostaGenerica;
+  });
+
+  // Confirma o código de 6 dígitos e define a nova senha. Sem preHandler:
+  // authenticate — quem está aqui não tem sessão válida (é justamente o
+  // caso de esquecer a senha).
+  fastify.post('/api/auth/redefinir-senha', async (request, reply) => {
+    const { email: emailBruto, token: tokenBruto, senha } = request.body || {};
+    const email = (emailBruto || '').toLowerCase().trim();
+    const codigo = String(tokenBruto || '').trim();
+
+    if (!EMAIL_REGEX.test(email)) {
+      return reply.code(400).send({ error: 'Digite um e-mail válido.' });
+    }
+    if (!/^\d{6}$/.test(codigo)) {
+      return reply.code(400).send({ error: 'Código inválido ou expirado. Solicite um novo.' });
+    }
+    if (!SENHA_REGEX.test(senha || '')) {
+      return reply.code(400).send({
+        error: 'A senha deve ter no mínimo 8 caracteres, 1 número e 1 letra maiúscula.',
+      });
+    }
+
+    const mensagens = {
+      nao_encontrado: 'Código inválido ou expirado. Solicite um novo.',
+      expirado: 'Código expirado. Solicite um novo.',
+      bloqueado: 'Número máximo de tentativas atingido. Solicite um novo código.',
+      incorreto: 'Código incorreto. Tente novamente.',
+    };
+
+    const { rows } = await pool.query('SELECT id FROM usuarios WHERE email = $1', [email]);
+    const usuario = rows[0];
+    // E-mail não encontrado cai na mesma mensagem de código inválido (CA02)
+    // — não revela se a conta existe.
+    if (!usuario) {
+      return reply.code(400).send({ error: mensagens.nao_encontrado });
+    }
+
+    const { valido, motivo } = await tokenService.validate({
+      userId: usuario.id,
+      tipo: 'recuperacao_senha',
+      token: codigo,
+    });
+    if (!valido) {
+      return reply.code(400).send({ error: mensagens[motivo] || mensagens.incorreto });
+    }
+
+    const hash = await bcrypt.hash(senha, 10);
+    // token_version++ derruba qualquer sessão JWT ativa (mesmo efeito do
+    // logout) — sessões abertas em outro lugar não devem sobreviver a uma
+    // redefinição de senha.
+    await pool.query(
+      'UPDATE usuarios SET senha_hash = $1, token_version = token_version + 1 WHERE id = $2',
+      [hash, usuario.id]
+    );
+
+    return { ok: true, message: 'Senha redefinida com sucesso. Faça login com a nova senha.' };
+  });
+
   // GET /api/config-publica — expõe só a chave pública do PostHog pro front do
   // painel (US47/CA de rastreamento de conversão). Não autenticada de
   // propósito: precisa estar disponível em login.html/cadastro.html, antes de
@@ -760,7 +898,8 @@ async function start() {
   fastify.get('/api/tenant/status', { preHandler: [fastify.authenticate] }, async (request) => {
     const { userId, tenantId } = request.user;
     const { rows } = await pool.query(
-      `SELECT u.email, u.email_verified, u.role, t.status, t.plano, t.trial_expires_at, t.ativado_em
+      `SELECT u.email, u.email_verified, u.role, t.status, t.plano, t.trial_expires_at, t.ativado_em,
+              t.onboarding_horario_revisado, t.onboarding_dispensado
        FROM usuarios u JOIN tenants t ON t.id = u.tenant_id
        WHERE u.id = $1`,
       [userId]
@@ -801,12 +940,29 @@ async function start() {
       suporte_email: EMAIL_SUPORTE,
       suporte_whatsapp: WHATSAPP_SUPORTE,
       pagamento_pendente: info.status === 'inadimplente',
+      // horario_nao_confirmado (US56): diferente de sem_servicos/
+      // whatsapp_desconectado, o horário de funcionamento sempre tem um
+      // valor (default 08:00-20:00 da migration 014) — não dá pra detectar
+      // "incompleto" por ausência de dado, só se o tenant já passou pela
+      // tela de Configuração ao menos uma vez (onboarding_horario_revisado,
+      // setado em PATCH /api/configuracao).
       configuracao: {
         sem_servicos: configInfo.servicos === 0,
         sem_profissionais: configInfo.profissionais === 0,
         whatsapp_desconectado: !configInfo.meta_phone_number_id,
+        horario_nao_confirmado: !info.onboarding_horario_revisado,
       },
+      onboarding_dispensado: !!info.onboarding_dispensado,
     };
+  });
+
+  // US56 — o usuário optou por pular o checklist de onboarding por agora.
+  // Só afasta o redirecionamento automático pro checklist no próximo acesso
+  // (CA "usuário pode retomar o onboarding depois") — o item "Primeiros
+  // passos" continua na sidebar enquanto algum passo estiver pendente.
+  fastify.post('/api/onboarding/dispensar', { preHandler: [fastify.authenticate] }, async (request) => {
+    await pool.query('UPDATE tenants SET onboarding_dispensado = true WHERE id = $1', [request.user.tenantId]);
+    return { ok: true };
   });
 
   // US52 — endpoint genérico pro frontend registrar impressões do funil de
@@ -889,12 +1045,15 @@ async function start() {
     if (status === undefined && dataHora === undefined) {
       return reply.code(400).send({ error: 'Informe "status" e/ou "data_hora" para atualizar' });
     }
-    if (status !== undefined && !['confirmado', 'cancelado', 'reagendado'].includes(status)) {
+    // 'concluido' (US64) — converte a receita prevista do agendamento em
+    // realizada (CA "Cenário 5").
+    if (status !== undefined && !['confirmado', 'cancelado', 'reagendado', 'concluido'].includes(status)) {
       return reply.code(400).send({ error: 'status inválido' });
     }
 
     const { rows: atuais } = await pool.query(
-      `SELECT a.id, a.profissional_id, s.duracao_minutos, p.nome AS profissional
+      `SELECT a.id, a.profissional_id, a.status, a.data_hora, s.duracao_minutos, s.nome AS servico_nome, s.preco AS servico_preco,
+              p.nome AS profissional
        FROM agendamentos a
        JOIN servicos s ON s.id = a.servico_id
        JOIN profissionais p ON p.id = a.profissional_id
@@ -934,7 +1093,7 @@ async function start() {
          JOIN servicos s ON s.id = a.servico_id
          WHERE a.tenant_id = $1
            AND a.profissional_id = $2
-           AND a.status = 'confirmado'
+           AND a.status IN ('confirmado', 'concluido')
            AND a.id <> $3
            AND a.data_hora < $4::timestamptz + ($5 * interval '1 minute')
            AND $4::timestamptz < a.data_hora + (s.duracao_minutos * interval '1 minute')`,
@@ -947,14 +1106,37 @@ async function start() {
       }
     }
 
-    await pool.query(
-      `UPDATE agendamentos SET
-         status = COALESCE($2, status),
-         data_hora = COALESCE($3, data_hora),
-         updated_at = now()
-       WHERE id = $1`,
-      [id, status ?? null, dataHora ?? null]
-    );
+    // US64 — a mudança no agendamento e a sincronização do lançamento
+    // financeiro (CA "Cenário 3/4/5/6") precisam acontecer atomicamente,
+    // mesma razão do POST /agendamentos.
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `UPDATE agendamentos SET
+           status = COALESCE($2, status),
+           data_hora = COALESCE($3, data_hora),
+           updated_at = now()
+         WHERE id = $1`,
+        [id, status ?? null, dataHora ?? null]
+      );
+
+      await sincronizarLancamentoFinanceiro(client, {
+        tenantId,
+        agendamentoId: id,
+        servicoNome: atual.servico_nome,
+        servicoPreco: atual.servico_preco,
+        dataHora: dataHora ?? atual.data_hora,
+        statusAgendamento: status ?? atual.status,
+      });
+
+      await client.query('COMMIT');
+    } catch (erro) {
+      await client.query('ROLLBACK');
+      throw erro;
+    } finally {
+      client.release();
+    }
 
     const { rows: detalhado } = await pool.query(
       `SELECT a.id, a.data_hora, a.status, a.encaixe, a.updated_at,
@@ -1017,7 +1199,7 @@ async function start() {
        FROM agendamentos a
        JOIN servicos s ON s.id = a.servico_id
        WHERE a.tenant_id = $1 AND a.profissional_id = $2
-         AND a.status = 'confirmado'
+         AND a.status IN ('confirmado', 'concluido')
          AND (a.data_hora AT TIME ZONE 'America/Sao_Paulo')::date = $3::date`,
       [tenantId, profissional, data]
     );
@@ -1186,7 +1368,7 @@ async function start() {
   fastify.get('/api/clientes', { preHandler: [fastify.authenticate] }, async (request) => {
     const { tenantId } = request.user;
     const { rows } = await pool.query(
-      `SELECT c.id, c.nome, c.telefone, COUNT(a.id) FILTER (WHERE a.status = 'confirmado')::int AS total_agendamentos
+      `SELECT c.id, c.nome, c.telefone, COUNT(a.id) FILTER (WHERE a.status IN ('confirmado', 'concluido'))::int AS total_agendamentos
        FROM clientes c
        LEFT JOIN agendamentos a ON a.cliente_id = c.id
        WHERE c.tenant_id = $1
@@ -1426,7 +1608,7 @@ async function start() {
     const origemFinal = origem || 'portal';
 
     const { rows: servicoRows } = await pool.query(
-      'SELECT duracao_minutos FROM servicos WHERE id = $1 AND tenant_id = $2',
+      'SELECT nome, duracao_minutos, preco FROM servicos WHERE id = $1 AND tenant_id = $2',
       [servicoId, tenantId]
     );
     const servicoInfo = servicoRows[0];
@@ -1478,7 +1660,7 @@ async function start() {
          JOIN servicos s ON s.id = a.servico_id
          WHERE a.tenant_id = $1
            AND a.profissional_id = $2
-           AND a.status = 'confirmado'
+           AND a.status IN ('confirmado', 'concluido')
            AND a.data_hora < $3::timestamptz + ($4 * interval '1 minute')
            AND $3::timestamptz < a.data_hora + (s.duracao_minutos * interval '1 minute')`,
         [tenantId, profissionalId, dataHora, servicoInfo.duracao_minutos]
@@ -1490,21 +1672,50 @@ async function start() {
       }
     }
 
-    const { rows: clienteRows } = await pool.query(
-      `INSERT INTO clientes (tenant_id, nome, telefone)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (tenant_id, telefone) DO UPDATE SET nome = COALESCE(EXCLUDED.nome, clientes.nome)
-       RETURNING id`,
-      [tenantId, clienteNome || null, clienteTelefone]
-    );
-    const clienteId = clienteRows[0].id;
+    // US64 — cliente, agendamento e o lançamento financeiro automático
+    // (CA "Cenário 1") precisam nascer juntos: um crash entre o INSERT do
+    // agendamento e o do financeiro não pode deixar receita prevista órfã
+    // nem um agendamento sem o lançamento correspondente.
+    const client = await pool.connect();
+    let agendamentoId;
+    try {
+      await client.query('BEGIN');
 
-    const { rows: criado } = await pool.query(
-      `INSERT INTO agendamentos (tenant_id, cliente_id, profissional_id, servico_id, data_hora, encaixe, origem, observacoes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING id`,
-      [tenantId, clienteId, profissionalId, servicoId, dataHora, !!encaixe, origemFinal, observacoes || null]
-    );
+      const { rows: clienteRows } = await client.query(
+        `INSERT INTO clientes (tenant_id, nome, telefone)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (tenant_id, telefone) DO UPDATE SET nome = COALESCE(EXCLUDED.nome, clientes.nome)
+         RETURNING id`,
+        [tenantId, clienteNome || null, clienteTelefone]
+      );
+      const clienteId = clienteRows[0].id;
+
+      const { rows: criado } = await client.query(
+        `INSERT INTO agendamentos (tenant_id, cliente_id, profissional_id, servico_id, data_hora, encaixe, origem, observacoes)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING id`,
+        [tenantId, clienteId, profissionalId, servicoId, dataHora, !!encaixe, origemFinal, observacoes || null]
+      );
+      agendamentoId = criado[0].id;
+
+      // Agendamento nasce sempre 'confirmado' (default da coluna) — receita
+      // prevista, nunca realizada, na criação.
+      await sincronizarLancamentoFinanceiro(client, {
+        tenantId,
+        agendamentoId,
+        servicoNome: servicoInfo.nome,
+        servicoPreco: servicoInfo.preco,
+        dataHora,
+        statusAgendamento: 'confirmado',
+      });
+
+      await client.query('COMMIT');
+    } catch (erro) {
+      await client.query('ROLLBACK');
+      throw erro;
+    } finally {
+      client.release();
+    }
 
     const { rows: detalhado } = await pool.query(
       `SELECT a.id, a.data_hora, a.status, a.encaixe, a.origem, a.observacoes, a.updated_at,
@@ -1516,7 +1727,7 @@ async function start() {
        JOIN profissionais p ON p.id = a.profissional_id
        JOIN servicos s ON s.id = a.servico_id
        WHERE a.id = $1`,
-      [criado[0].id]
+      [agendamentoId]
     );
 
     reply.code(201);
@@ -2256,7 +2467,11 @@ async function start() {
            horario_fechamento = COALESCE($5, horario_fechamento),
            horario_almoco_ativo = COALESCE($6, horario_almoco_ativo),
            horario_almoco_inicio = CASE WHEN $6 = false THEN null ELSE COALESCE($7, horario_almoco_inicio) END,
-           horario_almoco_fim = CASE WHEN $6 = false THEN null ELSE COALESCE($8, horario_almoco_fim) END
+           horario_almoco_fim = CASE WHEN $6 = false THEN null ELSE COALESCE($8, horario_almoco_fim) END,
+           -- US56 — qualquer salvamento nesta tela conta como "horário
+           -- revisado" pro checklist de onboarding, mesmo que o tenant só
+           -- confirme os valores padrão sem alterar nada.
+           onboarding_horario_revisado = true
          WHERE id = $1
          RETURNING dias_funcionamento, formato_hora, horario_abertura, horario_fechamento,
                    horario_almoco_ativo, horario_almoco_inicio, horario_almoco_fim`,
@@ -2291,9 +2506,10 @@ async function start() {
     return { modulos: rows };
   });
 
-  // ---------- Financeiro (US18) ----------
-  // Livro-caixa manual simples (entrada/saída) — primeira funcionalidade real
-  // do módulo "financeiro", só acessível a quem tem o módulo ativo.
+  // ---------- Financeiro (US18/US64) ----------
+  // Livro-caixa manual (entrada/saída, US18) + lançamentos automáticos de
+  // agendamento (US64, sincronizados por sincronizarLancamentoFinanceiro) —
+  // só acessível a quem tem o módulo "financeiro" ativo.
   fastify.get(
     '/api/financeiro/lancamentos',
     // US62 — dinheiro é visão de administrador; operador não acessa.
@@ -2302,21 +2518,38 @@ async function start() {
       const { tenantId } = request.user;
       const mesRef = request.query.mes || mesAtualBrasilia();
 
+      // LEFT JOIN com agendamentos/clientes/servicos só resolve campos pra
+      // exibição (CA "Cenário 8" — identificar cliente/serviço/data do
+      // atendimento a partir do financeiro); lançamentos manuais (US18) têm
+      // agendamento_id nulo e os três campos vêm null.
       const { rows } = await pool.query(
-        `SELECT id, tipo, valor, descricao, data
-         FROM lancamentos_financeiros
-         WHERE tenant_id = $1 AND to_char(data, 'YYYY-MM') = $2
-         ORDER BY data DESC, criado_em DESC`,
+        `SELECT l.id, l.tipo, l.valor, l.descricao, l.data, l.status, l.agendamento_id,
+                c.nome AS cliente, s.nome AS servico
+         FROM lancamentos_financeiros l
+         LEFT JOIN agendamentos a ON a.id = l.agendamento_id
+         LEFT JOIN clientes c ON c.id = a.cliente_id
+         LEFT JOIN servicos s ON s.id = a.servico_id
+         WHERE l.tenant_id = $1 AND to_char(l.data, 'YYYY-MM') = $2
+         ORDER BY l.data DESC, l.criado_em DESC`,
         [tenantId, mesRef]
       );
+      const lancamentos = rows.map((r) => ({ ...r, origem: r.agendamento_id ? 'agendamento' : 'manual' }));
 
-      const entradas = rows.filter((r) => r.tipo === 'entrada').reduce((soma, r) => soma + Number(r.valor), 0);
-      const saidas = rows.filter((r) => r.tipo === 'saida').reduce((soma, r) => soma + Number(r.valor), 0);
+      // Cancelado (CA "Cenário 6") não conta em nenhum resumo — não é receita
+      // prevista nem realizada ativa, só fica visível na listagem pra
+      // conferência. previsto/realizado (US64) diferenciam a receita de
+      // agendamento; entradas/saidas/saldo (US18) continuam a soma total do
+      // que está ativo, pra não quebrar os cards que já existiam.
+      const ativos = lancamentos.filter((r) => r.status !== 'cancelado');
+      const entradas = ativos.filter((r) => r.tipo === 'entrada').reduce((soma, r) => soma + Number(r.valor), 0);
+      const saidas = ativos.filter((r) => r.tipo === 'saida').reduce((soma, r) => soma + Number(r.valor), 0);
+      const previsto = ativos.filter((r) => r.tipo === 'entrada' && r.status === 'previsto').reduce((soma, r) => soma + Number(r.valor), 0);
+      const realizado = ativos.filter((r) => r.tipo === 'entrada' && r.status === 'realizado').reduce((soma, r) => soma + Number(r.valor), 0);
 
       return {
         mes: mesRef,
-        lancamentos: rows,
-        resumo: { entradas, saidas, saldo: entradas - saidas },
+        lancamentos,
+        resumo: { entradas, saidas, saldo: entradas - saidas, previsto, realizado },
       };
     }
   );
@@ -2336,14 +2569,17 @@ async function start() {
         return reply.code(400).send({ error: 'Campo "valor" deve ser um número maior que zero' });
       }
 
+      // Lançamento manual: sem agendamento_id, status nasce 'realizado' (é o
+      // default da coluna) — já representa um valor que efetivamente
+      // entrou/saiu, diferente da receita prevista de um agendamento.
       const { rows } = await pool.query(
         `INSERT INTO lancamentos_financeiros (tenant_id, tipo, valor, descricao, data)
          VALUES ($1, $2, $3, $4, COALESCE($5, current_date))
-         RETURNING id, tipo, valor, descricao, data`,
+         RETURNING id, tipo, valor, descricao, data, status, agendamento_id`,
         [tenantId, tipo, valor, descricao || null, data || null]
       );
       reply.code(201);
-      return rows[0];
+      return { ...rows[0], origem: 'manual' };
     }
   );
 

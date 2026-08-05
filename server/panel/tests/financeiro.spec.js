@@ -89,3 +89,64 @@ test.describe('Financeiro (US18)', () => {
     await expect(page.locator('#lancamento-erro')).toHaveText(/Módulo não ativo/);
   });
 });
+
+// US64 — lançamentos automáticos originados de agendamento: mostram origem,
+// cliente/serviço (CA "Cenário 8") e status (previsto/realizado/cancelado),
+// e o resumo ganha os cards de receita prevista/realizada.
+test.describe('Financeiro — lançamentos de agendamento (US64)', () => {
+  test('lançamento de agendamento mostra serviço, cliente e origem', async ({ page }) => {
+    await entrarNoPainel(page, {
+      lancamentos: [{
+        id: 'l1', tipo: 'entrada', valor: 50, data: '2026-07-05', status: 'previsto',
+        agendamento_id: 'ag1', origem: 'agendamento', cliente: 'Maria Teste', servico: 'Corte',
+      }],
+    });
+    const item = page.locator('.agendamento-item');
+    await expect(item).toContainText('Corte');
+    await expect(item).toContainText('Maria Teste');
+    await expect(item).toContainText('Agendamento');
+    await expect(item).toContainText('R$ 50,00');
+  });
+
+  test('lançamento previsto mostra o badge "Previsto"; realizado não mostra badge de status', async ({ page }) => {
+    await entrarNoPainel(page, {
+      lancamentos: [
+        { id: 'l1', tipo: 'entrada', valor: 50, data: '2026-07-05', status: 'previsto', agendamento_id: 'ag1', origem: 'agendamento', cliente: 'Maria', servico: 'Corte' },
+        { id: 'l2', tipo: 'entrada', valor: 40, data: '2026-07-06', status: 'realizado', agendamento_id: 'ag2', origem: 'agendamento', cliente: 'Ana', servico: 'Escova' },
+      ],
+    });
+    const itens = page.locator('.agendamento-item');
+    await expect(itens.nth(0).locator('.badge-previsto')).toHaveText('Previsto');
+    await expect(itens.nth(1).locator('.badge-realizado')).toHaveCount(0);
+  });
+
+  test('lançamento cancelado mostra o badge "Cancelado"', async ({ page }) => {
+    await entrarNoPainel(page, {
+      lancamentos: [{ id: 'l1', tipo: 'entrada', valor: 50, data: '2026-07-05', status: 'cancelado', agendamento_id: 'ag1', origem: 'agendamento', cliente: 'Maria', servico: 'Corte' }],
+    });
+    await expect(page.locator('.agendamento-item .badge-cancelado')).toHaveText('Cancelado');
+  });
+
+  test('lançamento manual não mostra badge de origem nem de status', async ({ page }) => {
+    await entrarNoPainel(page, {
+      lancamentos: [{ id: 'l1', tipo: 'entrada', valor: 80, descricao: 'Venda balcão', data: '2026-07-05', status: 'realizado', origem: 'manual' }],
+    });
+    const item = page.locator('.agendamento-item');
+    await expect(item).toContainText('Venda balcão');
+    await expect(item.locator('.badge-origem-agendamento')).toHaveCount(0);
+    await expect(item.locator('.badge')).toHaveCount(0);
+  });
+
+  test('resumo mostra os cards de receita prevista e realizada quando presentes', async ({ page }) => {
+    await entrarNoPainel(page, {
+      resumo: { entradas: 90, saidas: 0, saldo: 90, previsto: 50, realizado: 40 },
+    });
+    await expect(page.getByText('Receita prevista')).toBeVisible();
+    await expect(page.getByText('Receita realizada')).toBeVisible();
+  });
+
+  test('sem os campos de US64 no resumo (payload antigo), os cards novos não aparecem', async ({ page }) => {
+    await entrarNoPainel(page, { resumo: { entradas: 90, saidas: 0, saldo: 90 } });
+    await expect(page.getByText('Receita prevista')).toHaveCount(0);
+  });
+});

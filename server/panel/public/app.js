@@ -56,6 +56,27 @@ async function verificarStatusConta() {
     history.replaceState(null, '', location.pathname);
   }
 
+  // US56 — item "Primeiros passos" na sidebar só existe enquanto houver
+  // passo pendente (concluído o checklist, some — não faz sentido continuar
+  // ocupando espaço na sidebar pra sempre). Primeiro acesso com configuração
+  // incompleta é levado direto pro checklist (CA "primeiro acesso identifica
+  // configuração incompleta"); se o tenant já dispensou o checklist antes
+  // (CA "usuário pode retomar o onboarding depois"), o item continua na
+  // sidebar mas o redirecionamento automático não repete a cada login.
+  const menuItemOnboarding = document.getElementById('menu-item-onboarding');
+  const onboardingPendente = construirPassosOnboarding(status).some((p) => !p.feito);
+  if (menuItemOnboarding) menuItemOnboarding.hidden = !onboardingPendente;
+  // `menuAtual === 'agendamento'` (não só `!== 'onboarding'`) de propósito:
+  // 'agendamento' é o valor inicial intocado antes de qualquer navegação —
+  // essa checagem só dispara o redirecionamento automático se o usuário
+  // ainda não clicou em nada desde que a página carregou. Como essa chamada
+  // de status é assíncrona, ela pode resolver depois de o usuário já ter
+  // navegado manualmente pra outra tela; nesse caso `menuAtual` já mudou e o
+  // onboarding não deve sequestrar a navegação em andamento.
+  if (onboardingPendente && !status.onboarding_dispensado && menuAtual === 'agendamento') {
+    selecionarMenu('onboarding');
+  }
+
   // CA09 — banner de trial com contador de dias restantes.
   const banner = document.getElementById('trial-banner');
   if (banner && status.status === 'trial' && status.dias_restantes != null) {
@@ -127,6 +148,42 @@ function construirAvisos(status) {
     });
   }
   return avisos;
+}
+
+// US56 — checklist mínimo de onboarding: serviços, horário de funcionamento
+// e WhatsApp, nessa ordem (ordem natural de configuração — não faz sentido
+// revisar horário ou conectar WhatsApp antes de ter serviço nenhum pra
+// oferecer). Mesma fonte de dados que os avisos (US59) e as pendências do
+// Início (US63), só reorganizada em passos sequenciais com "próximo passo
+// recomendado" em vez de uma lista plana.
+function construirPassosOnboarding(status) {
+  const configuracao = (status && status.configuracao) || {};
+  return [
+    {
+      id: 'servicos',
+      titulo: 'Cadastre seus serviços',
+      descricao: 'Defina os serviços que seu negócio oferece, com duração e preço.',
+      feito: !configuracao.sem_servicos,
+      acaoMenu: 'servicos',
+      acaoLabel: 'Cadastrar serviços',
+    },
+    {
+      id: 'horario',
+      titulo: 'Confirme seu horário de funcionamento',
+      descricao: 'Revise os dias e horários em que seu negócio atende (já vem com um padrão sugerido).',
+      feito: !configuracao.horario_nao_confirmado,
+      acaoMenu: 'configuracao',
+      acaoLabel: 'Revisar horário',
+    },
+    {
+      id: 'whatsapp',
+      titulo: 'Conecte seu WhatsApp',
+      descricao: 'Conecte o número do seu negócio para receber agendamentos automaticamente pelo bot.',
+      feito: !configuracao.whatsapp_desconectado,
+      acaoMenu: 'whatsapp',
+      acaoLabel: 'Conectar WhatsApp',
+    },
+  ];
 }
 
 let avisosAtuais = [];
@@ -741,6 +798,45 @@ function abrirModalNovoAgendamento(prefill) {
 
 document.getElementById('btn-novo-agendamento').addEventListener('click', () => abrirModalNovoAgendamento());
 
+// ---------- Modal: concluir atendimento (US64) ----------
+// Marca o agendamento como concluído — converte a receita prevista do
+// lançamento financeiro vinculado em realizada (CA "Cenário 5"), feito no
+// backend por sincronizarLancamentoFinanceiro dentro do mesmo PATCH.
+function abrirModalConcluir(ag) {
+  abrirModal(
+    '<h3>Concluir atendimento</h3>',
+    `
+      <p class="modal-texto">Confirmar que o atendimento de <strong>${ag.cliente || ag.cliente_telefone}</strong> — ${ag.servico} — ${formatarDataCurta(ag.data_hora)} às ${formatarHora(ag.data_hora)} foi concluído?</p>
+      <div class="modal-acoes">
+        <button class="btn-secundario" id="btn-voltar-concluir">Voltar</button>
+        <button class="btn-primario" id="btn-confirmar-concluir">Confirmar conclusão</button>
+      </div>
+    `
+  );
+
+  document.getElementById('btn-voltar-concluir').addEventListener('click', fecharModal);
+  document.getElementById('btn-confirmar-concluir').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-confirmar-concluir');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    const resultado = await api(`/api/agendamentos/${ag.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'concluido' }),
+    });
+
+    if (resultado && !resultado.error) {
+      fecharModal();
+      mostrarToast('Agendamento atualizado com sucesso.', 'sucesso');
+      render();
+    } else {
+      mostrarToast((resultado && resultado.error) || 'Erro ao concluir agendamento.', 'erro');
+      btn.disabled = false;
+      btn.textContent = 'Confirmar conclusão';
+    }
+  });
+}
+
 // ---------- Modal: cancelamento (ST08.4) ----------
 function abrirModalCancelar(ag) {
   abrirModal(
@@ -961,21 +1057,27 @@ let agendamentosAtuais = [];
 
 function renderAgendamentoItem(ag) {
   const cancelado = ag.status === 'cancelado';
+  // US64 — concluído também não tem mais o que fazer (mesmo raciocínio do
+  // cancelado): sem menu de ações, só o badge indicando o estado final.
+  const concluido = ag.status === 'concluido';
+  const semAcoes = cancelado || concluido;
   return `
     <div class="agendamento-item${cancelado ? ' agendamento-cancelado' : ''}" data-id="${ag.id}">
-      <div class="agendamento-linha-principal" ${cancelado ? '' : `data-acoes-toggle="${ag.id}"`}>
+      <div class="agendamento-linha-principal" ${semAcoes ? '' : `data-acoes-toggle="${ag.id}"`}>
         <div>
           <div class="agendamento-hora">${formatarHora(ag.data_hora)} — ${ag.servico}</div>
           <div class="agendamento-detalhe">
             ${ag.cliente || ag.cliente_telefone} · ${ag.profissional} · ${ag.duracao_minutos}min
             ${ag.encaixe ? '<span class="badge badge-encaixe">Encaixe</span>' : ''}
             ${cancelado ? '<span class="badge badge-cancelado">Cancelado</span>' : ''}
+            ${concluido ? '<span class="badge badge-concluido">Concluído</span>' : ''}
           </div>
         </div>
-        ${cancelado ? '' : '<button class="btn-acoes" aria-label="Ações">⋮</button>'}
+        ${semAcoes ? '' : '<button class="btn-acoes" aria-label="Ações">⋮</button>'}
       </div>
-      ${cancelado ? '' : `
+      ${semAcoes ? '' : `
         <div class="menu-acoes" id="menu-acoes-${ag.id}">
+          <button data-acao="concluir" data-id="${ag.id}">Concluir</button>
           <button data-acao="reagendar" data-id="${ag.id}">Reagendar</button>
           <button data-acao="encaixar" data-id="${ag.id}">Encaixar</button>
           <button data-acao="cancelar" data-id="${ag.id}" class="acao-perigo">Cancelar</button>
@@ -1022,6 +1124,7 @@ conteudo.addEventListener('click', (e) => {
     document.querySelectorAll('.menu-acoes.aberto').forEach((m) => m.classList.remove('aberto'));
     const ag = agendamentosAtuais.find((a) => a.id === acaoBtn.dataset.id);
     if (!ag) return;
+    if (acaoBtn.dataset.acao === 'concluir') abrirModalConcluir(ag);
     if (acaoBtn.dataset.acao === 'cancelar') abrirModalCancelar(ag);
     if (acaoBtn.dataset.acao === 'reagendar') abrirModalReagendar(ag);
     if (acaoBtn.dataset.acao === 'encaixar') abrirModalEncaixe(ag);
@@ -1061,8 +1164,16 @@ conteudo.addEventListener('click', (e) => {
   }
 });
 
+// BUG (achado testando a US64) — só checava '.agendamento-item' (usado em
+// Início/Clientes/Financeiro), nunca '.grade-ag-card' (usado nas views
+// Dia/Semana, o card de agendamento mais comum do painel). Resultado: o
+// clique que abre o menu de ações (Reagendar/Encaixar/Cancelar/Concluir)
+// também "clica fora" na visão desse listener, fechando o menu no mesmo
+// evento em que acabou de abrir — o menu de ações nunca funcionava de fato
+// nas views Dia/Semana, só em Início/Clientes (onde o card usa a outra
+// classe). Ninguém tinha pego porque nenhum teste clicava nesse menu antes.
 document.addEventListener('click', (e) => {
-  if (!e.target.closest('.agendamento-item')) {
+  if (!e.target.closest('.agendamento-item, .grade-ag-card')) {
     document.querySelectorAll('.menu-acoes.aberto').forEach((m) => m.classList.remove('aberto'));
   }
 });
@@ -1091,16 +1202,35 @@ function infoSegmento(segmento) {
 // escopo combinado foi só registrar e listar.
 let mesFinanceiroRef = new Date();
 
+// US64 — status do lançamento (previsto/realizado/cancelado) só existe pra
+// lançamentos vinculados a agendamento; manuais (US18) nascem 'realizado' e
+// não mostram badge — já é óbvio que é dinheiro que entrou/saiu de fato.
+const LANCAMENTO_STATUS_LABEL = { previsto: 'Previsto', realizado: 'Realizado', cancelado: 'Cancelado' };
+const LANCAMENTO_STATUS_BADGE = { previsto: 'badge-previsto', realizado: 'badge-realizado', cancelado: 'badge-cancelado' };
+
 function renderLancamentoItem(l) {
   const sinal = l.tipo === 'entrada' ? '+' : '−';
   const classeTipo = l.tipo === 'entrada' ? 'financeiro-entrada' : 'financeiro-saida';
   const dataLabel = new Date(l.data + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' });
+  const origemAgendamento = l.origem === 'agendamento';
+
+  // CA "Cenário 8" — lançamento de agendamento identifica cliente/serviço/
+  // data do atendimento e mostra a origem explicitamente, em vez de só um
+  // texto livre de descrição como os manuais.
+  const titulo = origemAgendamento ? l.servico : (l.descricao || (l.tipo === 'entrada' ? 'Entrada' : 'Saída'));
+  const detalhe = origemAgendamento
+    ? `${dataLabel} · ${l.cliente || 'Cliente'} · <span class="badge-origem-agendamento">Agendamento</span>`
+    : dataLabel;
+  const statusBadge = origemAgendamento && l.status !== 'realizado'
+    ? `<span class="badge ${LANCAMENTO_STATUS_BADGE[l.status] || ''}">${LANCAMENTO_STATUS_LABEL[l.status] || l.status}</span>`
+    : '';
+
   return `
     <div class="agendamento-item">
       <div class="agendamento-linha-principal">
         <div>
-          <div class="agendamento-hora">${l.descricao || (l.tipo === 'entrada' ? 'Entrada' : 'Saída')}</div>
-          <div class="agendamento-detalhe">${dataLabel}</div>
+          <div class="agendamento-hora">${titulo}${statusBadge}</div>
+          <div class="agendamento-detalhe">${detalhe}</div>
         </div>
         <div class="${classeTipo}">${sinal} ${formatarPreco(l.valor)}</div>
       </div>
@@ -1135,6 +1265,16 @@ async function renderFinanceiro() {
         <div class="financeiro-resumo-label">Saldo</div>
         <div class="${data.resumo.saldo >= 0 ? 'financeiro-entrada' : 'financeiro-saida'}">${formatarPreco(data.resumo.saldo)}</div>
       </div>
+      ${data.resumo.previsto != null ? `
+        <div class="financeiro-resumo-card">
+          <div class="financeiro-resumo-label">Receita prevista</div>
+          <div class="financeiro-entrada">${formatarPreco(data.resumo.previsto)}</div>
+        </div>
+        <div class="financeiro-resumo-card">
+          <div class="financeiro-resumo-label">Receita realizada</div>
+          <div class="financeiro-entrada">${formatarPreco(data.resumo.realizado)}</div>
+        </div>
+      ` : ''}
     </div>
     <button class="btn-novo-agendamento" id="btn-novo-lancamento" style="margin-bottom:16px">+ Novo lançamento</button>
   `;
@@ -1541,6 +1681,7 @@ async function render() {
   // continuam nos 720px padrão, estreitos de propósito pra formulário.
   conteudo.classList.toggle('conteudo-largo', menuAtual === 'inicio' || menuAtual === 'agendamento');
 
+  if (menuAtual === 'onboarding') return renderOnboarding();
   if (menuAtual === 'inicio') return renderInicio();
   if (menuAtual === 'configuracao') return renderConfiguracao();
   if (menuAtual === 'perfil') return renderPerfil();
@@ -2094,9 +2235,11 @@ function renderModuloEmBreve() {
 // horário (CA da grade: "dividir a coluna ou dois componentes").
 function renderAgendamentoGradeCard(ag) {
   const cancelado = ag.status === 'cancelado';
+  const concluido = ag.status === 'concluido';
+  const semAcoes = cancelado || concluido;
   return `
     <div class="grade-ag-card${cancelado ? ' agendamento-cancelado' : ''}" data-id="${ag.id}">
-      <div class="grade-ag-linha-principal" ${cancelado ? '' : `data-acoes-toggle="${ag.id}"`}>
+      <div class="grade-ag-linha-principal" ${semAcoes ? '' : `data-acoes-toggle="${ag.id}"`}>
         <div>
           <div class="grade-ag-servico">${ag.servico}</div>
           <div class="grade-ag-cliente">${ag.cliente || ag.cliente_telefone}</div>
@@ -2104,12 +2247,14 @@ function renderAgendamentoGradeCard(ag) {
             ${formatarHora(ag.data_hora)} · ${ag.duracao_minutos}min · ${formatarPreco(ag.preco)} · ${ag.profissional}
             ${ag.encaixe ? '<span class="badge badge-encaixe">Encaixe</span>' : ''}
             ${cancelado ? '<span class="badge badge-cancelado">Cancelado</span>' : ''}
+            ${concluido ? '<span class="badge badge-concluido">Concluído</span>' : ''}
           </div>
         </div>
-        ${cancelado ? '' : '<button class="btn-acoes" aria-label="Ações">⋮</button>'}
+        ${semAcoes ? '' : '<button class="btn-acoes" aria-label="Ações">⋮</button>'}
       </div>
-      ${cancelado ? '' : `
+      ${semAcoes ? '' : `
         <div class="menu-acoes" id="menu-acoes-${ag.id}">
+          <button data-acao="concluir" data-id="${ag.id}">Concluir</button>
           <button data-acao="reagendar" data-id="${ag.id}">Reagendar</button>
           <button data-acao="encaixar" data-id="${ag.id}">Encaixar</button>
           <button data-acao="cancelar" data-id="${ag.id}" class="acao-perigo">Cancelar</button>
@@ -2154,6 +2299,67 @@ function renderGradeHorariosDoDia(dataISO, agendamentos) {
         .join('')}
     </div>
   `;
+}
+
+// ---------- Onboarding (US56) ----------
+// Tela dedicada de "primeiros passos", separada do painel de avisos (US59) e
+// das pendências do Início (US63): aqueles são nudges passivos que convivem
+// com o resto do painel, esta é uma tela sequencial com progresso e "próximo
+// passo recomendado" — pensada pra guiar o primeiro acesso, não pra ficar
+// competindo por atenção depois que o tenant já está operando normalmente.
+async function renderOnboarding() {
+  conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
+  const status = contaStatus || await api('/api/tenant/status');
+  if (!status) return;
+
+  const passos = construirPassosOnboarding(status);
+  const concluidos = passos.filter((p) => p.feito).length;
+  const proximoPasso = passos.find((p) => !p.feito);
+  const percentual = Math.round((concluidos / passos.length) * 100);
+
+  let html = `
+    <div class="onboarding-cabecalho">
+      <h2>Primeiros passos</h2>
+      <p>Complete esses passos para deixar o Kyvvo pronto pra receber agendamentos.</p>
+      <div class="onboarding-progresso">
+        <div class="onboarding-progresso-barra"><div class="onboarding-progresso-preenchido" style="width:${percentual}%"></div></div>
+        <span>${concluidos} de ${passos.length} concluídos</span>
+      </div>
+    </div>
+    <ul class="onboarding-lista">
+      ${passos.map((p) => {
+        const recomendado = !p.feito && proximoPasso && p.id === proximoPasso.id;
+        return `
+        <li class="onboarding-passo ${p.feito ? 'onboarding-passo-feito' : ''} ${recomendado ? 'onboarding-passo-recomendado' : ''}">
+          <div class="onboarding-passo-check" aria-hidden="true">${p.feito ? '✓' : ''}</div>
+          <div class="onboarding-passo-texto">
+            <strong>${p.titulo}</strong>
+            <p>${p.descricao}</p>
+            ${recomendado ? '<span class="onboarding-passo-tag">Próximo passo recomendado</span>' : ''}
+          </div>
+          ${p.feito ? '' : `<button class="btn-secundario" data-acao-onboarding-passo="${p.acaoMenu}">${p.acaoLabel}</button>`}
+        </li>
+      `;
+      }).join('')}
+    </ul>
+    ${concluidos < passos.length ? '<button class="link-pular-onboarding" id="btn-pular-onboarding">Pular por agora</button>' : ''}
+  `;
+
+  conteudo.innerHTML = html;
+  conteudo.querySelectorAll('[data-acao-onboarding-passo]').forEach((btn) => {
+    btn.addEventListener('click', () => selecionarMenu(btn.dataset.acaoOnboardingPasso));
+  });
+  const btnPular = document.getElementById('btn-pular-onboarding');
+  if (btnPular) {
+    btnPular.addEventListener('click', async () => {
+      // Só marca a dispensa pro backend não repetir o redirecionamento
+      // automático no próximo login — o item "Primeiros passos" continua na
+      // sidebar (CA "usuário pode retomar o onboarding depois").
+      await api('/api/onboarding/dispensar', { method: 'POST' });
+      if (contaStatus) contaStatus.onboarding_dispensado = true;
+      selecionarMenu('inicio');
+    });
+  }
 }
 
 // ---------- Início (dashboard) ----------
