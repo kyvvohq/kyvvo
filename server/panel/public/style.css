@@ -1755,6 +1755,55 @@ input.invalid, select.invalid {
   padding: 12px 24px;
 }
 
+/* Avisos contextuais (US59): cobrança pendente (crítico) e configuração
+   incompleta (dispensável). Empilham abaixo do trial-banner, um por linha. */
+.aviso-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 24px;
+  font-size: 14px;
+  border-bottom: 1px solid #2a2f52;
+}
+
+.aviso-critico {
+  background: rgba(255, 107, 107, 0.14);
+  color: #ffb4b4;
+}
+
+.aviso-info {
+  background: rgba(124, 92, 252, 0.1);
+  color: #d8d2ff;
+}
+
+.aviso-acoes {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.aviso-acao {
+  width: auto;
+  margin: 0;
+  padding: 6px 14px;
+  font-size: 13px;
+  border-radius: 6px;
+}
+
+.aviso-dispensar {
+  width: auto;
+  margin: 0;
+  padding: 2px 8px;
+  background: transparent;
+  color: inherit;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.aviso-dispensar:hover { background: rgba(255, 255, 255, 0.1); }
+
 /* Botão com spinner durante o envio (CA12). */
 button.loading {
   position: relative;

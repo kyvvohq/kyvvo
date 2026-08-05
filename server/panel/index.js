@@ -745,6 +745,20 @@ async function start() {
     // mais curto (ou já "expirado") do que o que realmente estava valendo.
     // Unifica no mesmo cálculo usado no resto do sistema.
     const trial = calcularTrialTenant(info);
+
+    // US59 — dados pros avisos contextuais do painel (CA "trial, configuração
+    // incompleta e cobrança pendente"): sem serviço/profissional cadastrado
+    // ou WhatsApp desconectado, o tenant não consegue receber agendamento
+    // nenhum pelo bot, então vale nudge mesmo fora do dashboard.
+    const { rows: contagem } = await pool.query(
+      `SELECT
+         (SELECT COUNT(*)::int FROM servicos WHERE tenant_id = $1 AND ativo = true AND excluido_em IS NULL) AS servicos,
+         (SELECT COUNT(*)::int FROM profissionais WHERE tenant_id = $1) AS profissionais,
+         (SELECT meta_phone_number_id FROM tenants WHERE id = $1) AS meta_phone_number_id`,
+      [tenantId]
+    );
+    const configInfo = contagem[0];
+
     return {
       tenant_id: tenantId,
       email: info.email,
@@ -756,6 +770,12 @@ async function start() {
       dias_restantes: trial.trialDiasRestantes,
       suporte_email: EMAIL_SUPORTE,
       suporte_whatsapp: WHATSAPP_SUPORTE,
+      pagamento_pendente: info.status === 'inadimplente',
+      configuracao: {
+        sem_servicos: configInfo.servicos === 0,
+        sem_profissionais: configInfo.profissionais === 0,
+        whatsapp_desconectado: !configInfo.meta_phone_number_id,
+      },
     };
   });
 
