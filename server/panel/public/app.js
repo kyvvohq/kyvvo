@@ -84,8 +84,14 @@ function saudacaoPorHorario() {
   return 'Boa noite';
 }
 
-const nomeUsuario = (localStorage.getItem('kyvvo_nome') || '').split(' ')[0] || '';
-document.getElementById('saudacao').textContent = `${saudacaoPorHorario()}${nomeUsuario ? ', ' + nomeUsuario : ''}!`;
+// US57 — extraído em função pra poder re-renderizar a saudação assim que o
+// nome muda em "Meu Perfil", sem precisar de logout/login pra refletir
+// (antes só `kyvvo_nome` no localStorage era lido, e só uma vez, no load).
+function atualizarSaudacao() {
+  const nomeUsuario = (localStorage.getItem('kyvvo_nome') || '').split(' ')[0] || '';
+  document.getElementById('saudacao').textContent = `${saudacaoPorHorario()}${nomeUsuario ? ', ' + nomeUsuario : ''}!`;
+}
+atualizarSaudacao();
 
 const conteudo = document.getElementById('conteudo');
 const menuEl = document.querySelector('.menu');
@@ -2338,6 +2344,11 @@ async function renderPerfil() {
     if (resultado && !resultado.error) {
       mostrarToast('Perfil atualizado com sucesso.', 'sucesso');
       preencherUserMenu(resultado);
+      // US57 — sem isso, a saudação do topo ("Bom dia, {nome antigo}!")
+      // ficava com o nome desatualizado até um novo login, mesmo com o
+      // resto da tela (user menu) já refletindo o nome novo.
+      localStorage.setItem('kyvvo_nome', resultado.nome_responsavel || '');
+      atualizarSaudacao();
       renderPerfil();
     } else {
       mostrarToast((resultado && resultado.error) || 'Erro ao salvar. Tente novamente.', 'erro');
