@@ -983,17 +983,21 @@ async function start() {
   fastify.get('/api/servicos', { preHandler: [fastify.authenticate] }, async (request) => {
     const { tenantId } = request.user;
     const { rows } = await pool.query(
-      `SELECT id, nome, duracao_minutos, preco, ativo, profissional_preferencial_id
+      `SELECT id, nome, duracao_minutos, preco, descricao, ativo, profissional_preferencial_id
        FROM servicos WHERE tenant_id = $1 AND excluido_em IS NULL ORDER BY nome`,
       [tenantId]
     );
     return { servicos: rows };
   });
 
+  // Descrição curta do serviço (US60/CA02) — limite pra não virar um texto
+  // longo dentro do card da listagem.
+  const DESCRICAO_SERVICO_MAX = 280;
+
   // ---------- CRUD de serviços (US17/ST17.1) ----------
   fastify.post('/api/servicos', { preHandler: [fastify.authenticate] }, async (request, reply) => {
     const { tenantId } = request.user;
-    const { nome, duracao_minutos: duracaoMinutos, preco, profissional_preferencial_id: profissionalPreferencialId } = request.body || {};
+    const { nome, duracao_minutos: duracaoMinutos, preco, descricao, profissional_preferencial_id: profissionalPreferencialId } = request.body || {};
 
     if (!nome || !nome.trim()) {
       return reply.code(400).send({ error: 'Campo "nome" é obrigatório' });
@@ -1004,12 +1008,15 @@ async function start() {
     if (preco !== undefined && preco !== null && (!Number.isFinite(preco) || preco < 0)) {
       return reply.code(400).send({ error: 'Campo "preco" deve ser um número maior ou igual a zero' });
     }
+    if (descricao && descricao.length > DESCRICAO_SERVICO_MAX) {
+      return reply.code(400).send({ error: `Campo "descricao" deve ter no máximo ${DESCRICAO_SERVICO_MAX} caracteres` });
+    }
 
     const { rows } = await pool.query(
-      `INSERT INTO servicos (tenant_id, nome, duracao_minutos, preco, profissional_preferencial_id)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, nome, duracao_minutos, preco, ativo, profissional_preferencial_id`,
-      [tenantId, nome.trim(), duracaoMinutos, preco ?? null, profissionalPreferencialId || null]
+      `INSERT INTO servicos (tenant_id, nome, duracao_minutos, preco, descricao, profissional_preferencial_id)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, nome, duracao_minutos, preco, descricao, ativo, profissional_preferencial_id`,
+      [tenantId, nome.trim(), duracaoMinutos, preco ?? null, descricao ? descricao.trim() : null, profissionalPreferencialId || null]
     );
     reply.code(201);
     return rows[0];
@@ -1018,7 +1025,7 @@ async function start() {
   fastify.patch('/api/servicos/:id', { preHandler: [fastify.authenticate] }, async (request, reply) => {
     const { tenantId } = request.user;
     const { id } = request.params;
-    const { nome, duracao_minutos: duracaoMinutos, preco, ativo, profissional_preferencial_id: profissionalPreferencialId } = request.body || {};
+    const { nome, duracao_minutos: duracaoMinutos, preco, descricao, ativo, profissional_preferencial_id: profissionalPreferencialId } = request.body || {};
 
     if (nome !== undefined && !nome.trim()) {
       return reply.code(400).send({ error: 'Campo "nome" não pode ficar vazio' });
@@ -1029,18 +1036,23 @@ async function start() {
     if (preco !== undefined && preco !== null && (!Number.isFinite(preco) || preco < 0)) {
       return reply.code(400).send({ error: 'Campo "preco" deve ser um número maior ou igual a zero' });
     }
+    if (descricao && descricao.length > DESCRICAO_SERVICO_MAX) {
+      return reply.code(400).send({ error: `Campo "descricao" deve ter no máximo ${DESCRICAO_SERVICO_MAX} caracteres` });
+    }
 
     const { rows } = await pool.query(
       `UPDATE servicos SET
          nome = COALESCE($3, nome),
          duracao_minutos = COALESCE($4, duracao_minutos),
          preco = CASE WHEN $5 THEN $6 ELSE preco END,
-         ativo = COALESCE($7, ativo),
-         profissional_preferencial_id = CASE WHEN $8 THEN $9 ELSE profissional_preferencial_id END
+         descricao = CASE WHEN $7 THEN $8 ELSE descricao END,
+         ativo = COALESCE($9, ativo),
+         profissional_preferencial_id = CASE WHEN $10 THEN $11 ELSE profissional_preferencial_id END
        WHERE id = $1 AND tenant_id = $2 AND excluido_em IS NULL
-       RETURNING id, nome, duracao_minutos, preco, ativo, profissional_preferencial_id`,
+       RETURNING id, nome, duracao_minutos, preco, descricao, ativo, profissional_preferencial_id`,
       [
         id, tenantId, nome ? nome.trim() : null, duracaoMinutos ?? null, preco !== undefined, preco ?? null,
+        descricao !== undefined, descricao ? descricao.trim() : null,
         ativo ?? null, profissionalPreferencialId !== undefined, profissionalPreferencialId || null,
       ]
     );

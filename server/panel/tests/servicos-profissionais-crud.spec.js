@@ -42,6 +42,16 @@ test.describe('Serviços — CRUD (US17/PR4)', () => {
     await expect(item.locator('[data-acao-servico="excluir"]')).toBeVisible();
   });
 
+  // US60 — descrição curta é opcional: aparece no card quando cadastrada.
+  test('serviço com descrição mostra o texto no card', async ({ page }) => {
+    await entrarNoPainel(page, {
+      servicos: [{ id: 's1', nome: 'Corte', duracao_minutos: 30, preco: 50, ativo: true, descricao: 'Inclui lavagem e finalização' }],
+    });
+    await page.click('#menu-cadastros-toggle');
+    await page.click('.menu-item[data-menu="servicos"]');
+    await expect(page.locator('.servico-item')).toContainText('Inclui lavagem e finalização');
+  });
+
   test('serviço com profissional preferencial mostra o nome dele no card', async ({ page }) => {
     await entrarNoPainel(page, {
       servicos: [{ id: 's1', nome: 'Corte', duracao_minutos: 30, preco: 50, ativo: true, profissional_preferencial_id: 'p1' }],
@@ -84,16 +94,23 @@ test.describe('Serviços — CRUD (US17/PR4)', () => {
     await page.fill('#servico-nome', 'Escova');
     await page.fill('#servico-duracao', '45');
     await page.fill('#servico-preco', '60');
+    await page.fill('#servico-descricao', 'Escova modeladora');
     await page.selectOption('#servico-profissional-preferencial', 'p1');
     await page.click('#btn-salvar-servico');
 
     await expect(page.locator('.toast-sucesso')).toHaveText(/criado com sucesso/);
-    expect(corpoEnviado).toMatchObject({ nome: 'Escova', duracao_minutos: 45, preco: 60, profissional_preferencial_id: 'p1' });
+    expect(corpoEnviado).toMatchObject({
+      nome: 'Escova',
+      duracao_minutos: 45,
+      preco: 60,
+      descricao: 'Escova modeladora',
+      profissional_preferencial_id: 'p1',
+    });
   });
 
-  test('editar um serviço existente pré-preenche o formulário (inclusive profissional preferencial)', async ({ page }) => {
+  test('editar um serviço existente pré-preenche o formulário (inclusive descrição e profissional preferencial)', async ({ page }) => {
     await entrarNoPainel(page, {
-      servicos: [{ id: 's1', nome: 'Corte', duracao_minutos: 30, preco: 50, ativo: true, profissional_preferencial_id: 'p1' }],
+      servicos: [{ id: 's1', nome: 'Corte', duracao_minutos: 30, preco: 50, ativo: true, descricao: 'Inclui lavagem', profissional_preferencial_id: 'p1' }],
       profissionais: [{ id: 'p1', nome: 'Bruna', servicos: ['s1'] }],
     });
     await page.click('#menu-cadastros-toggle');
@@ -103,6 +120,7 @@ test.describe('Serviços — CRUD (US17/PR4)', () => {
     await expect(page.locator('#servico-nome')).toHaveValue('Corte');
     await expect(page.locator('#servico-duracao')).toHaveValue('30');
     await expect(page.locator('#servico-preco')).toHaveValue('50');
+    await expect(page.locator('#servico-descricao')).toHaveValue('Inclui lavagem');
     await expect(page.locator('#servico-profissional-preferencial')).toHaveValue('p1');
   });
 

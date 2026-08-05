@@ -1435,6 +1435,7 @@ function renderServicoItem(s, nomeProfissionalPreferencial) {
         <div class="agendamento-detalhe">Serviço: <strong>${s.nome}</strong></div>
         <div class="agendamento-detalhe">Duração: ${s.duracao_minutos} min</div>
         <div class="agendamento-detalhe">Valor: ${formatarPreco(s.preco)}</div>
+        ${s.descricao ? `<div class="agendamento-detalhe servico-descricao">${s.descricao}</div>` : ''}
         ${nomeProfissionalPreferencial ? `<div class="agendamento-detalhe">Profissional preferencial: ${nomeProfissionalPreferencial}</div>` : ''}
         ${desabilitado ? '<span class="badge badge-status-inativo">Desabilitado</span>' : ''}
       </div>
@@ -1494,6 +1495,8 @@ function abrirModalServico(servico) {
         <input type="number" id="servico-duracao" data-obrigatorio min="1" value="${editando ? servico.duracao_minutos : ''}">
         <label for="servico-preco">Preço em R$ (opcional)</label>
         <input type="number" id="servico-preco" min="0" step="0.01" value="${editando && servico.preco != null ? servico.preco : ''}">
+        <label for="servico-descricao">Descrição curta (opcional)</label>
+        <textarea id="servico-descricao" rows="2" maxlength="280" placeholder="Ex: inclui lavagem e finalização">${editando && servico.descricao ? servico.descricao : ''}</textarea>
         <label for="servico-profissional-preferencial">Profissional preferencial (opcional)</label>
         <select id="servico-profissional-preferencial"><option value="">Carregando profissionais...</option></select>
         <div class="modal-acoes">
@@ -1542,6 +1545,7 @@ function abrirModalServico(servico) {
       nome: document.getElementById('servico-nome').value.trim(),
       duracao_minutos: parseInt(document.getElementById('servico-duracao').value, 10),
       preco: precoValor ? parseFloat(precoValor) : null,
+      descricao: document.getElementById('servico-descricao').value.trim() || null,
       profissional_preferencial_id: document.getElementById('servico-profissional-preferencial').value || null,
     };
 

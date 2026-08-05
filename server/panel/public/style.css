@@ -466,6 +466,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .servico-info .agendamento-detalhe:first-child { margin-top: 0; }
 .servico-desabilitado { opacity: 0.6; }
 
+/* Descrição curta do serviço (US60) — mesmo tom dos outros detalhes, só em
+   itálico pra diferenciar de um dado estruturado (duração, valor). */
+.servico-descricao { font-style: italic; }
+
 .servico-acoes {
   display: flex;
   gap: 8px;
