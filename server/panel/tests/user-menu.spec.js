@@ -66,11 +66,11 @@ test.describe('User menu — dropdown (PR11)', () => {
     await expect(page.locator('#user-menu-dropdown')).toBeHidden();
   });
 
-  test('lista Meu Perfil, Minha Empresa, WhatsApp, Cobrança, Preferências e Ajuda, com divisor antes do Sair', async ({ page }) => {
+  test('lista Meu Perfil, Minha Empresa, Equipe, WhatsApp, Cobrança, Preferências e Ajuda, com divisor antes do Sair', async ({ page }) => {
     await entrarNoPainel(page);
     await page.click('#user-menu-toggle');
     const itens = await page.locator('.user-menu-item').allTextContents();
-    expect(itens).toEqual(['Meu Perfil', 'Minha Empresa', 'WhatsApp', 'Cobrança', 'Preferências', 'Ajuda']);
+    expect(itens).toEqual(['Meu Perfil', 'Minha Empresa', 'Equipe', 'WhatsApp', 'Cobrança', 'Preferências', 'Ajuda']);
     await expect(page.locator('.user-menu-divisor')).toBeVisible();
     await expect(page.locator('#btn-sair')).toContainText('Sair');
   });

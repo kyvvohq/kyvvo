@@ -46,6 +46,7 @@ const cors = require('@fastify/cors');
 const staticPlugin = require('@fastify/static');
 const path = require('path');
 const fsPromises = require('fs/promises');
+const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const { Pool } = require('pg');
 const tokenService = require('./token-service');
@@ -394,7 +395,7 @@ async function start() {
     }
 
     const { rows } = await pool.query(
-      `SELECT u.token_version, u.email_verified, t.status AS tenant_status, t.ativado_em
+      `SELECT u.token_version, u.email_verified, u.role, u.ativo, t.status AS tenant_status, t.ativado_em
        FROM usuarios u JOIN tenants t ON t.id = u.tenant_id
        WHERE u.id = $1`,
       [request.user.userId]
@@ -403,6 +404,17 @@ async function start() {
     if (!usuario || usuario.token_version !== request.user.tokenVersion) {
       return reply.code(401).send({ error: 'Sessão expirada. Faça login novamente.' });
     }
+    // US62 — membro desativado pelo administrador da equipe perde acesso na
+    // próxima requisição, mesmo com um JWT ainda válido (mesmo espírito do
+    // token_version acima, só que pra "conta inteira desligada" em vez de
+    // "essa sessão específica").
+    if (!usuario.ativo) {
+      return reply.code(401).send({ error: 'Acesso desativado. Fale com o administrador da sua equipe.' });
+    }
+    // Sempre a fonte de verdade do banco, nunca um claim do JWT — uma
+    // mudança de perfil feita pelo administrador vale já na próxima
+    // requisição, sem esperar o membro deslogar e logar de novo.
+    request.user.role = usuario.role;
 
     const rotaAtual = `${request.method} ${request.routeOptions.url}`;
     if (!usuario.email_verified) {
@@ -477,6 +489,16 @@ async function start() {
     }
   });
 
+  // US62 — restringe rotas ao perfil administrador (gestão de equipe,
+  // cobrança/financeiro, configurações do negócio). Encadear sempre depois
+  // de fastify.authenticate, que já resolve request.user.role a partir do
+  // banco (nunca do JWT).
+  fastify.decorate('requireAdmin', async (request, reply) => {
+    if (request.user.role !== 'administrador') {
+      return reply.code(403).send({ error: 'Ação restrita ao administrador da conta.' });
+    }
+  });
+
   // ---------- Auth ----------
   fastify.post('/api/auth/login', async (request, reply) => {
     const { email, senha } = request.body || {};
@@ -485,7 +507,8 @@ async function start() {
     }
 
     const { rows } = await pool.query(
-      `SELECT u.id, u.tenant_id, u.email, u.senha_hash, u.nome, u.token_version, u.email_verified, t.ativo AS tenant_ativo
+      `SELECT u.id, u.tenant_id, u.email, u.senha_hash, u.nome, u.token_version, u.email_verified,
+              u.role, u.ativo AS usuario_ativo, t.ativo AS tenant_ativo
        FROM usuarios u JOIN tenants t ON t.id = u.tenant_id
        WHERE u.email = $1`,
       [email.toLowerCase().trim()]
@@ -506,6 +529,11 @@ async function start() {
     if (!usuario.tenant_ativo) {
       return reply.code(403).send({ error: 'Acesso desativado. Fale com o suporte da Kyvvo.' });
     }
+    // US62 — membro desativado pelo administrador da equipe (distinto do
+    // tenant inteiro desativado pela Kyvvo acima).
+    if (!usuario.usuario_ativo) {
+      return reply.code(403).send({ error: 'Acesso desativado. Fale com o administrador da sua equipe.' });
+    }
 
     const token = fastify.jwt.sign(
       { userId: usuario.id, tenantId: usuario.tenant_id, email: usuario.email, tokenVersion: usuario.token_version },
@@ -513,8 +541,9 @@ async function start() {
     );
 
     // email_verified informa ao front se deve redirecionar pra tela de
-    // validação (CA10) em vez de entrar direto no portal.
-    return { token, nome: usuario.nome, email: usuario.email, email_verified: usuario.email_verified };
+    // validação (CA10) em vez de entrar direto no portal. role (US62)
+    // informa se mostra itens de menu restritos ao administrador.
+    return { token, nome: usuario.nome, email: usuario.email, email_verified: usuario.email_verified, role: usuario.role };
   });
 
   // Invalida o token atual (e qualquer outro emitido antes dele) incrementando
@@ -869,7 +898,7 @@ async function start() {
   fastify.get('/api/tenant/status', { preHandler: [fastify.authenticate] }, async (request) => {
     const { userId, tenantId } = request.user;
     const { rows } = await pool.query(
-      `SELECT u.email, u.email_verified, t.status, t.plano, t.trial_expires_at, t.ativado_em,
+      `SELECT u.email, u.email_verified, u.role, t.status, t.plano, t.trial_expires_at, t.ativado_em,
               t.onboarding_horario_revisado, t.onboarding_dispensado
        FROM usuarios u JOIN tenants t ON t.id = u.tenant_id
        WHERE u.id = $1`,
@@ -903,6 +932,7 @@ async function start() {
       email: info.email,
       email_mascarado: info.email ? tokenService.mascararEmail(info.email) : null,
       email_verified: !!info.email_verified,
+      role: info.role,
       status: info.status,
       plano: info.plano,
       trial_ativo: trial.trialAtivo,
@@ -1872,6 +1902,306 @@ async function start() {
     return buscarPerfil(userId);
   });
 
+  // ---------- Equipe (US62) ----------
+  const CONVITE_EXPIRACAO_DIAS = 7;
+
+  // Token opaco (link de convite) — diferente do código de 6 dígitos do
+  // token-service.js: aqui é um clique só, não algo pra digitar.
+  function gerarTokenConvite() {
+    return crypto.randomBytes(32).toString('hex');
+  }
+
+  // Best-effort, mesmo padrão do token-service.js: sem RESEND_API_KEY
+  // configurada, cai num modo de log (dev/homolog sem depender do provedor).
+  async function enviarConviteEmail({ email, tenantNome, convidadoPorNome, link, role }) {
+    const apiKey = process.env.RESEND_API_KEY;
+    const from = process.env.RESEND_FROM || 'Kyvvo <no-reply@kyvvo.com.br>';
+    const perfilLabel = role === 'administrador' ? 'administrador' : 'operador';
+
+    if (!apiKey) {
+      console.log(`[equipe] (dev) convite para ${email} (${perfilLabel} de ${tenantNome}) — link: ${link}`);
+      return;
+    }
+
+    try {
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from,
+          to: [email],
+          subject: `${convidadoPorNome || 'Alguém'} te convidou para o Kyvvo`,
+          html: `
+          <div style="font-family:Arial,Helvetica,sans-serif;background:#080b14;padding:32px;color:#f2f2f7">
+            <div style="max-width:420px;margin:0 auto;background:#12162a;border:1px solid #232847;border-radius:16px;padding:32px">
+              <div style="font-size:22px;font-weight:800;letter-spacing:-.03em;margin-bottom:24px">
+                ky<span style="color:#a688ff">vv</span>o
+              </div>
+              <h1 style="font-size:18px;margin:0 0 12px">Você foi convidado para ${tenantNome}</h1>
+              <p style="color:#a1a5c4;font-size:14px;line-height:1.6;margin:0 0 24px">
+                ${convidadoPorNome || 'Um administrador'} te convidou pra fazer parte da equipe no Kyvvo, como <strong>${perfilLabel}</strong>.
+              </p>
+              <a href="${link}" style="display:inline-block;background:#7c5cfc;color:white;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600">Aceitar convite</a>
+              <p style="color:#6b7099;font-size:12px;line-height:1.6;margin:24px 0 0">
+                O convite expira em ${CONVITE_EXPIRACAO_DIAS} dias. Se não foi você quem esperava isso, ignore este e-mail.
+              </p>
+            </div>
+          </div>`,
+        }),
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!res.ok) console.error(`[equipe] Resend respondeu ${res.status} ao convidar ${email}`);
+    } catch (erro) {
+      console.error(`[equipe] Falha ao enviar convite para ${email}: ${erro.message}`);
+    }
+  }
+
+  // CA "convite possui status pendente/aceito/expirado" — 'expirado' nunca é
+  // gravado no banco, é computado na leitura (evita precisar de um job
+  // periódico só pra atualizar a coluna).
+  fastify.get('/api/equipe', { preHandler: [fastify.authenticate, fastify.requireAdmin] }, async (request) => {
+    const { tenantId } = request.user;
+    const { rows: membros } = await pool.query(
+      `SELECT id, nome, email, role, ativo, criado_em
+       FROM usuarios WHERE tenant_id = $1 ORDER BY criado_em`,
+      [tenantId]
+    );
+    const { rows: convites } = await pool.query(
+      `SELECT id, email, role,
+              CASE WHEN status = 'pendente' AND expires_at < now() THEN 'expirado' ELSE status END AS status,
+              expires_at, criado_em
+       FROM convites_equipe
+       WHERE tenant_id = $1 AND status IN ('pendente', 'expirado')
+       ORDER BY criado_em DESC`,
+      [tenantId]
+    );
+    return { membros, convites };
+  });
+
+  fastify.post('/api/equipe/convites', { preHandler: [fastify.authenticate, fastify.requireAdmin] }, async (request, reply) => {
+    const { tenantId, userId } = request.user;
+    const { email: emailBruto, role } = request.body || {};
+    const email = (emailBruto || '').toLowerCase().trim();
+
+    if (!EMAIL_REGEX.test(email)) {
+      return reply.code(400).send({ error: 'Digite um e-mail válido.' });
+    }
+    if (!['administrador', 'operador'].includes(role)) {
+      return reply.code(400).send({ error: 'Selecione um perfil de acesso válido.' });
+    }
+
+    const { rows: usuarioExistente } = await pool.query('SELECT 1 FROM usuarios WHERE email = $1', [email]);
+    if (usuarioExistente.length > 0) {
+      return reply.code(409).send({ error: 'Este e-mail já está cadastrado no Kyvvo.' });
+    }
+
+    const { rows: quemConvida } = await pool.query(
+      `SELECT u.nome AS convidado_por_nome, t.nome AS tenant_nome FROM usuarios u JOIN tenants t ON t.id = u.tenant_id WHERE u.id = $1`,
+      [userId]
+    );
+    const { convidado_por_nome: convidadoPorNome, tenant_nome: tenantNome } = quemConvida[0];
+
+    const token = gerarTokenConvite();
+    const expiresAt = new Date(Date.now() + CONVITE_EXPIRACAO_DIAS * 24 * 60 * 60000);
+
+    const client = await pool.connect();
+    let convite;
+    try {
+      await client.query('BEGIN');
+      // Reenviar convite pro mesmo e-mail cancela o pendente anterior antes
+      // de criar o novo — o índice único (tenant_id, lower(email)) WHERE
+      // status='pendente' é o cinto de segurança contra corrida.
+      await client.query(
+        `UPDATE convites_equipe SET status = 'cancelado' WHERE tenant_id = $1 AND lower(email) = $2 AND status = 'pendente'`,
+        [tenantId, email]
+      );
+      const { rows } = await client.query(
+        `INSERT INTO convites_equipe (tenant_id, email, role, token, convidado_por, expires_at)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING id, email, role, status, expires_at, criado_em`,
+        [tenantId, email, role, token, userId, expiresAt.toISOString()]
+      );
+      convite = rows[0];
+      await client.query('COMMIT');
+    } catch (erro) {
+      await client.query('ROLLBACK');
+      if (erro.code === '23505') {
+        return reply.code(409).send({ error: 'Já existe um convite pendente para este e-mail.' });
+      }
+      throw erro;
+    } finally {
+      client.release();
+    }
+
+    const origemApp = `${request.protocol}://${request.hostname}`;
+    const link = `${origemApp}/equipe-convite.html?token=${token}`;
+    enviarConviteEmail({ email, tenantNome, convidadoPorNome, link, role });
+
+    reply.code(201);
+    return convite;
+  });
+
+  fastify.delete('/api/equipe/convites/:id', { preHandler: [fastify.authenticate, fastify.requireAdmin] }, async (request, reply) => {
+    const { tenantId } = request.user;
+    const { rows } = await pool.query(
+      `UPDATE convites_equipe SET status = 'cancelado'
+       WHERE id = $1 AND tenant_id = $2 AND status = 'pendente'
+       RETURNING id`,
+      [request.params.id, tenantId]
+    );
+    if (rows.length === 0) {
+      return reply.code(404).send({ error: 'Convite pendente não encontrado.' });
+    }
+    return { ok: true };
+  });
+
+  // Pública (sem fastify.authenticate) — quem recebeu o convite ainda não
+  // tem sessão. Só devolve o mínimo pra montar a tela (CA "convite possui
+  // status"): nunca vaza o token de volta, nem dados de outros convites.
+  fastify.get('/api/equipe/convites/:token', async (request, reply) => {
+    const { rows } = await pool.query(
+      `SELECT c.email, c.role,
+              CASE WHEN c.status = 'pendente' AND c.expires_at < now() THEN 'expirado' ELSE c.status END AS status,
+              t.nome AS tenant_nome
+       FROM convites_equipe c JOIN tenants t ON t.id = c.tenant_id
+       WHERE c.token = $1`,
+      [request.params.token]
+    );
+    const convite = rows[0];
+    if (!convite) {
+      return reply.code(404).send({ error: 'Convite não encontrado.' });
+    }
+    return convite;
+  });
+
+  fastify.post('/api/equipe/convites/:token/aceitar', async (request, reply) => {
+    const { nome: nomeBruto, senha } = request.body || {};
+    const nome = (nomeBruto || '').trim();
+
+    if (nome.length < 2) {
+      return reply.code(400).send({ error: 'Informe seu nome.' });
+    }
+    if (!SENHA_REGEX.test(senha || '')) {
+      return reply.code(400).send({
+        error: 'A senha deve ter no mínimo 8 caracteres, 1 número e 1 letra maiúscula.',
+      });
+    }
+
+    const { rows } = await pool.query(
+      `SELECT id, tenant_id, email, role,
+              CASE WHEN status = 'pendente' AND expires_at < now() THEN 'expirado' ELSE status END AS status
+       FROM convites_equipe WHERE token = $1`,
+      [request.params.token]
+    );
+    const convite = rows[0];
+    if (!convite) {
+      return reply.code(404).send({ error: 'Convite não encontrado.' });
+    }
+    if (convite.status !== 'pendente') {
+      const mensagens = {
+        aceito: 'Este convite já foi aceito.',
+        expirado: 'Este convite expirou. Peça um novo convite ao administrador.',
+        cancelado: 'Este convite foi cancelado.',
+      };
+      return reply.code(400).send({ error: mensagens[convite.status] || 'Convite inválido.' });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const hash = await bcrypt.hash(senha, 10);
+      // E-mail já veio de um convite enviado pela própria Kyvvo — nasce
+      // verificado, sem precisar do fluxo de token de 6 dígitos da US20.
+      const { rows: usuarioRows } = await client.query(
+        `INSERT INTO usuarios (tenant_id, email, senha_hash, nome, role, email_verified)
+         VALUES ($1, $2, $3, $4, $5, true)
+         RETURNING id, token_version`,
+        [convite.tenant_id, convite.email, hash, nome, convite.role]
+      );
+      await client.query(`UPDATE convites_equipe SET status = 'aceito', aceito_em = now() WHERE id = $1`, [convite.id]);
+      await client.query('COMMIT');
+
+      const token = fastify.jwt.sign(
+        { userId: usuarioRows[0].id, tenantId: convite.tenant_id, email: convite.email, tokenVersion: usuarioRows[0].token_version },
+        { expiresIn: '7d' }
+      );
+      return { token, nome, email: convite.email, role: convite.role, email_verified: true };
+    } catch (erro) {
+      await client.query('ROLLBACK');
+      // Corrida: o e-mail virou usuário em outro tenant entre a checagem e o
+      // INSERT (unicidade global de usuarios.email).
+      if (erro.code === '23505') {
+        return reply.code(409).send({ error: 'Este e-mail já está cadastrado no Kyvvo.' });
+      }
+      throw erro;
+    } finally {
+      client.release();
+    }
+  });
+
+  fastify.patch('/api/equipe/membros/:id', { preHandler: [fastify.authenticate, fastify.requireAdmin] }, async (request, reply) => {
+    const { tenantId, userId } = request.user;
+    const { ativo } = request.body || {};
+    if (typeof ativo !== 'boolean') {
+      return reply.code(400).send({ error: 'Campo "ativo" deve ser verdadeiro ou falso.' });
+    }
+    if (request.params.id === userId) {
+      return reply.code(400).send({ error: 'Você não pode desativar sua própria conta.' });
+    }
+
+    const { rows: membroRows } = await pool.query(
+      'SELECT role FROM usuarios WHERE id = $1 AND tenant_id = $2',
+      [request.params.id, tenantId]
+    );
+    const membro = membroRows[0];
+    if (!membro) {
+      return reply.code(404).send({ error: 'Membro não encontrado.' });
+    }
+    if (!ativo && membro.role === 'administrador') {
+      const { rows: outrosAdmins } = await pool.query(
+        `SELECT COUNT(*)::int AS total FROM usuarios WHERE tenant_id = $1 AND role = 'administrador' AND ativo AND id <> $2`,
+        [tenantId, request.params.id]
+      );
+      if (outrosAdmins[0].total === 0) {
+        return reply.code(400).send({ error: 'Não é possível desativar o último administrador da conta.' });
+      }
+    }
+
+    const { rows } = await pool.query(
+      'UPDATE usuarios SET ativo = $3, token_version = token_version + 1 WHERE id = $1 AND tenant_id = $2 RETURNING id, nome, email, role, ativo',
+      [request.params.id, tenantId, ativo]
+    );
+    return rows[0];
+  });
+
+  fastify.delete('/api/equipe/membros/:id', { preHandler: [fastify.authenticate, fastify.requireAdmin] }, async (request, reply) => {
+    const { tenantId, userId } = request.user;
+    if (request.params.id === userId) {
+      return reply.code(400).send({ error: 'Você não pode remover sua própria conta.' });
+    }
+
+    const { rows: membroRows } = await pool.query(
+      'SELECT role FROM usuarios WHERE id = $1 AND tenant_id = $2',
+      [request.params.id, tenantId]
+    );
+    const membro = membroRows[0];
+    if (!membro) {
+      return reply.code(404).send({ error: 'Membro não encontrado.' });
+    }
+    if (membro.role === 'administrador') {
+      const { rows: outrosAdmins } = await pool.query(
+        `SELECT COUNT(*)::int AS total FROM usuarios WHERE tenant_id = $1 AND role = 'administrador' AND ativo AND id <> $2`,
+        [tenantId, request.params.id]
+      );
+      if (outrosAdmins[0].total === 0) {
+        return reply.code(400).send({ error: 'Não é possível remover o último administrador da conta.' });
+      }
+    }
+
+    await pool.query('DELETE FROM usuarios WHERE id = $1 AND tenant_id = $2', [request.params.id, tenantId]);
+    return { ok: true };
+  });
+
   // ---------- WhatsApp (self-service, Embedded Signup da Meta) ----------
   // appId/configId não são secretos — só inicializam o SDK do Facebook no
   // frontend, por isso não têm problema em ir numa rota GET comum.
@@ -1937,7 +2267,9 @@ async function start() {
   // pra a operação ver quem está esperando (aparece em GET
   // /admin/api/tenants/:id, e o vínculo do número em si já é feito por
   // /admin/api/numeros-prontos/:id/vincular, ver migration 037).
-  fastify.post('/api/whatsapp/solicitar-numero-novo', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+  // US62 — conectar/trocar o WhatsApp do negócio é configuração do negócio,
+  // restrita ao administrador (status/config pública continuam livres).
+  fastify.post('/api/whatsapp/solicitar-numero-novo', { preHandler: [fastify.authenticate, fastify.requireAdmin] }, async (request, reply) => {
     const { tenantId } = request.user;
     const { ddd_preferencia: dddPreferencia } = request.body || {};
 
@@ -1970,7 +2302,7 @@ async function start() {
   // token pra guardar — o code só confirma que o signup é legítimo; quem
   // manda/recebe mensagem continua sendo o Usuário do Sistema compartilhado
   // (ver comentário em meta-whatsapp-service.js).
-  fastify.post('/api/whatsapp/conectar', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+  fastify.post('/api/whatsapp/conectar', { preHandler: [fastify.authenticate, fastify.requireAdmin] }, async (request, reply) => {
     const { tenantId } = request.user;
     const { code, wabaId, phoneNumberId } = request.body || {};
 
@@ -2022,7 +2354,10 @@ async function start() {
 
   const HORARIO_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
 
-  fastify.patch('/api/configuracao', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+  // US62 — mudar horário/dias de funcionamento é configuração do negócio,
+  // restrita ao administrador (leitura continua livre pra qualquer membro
+  // logado, já que a agenda depende desses dados pra renderizar).
+  fastify.patch('/api/configuracao', { preHandler: [fastify.authenticate, fastify.requireAdmin] }, async (request, reply) => {
     const { tenantId } = request.user;
     const {
       diasFuncionamento, formatoHora, horarioAbertura, horarioFechamento,
@@ -2177,7 +2512,8 @@ async function start() {
   // só acessível a quem tem o módulo "financeiro" ativo.
   fastify.get(
     '/api/financeiro/lancamentos',
-    { preHandler: [fastify.authenticate, fastify.requireModulo('financeiro')] },
+    // US62 — dinheiro é visão de administrador; operador não acessa.
+    { preHandler: [fastify.authenticate, fastify.requireModulo('financeiro'), fastify.requireAdmin] },
     async (request) => {
       const { tenantId } = request.user;
       const mesRef = request.query.mes || mesAtualBrasilia();
@@ -2220,7 +2556,8 @@ async function start() {
 
   fastify.post(
     '/api/financeiro/lancamentos',
-    { preHandler: [fastify.authenticate, fastify.requireModulo('financeiro')] },
+    // US62 — dinheiro é visão de administrador; operador não acessa.
+    { preHandler: [fastify.authenticate, fastify.requireModulo('financeiro'), fastify.requireAdmin] },
     async (request, reply) => {
       const { tenantId } = request.user;
       const { tipo, valor, descricao, data } = request.body || {};
@@ -2316,7 +2653,8 @@ async function start() {
   }
 
   // CA02/CA07/CA08 — estado atual da aba de pagamentos do tenant logado.
-  fastify.get('/api/pagamentos', { preHandler: [fastify.authenticate] }, async (request) => {
+  // US62 — cobrança/assinatura é visão de administrador; operador não acessa.
+  fastify.get('/api/pagamentos', { preHandler: [fastify.authenticate, fastify.requireAdmin] }, async (request) => {
     const { tenantId } = request.user;
     const { rows } = await pool.query(
       `SELECT plano, status, ativado_em, asaas_customer_id, asaas_subscription_id,
@@ -2335,7 +2673,7 @@ async function start() {
   // `trial_percentual` são derivados de `trial_dias_restantes` com o mesmo
   // critério (Math.ceil) usado no cálculo dos dias restantes, e sempre
   // clampados entre 0 e TRIAL_DIAS mesmo com o trial já expirado.
-  fastify.get('/api/pagamentos/status', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+  fastify.get('/api/pagamentos/status', { preHandler: [fastify.authenticate, fastify.requireAdmin] }, async (request, reply) => {
     const { tenantId } = request.user;
     const { rows } = await pool.query('SELECT status, plano, ativado_em FROM tenants WHERE id = $1', [tenantId]);
     const tenant = rows[0];
@@ -2370,7 +2708,7 @@ async function start() {
   // (`POST /creditCard/tokenize`). Por isso o número/validade/CVV chegam aqui
   // brutos (via HTTPS) e são tokenizados neste handler, nunca armazenados
   // nem logados — só repassados à Asaas e descartados.
-  fastify.post('/api/pagamentos/cadastrar', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+  fastify.post('/api/pagamentos/cadastrar', { preHandler: [fastify.authenticate, fastify.requireAdmin] }, async (request, reply) => {
     const { tenantId } = request.user;
     const {
       meio,
@@ -2612,7 +2950,7 @@ async function start() {
   // cobrança recorrente na Asaas mas mantém o acesso até o fim do período já
   // pago (`acesso_ate`, CA05). Só o próprio tenant autenticado pode cancelar
   // a própria assinatura — nunca aceita um id de tenant vindo do corpo.
-  fastify.delete('/api/pagamentos/assinatura', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+  fastify.delete('/api/pagamentos/assinatura', { preHandler: [fastify.authenticate, fastify.requireAdmin] }, async (request, reply) => {
     const { tenantId } = request.user;
     const { rows } = await pool.query(
       `SELECT status, asaas_subscription_id FROM tenants WHERE id = $1`,
