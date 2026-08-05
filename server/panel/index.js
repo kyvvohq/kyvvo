@@ -731,7 +731,8 @@ async function start() {
   fastify.get('/api/tenant/status', { preHandler: [fastify.authenticate] }, async (request) => {
     const { userId, tenantId } = request.user;
     const { rows } = await pool.query(
-      `SELECT u.email, u.email_verified, t.status, t.plano, t.trial_expires_at, t.ativado_em
+      `SELECT u.email, u.email_verified, t.status, t.plano, t.trial_expires_at, t.ativado_em,
+              t.onboarding_horario_revisado, t.onboarding_dispensado
        FROM usuarios u JOIN tenants t ON t.id = u.tenant_id
        WHERE u.id = $1`,
       [userId]
@@ -771,12 +772,29 @@ async function start() {
       suporte_email: EMAIL_SUPORTE,
       suporte_whatsapp: WHATSAPP_SUPORTE,
       pagamento_pendente: info.status === 'inadimplente',
+      // horario_nao_confirmado (US56): diferente de sem_servicos/
+      // whatsapp_desconectado, o horário de funcionamento sempre tem um
+      // valor (default 08:00-20:00 da migration 014) — não dá pra detectar
+      // "incompleto" por ausência de dado, só se o tenant já passou pela
+      // tela de Configuração ao menos uma vez (onboarding_horario_revisado,
+      // setado em PATCH /api/configuracao).
       configuracao: {
         sem_servicos: configInfo.servicos === 0,
         sem_profissionais: configInfo.profissionais === 0,
         whatsapp_desconectado: !configInfo.meta_phone_number_id,
+        horario_nao_confirmado: !info.onboarding_horario_revisado,
       },
+      onboarding_dispensado: !!info.onboarding_dispensado,
     };
+  });
+
+  // US56 — o usuário optou por pular o checklist de onboarding por agora.
+  // Só afasta o redirecionamento automático pro checklist no próximo acesso
+  // (CA "usuário pode retomar o onboarding depois") — o item "Primeiros
+  // passos" continua na sidebar enquanto algum passo estiver pendente.
+  fastify.post('/api/onboarding/dispensar', { preHandler: [fastify.authenticate] }, async (request) => {
+    await pool.query('UPDATE tenants SET onboarding_dispensado = true WHERE id = $1', [request.user.tenantId]);
+    return { ok: true };
   });
 
   // US52 — endpoint genérico pro frontend registrar impressões do funil de
@@ -1921,7 +1939,11 @@ async function start() {
            horario_fechamento = COALESCE($5, horario_fechamento),
            horario_almoco_ativo = COALESCE($6, horario_almoco_ativo),
            horario_almoco_inicio = CASE WHEN $6 = false THEN null ELSE COALESCE($7, horario_almoco_inicio) END,
-           horario_almoco_fim = CASE WHEN $6 = false THEN null ELSE COALESCE($8, horario_almoco_fim) END
+           horario_almoco_fim = CASE WHEN $6 = false THEN null ELSE COALESCE($8, horario_almoco_fim) END,
+           -- US56 — qualquer salvamento nesta tela conta como "horário
+           -- revisado" pro checklist de onboarding, mesmo que o tenant só
+           -- confirme os valores padrão sem alterar nada.
+           onboarding_horario_revisado = true
          WHERE id = $1
          RETURNING dias_funcionamento, formato_hora, horario_abertura, horario_fechamento,
                    horario_almoco_ativo, horario_almoco_inicio, horario_almoco_fim`,
