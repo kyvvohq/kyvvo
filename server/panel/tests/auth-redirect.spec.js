@@ -214,4 +214,20 @@ test.describe('Login (/login.html)', () => {
     await expect(page.locator('#erro')).toHaveText('Acesso desativado. Fale com o suporte da Kyvvo.');
     expect(adminChamado).toBe(false);
   });
+
+  // US54 — link de recuperação de senha e aviso pós-redefinição.
+  test('link "Esqueci minha senha" aponta para /esqueci-senha.html', async ({ page }) => {
+    await page.goto('/login.html');
+    await expect(page.getByRole('link', { name: 'Esqueci minha senha' })).toHaveAttribute(
+      'href',
+      '/esqueci-senha.html'
+    );
+  });
+
+  test('acessar com ?senha_redefinida=1 mostra o aviso de sucesso', async ({ page }) => {
+    await page.goto('/login.html?senha_redefinida=1');
+    await expect(page.locator('#sucesso')).toHaveText(
+      'Senha redefinida com sucesso. Faça login com a nova senha.'
+    );
+  });
 });

@@ -489,6 +489,105 @@ async function start() {
     return { ok: true };
   });
 
+  // ---------- Recuperação de senha (US54) ----------
+  // Solicita o código de recuperação por e-mail. Sem preHandler: quem
+  // esqueceu a senha não tem sessão. Resposta sempre genérica (CA02): não
+  // revela se o e-mail existe, senão o endpoint vira um jeito de enumerar
+  // contas cadastradas.
+  fastify.post('/api/auth/esqueci-senha', async (request, reply) => {
+    const email = ((request.body || {}).email || '').toLowerCase().trim();
+    if (!EMAIL_REGEX.test(email)) {
+      return reply.code(400).send({ error: 'Digite um e-mail válido.' });
+    }
+
+    const respostaGenerica = {
+      ok: true,
+      message: 'Se este e-mail estiver cadastrado, enviamos um código de recuperação.',
+    };
+
+    const { rows } = await pool.query('SELECT id, nome FROM usuarios WHERE email = $1', [email]);
+    const usuario = rows[0];
+    if (!usuario) {
+      return respostaGenerica;
+    }
+
+    // Mesmo cooldown de 60s do reenvio de verificação de e-mail (CA11) —
+    // evita disparar um e-mail novo a cada re-submit do formulário, sem
+    // precisar de infra extra de rate limit.
+    const { rows: ultimoRows } = await pool.query(
+      `SELECT criado_em FROM tokens_validacao
+       WHERE user_id = $1 AND tipo = 'recuperacao_senha'
+       ORDER BY criado_em DESC LIMIT 1`,
+      [usuario.id]
+    );
+    const emCooldown = ultimoRows[0]
+      && Date.now() - new Date(ultimoRows[0].criado_em).getTime() < REENVIO_COOLDOWN_SEGUNDOS * 1000;
+    if (emCooldown) {
+      return respostaGenerica;
+    }
+
+    const codigo = await tokenService.criarToken(pool, { userId: usuario.id, tipo: 'recuperacao_senha' });
+    tokenService.enviarPorCanais({ token: codigo, canais: ['email'], email, nome: usuario.nome });
+
+    return respostaGenerica;
+  });
+
+  // Confirma o código de 6 dígitos e define a nova senha. Sem preHandler:
+  // authenticate — quem está aqui não tem sessão válida (é justamente o
+  // caso de esquecer a senha).
+  fastify.post('/api/auth/redefinir-senha', async (request, reply) => {
+    const { email: emailBruto, token: tokenBruto, senha } = request.body || {};
+    const email = (emailBruto || '').toLowerCase().trim();
+    const codigo = String(tokenBruto || '').trim();
+
+    if (!EMAIL_REGEX.test(email)) {
+      return reply.code(400).send({ error: 'Digite um e-mail válido.' });
+    }
+    if (!/^\d{6}$/.test(codigo)) {
+      return reply.code(400).send({ error: 'Código inválido ou expirado. Solicite um novo.' });
+    }
+    if (!SENHA_REGEX.test(senha || '')) {
+      return reply.code(400).send({
+        error: 'A senha deve ter no mínimo 8 caracteres, 1 número e 1 letra maiúscula.',
+      });
+    }
+
+    const mensagens = {
+      nao_encontrado: 'Código inválido ou expirado. Solicite um novo.',
+      expirado: 'Código expirado. Solicite um novo.',
+      bloqueado: 'Número máximo de tentativas atingido. Solicite um novo código.',
+      incorreto: 'Código incorreto. Tente novamente.',
+    };
+
+    const { rows } = await pool.query('SELECT id FROM usuarios WHERE email = $1', [email]);
+    const usuario = rows[0];
+    // E-mail não encontrado cai na mesma mensagem de código inválido (CA02)
+    // — não revela se a conta existe.
+    if (!usuario) {
+      return reply.code(400).send({ error: mensagens.nao_encontrado });
+    }
+
+    const { valido, motivo } = await tokenService.validate({
+      userId: usuario.id,
+      tipo: 'recuperacao_senha',
+      token: codigo,
+    });
+    if (!valido) {
+      return reply.code(400).send({ error: mensagens[motivo] || mensagens.incorreto });
+    }
+
+    const hash = await bcrypt.hash(senha, 10);
+    // token_version++ derruba qualquer sessão JWT ativa (mesmo efeito do
+    // logout) — sessões abertas em outro lugar não devem sobreviver a uma
+    // redefinição de senha.
+    await pool.query(
+      'UPDATE usuarios SET senha_hash = $1, token_version = token_version + 1 WHERE id = $2',
+      [hash, usuario.id]
+    );
+
+    return { ok: true, message: 'Senha redefinida com sucesso. Faça login com a nova senha.' };
+  });
+
   // GET /api/config-publica — expõe só a chave pública do PostHog pro front do
   // painel (US47/CA de rastreamento de conversão). Não autenticada de
   // propósito: precisa estar disponível em login.html/cadastro.html, antes de

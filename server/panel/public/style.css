@@ -169,6 +169,13 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   min-height: 16px;
 }
 
+.sucesso {
+  color: #4ade80;
+  font-size: 13px;
+  margin-top: 12px;
+  min-height: 16px;
+}
+
 /* Painel */
 .topbar {
   display: flex;
