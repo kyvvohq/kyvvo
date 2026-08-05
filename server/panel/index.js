@@ -240,6 +240,45 @@ async function buscarBloqueioConflitante(tenantId, profissionalId, dataHoraISO, 
   return rows[0] || null;
 }
 
+// US64 — cria/atualiza o lançamento financeiro vinculado a um agendamento
+// com serviço pago (CA "Cenário 1/3/4/5/6/7"). `client` pode ser o pool do
+// módulo ou um client de transação já aberto pelo chamador — POST/PATCH
+// /api/agendamentos precisam que a mudança no agendamento e no financeiro
+// aconteçam atomicamente, senão um crash no meio deixaria os dois lados
+// inconsistentes.
+//
+// Sempre um UPDATE em cima do lançamento existente do agendamento (nunca um
+// segundo INSERT): o ON CONFLICT usa o índice único uq_lancamentos_agendamento,
+// que também garante isso numa corrida (CA "Cenário 7", evitar duplicidade).
+async function sincronizarLancamentoFinanceiro(client, {
+  tenantId, agendamentoId, servicoNome, servicoPreco, dataHora, statusAgendamento,
+}) {
+  // Serviço sem preço (ou preço zero) nunca gera lançamento automático (CA
+  // "Cenário 2") — nem na criação nem numa atualização: hoje não existe
+  // jeito de mudar o serviço/preço de um agendamento já criado (servico_id é
+  // fixo, e servicos.preco não tem endpoint de edição), então um agendamento
+  // que nasceu sem lançamento nunca precisa ganhar um depois.
+  const preco = servicoPreco != null ? Number(servicoPreco) : 0;
+  if (!(preco > 0)) return;
+
+  // 'reagendado' nunca é de fato setado por nenhum código hoje (reagendar só
+  // muda data_hora no mesmo registro) — trata como 'confirmado' por
+  // segurança, caso isso mude no futuro.
+  const statusFinanceiro = statusAgendamento === 'concluido'
+    ? 'realizado'
+    : statusAgendamento === 'cancelado'
+      ? 'cancelado'
+      : 'previsto';
+
+  await client.query(
+    `INSERT INTO lancamentos_financeiros (tenant_id, agendamento_id, tipo, valor, descricao, data, status)
+     VALUES ($1, $2, 'entrada', $3, $4, ($5::timestamptz AT TIME ZONE 'America/Sao_Paulo')::date, $6)
+     ON CONFLICT (agendamento_id) WHERE agendamento_id IS NOT NULL
+     DO UPDATE SET valor = EXCLUDED.valor, data = EXCLUDED.data, status = EXCLUDED.status, descricao = EXCLUDED.descricao`,
+    [tenantId, agendamentoId, preco, servicoNome, dataHora, statusFinanceiro]
+  );
+}
+
 // Data (YYYY-MM-DD) de "agora" em horário de Brasília — usada como fallback
 // quando a view de agenda é consultada sem o parâmetro "data" explícito.
 function dataAtualBrasilia() {
@@ -859,12 +898,15 @@ async function start() {
     if (status === undefined && dataHora === undefined) {
       return reply.code(400).send({ error: 'Informe "status" e/ou "data_hora" para atualizar' });
     }
-    if (status !== undefined && !['confirmado', 'cancelado', 'reagendado'].includes(status)) {
+    // 'concluido' (US64) — converte a receita prevista do agendamento em
+    // realizada (CA "Cenário 5").
+    if (status !== undefined && !['confirmado', 'cancelado', 'reagendado', 'concluido'].includes(status)) {
       return reply.code(400).send({ error: 'status inválido' });
     }
 
     const { rows: atuais } = await pool.query(
-      `SELECT a.id, a.profissional_id, s.duracao_minutos, p.nome AS profissional
+      `SELECT a.id, a.profissional_id, a.status, a.data_hora, s.duracao_minutos, s.nome AS servico_nome, s.preco AS servico_preco,
+              p.nome AS profissional
        FROM agendamentos a
        JOIN servicos s ON s.id = a.servico_id
        JOIN profissionais p ON p.id = a.profissional_id
@@ -904,7 +946,7 @@ async function start() {
          JOIN servicos s ON s.id = a.servico_id
          WHERE a.tenant_id = $1
            AND a.profissional_id = $2
-           AND a.status = 'confirmado'
+           AND a.status IN ('confirmado', 'concluido')
            AND a.id <> $3
            AND a.data_hora < $4::timestamptz + ($5 * interval '1 minute')
            AND $4::timestamptz < a.data_hora + (s.duracao_minutos * interval '1 minute')`,
@@ -917,14 +959,37 @@ async function start() {
       }
     }
 
-    await pool.query(
-      `UPDATE agendamentos SET
-         status = COALESCE($2, status),
-         data_hora = COALESCE($3, data_hora),
-         updated_at = now()
-       WHERE id = $1`,
-      [id, status ?? null, dataHora ?? null]
-    );
+    // US64 — a mudança no agendamento e a sincronização do lançamento
+    // financeiro (CA "Cenário 3/4/5/6") precisam acontecer atomicamente,
+    // mesma razão do POST /agendamentos.
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `UPDATE agendamentos SET
+           status = COALESCE($2, status),
+           data_hora = COALESCE($3, data_hora),
+           updated_at = now()
+         WHERE id = $1`,
+        [id, status ?? null, dataHora ?? null]
+      );
+
+      await sincronizarLancamentoFinanceiro(client, {
+        tenantId,
+        agendamentoId: id,
+        servicoNome: atual.servico_nome,
+        servicoPreco: atual.servico_preco,
+        dataHora: dataHora ?? atual.data_hora,
+        statusAgendamento: status ?? atual.status,
+      });
+
+      await client.query('COMMIT');
+    } catch (erro) {
+      await client.query('ROLLBACK');
+      throw erro;
+    } finally {
+      client.release();
+    }
 
     const { rows: detalhado } = await pool.query(
       `SELECT a.id, a.data_hora, a.status, a.encaixe, a.updated_at,
@@ -987,7 +1052,7 @@ async function start() {
        FROM agendamentos a
        JOIN servicos s ON s.id = a.servico_id
        WHERE a.tenant_id = $1 AND a.profissional_id = $2
-         AND a.status = 'confirmado'
+         AND a.status IN ('confirmado', 'concluido')
          AND (a.data_hora AT TIME ZONE 'America/Sao_Paulo')::date = $3::date`,
       [tenantId, profissional, data]
     );
@@ -1156,7 +1221,7 @@ async function start() {
   fastify.get('/api/clientes', { preHandler: [fastify.authenticate] }, async (request) => {
     const { tenantId } = request.user;
     const { rows } = await pool.query(
-      `SELECT c.id, c.nome, c.telefone, COUNT(a.id) FILTER (WHERE a.status = 'confirmado')::int AS total_agendamentos
+      `SELECT c.id, c.nome, c.telefone, COUNT(a.id) FILTER (WHERE a.status IN ('confirmado', 'concluido'))::int AS total_agendamentos
        FROM clientes c
        LEFT JOIN agendamentos a ON a.cliente_id = c.id
        WHERE c.tenant_id = $1
@@ -1396,7 +1461,7 @@ async function start() {
     const origemFinal = origem || 'portal';
 
     const { rows: servicoRows } = await pool.query(
-      'SELECT duracao_minutos FROM servicos WHERE id = $1 AND tenant_id = $2',
+      'SELECT nome, duracao_minutos, preco FROM servicos WHERE id = $1 AND tenant_id = $2',
       [servicoId, tenantId]
     );
     const servicoInfo = servicoRows[0];
@@ -1448,7 +1513,7 @@ async function start() {
          JOIN servicos s ON s.id = a.servico_id
          WHERE a.tenant_id = $1
            AND a.profissional_id = $2
-           AND a.status = 'confirmado'
+           AND a.status IN ('confirmado', 'concluido')
            AND a.data_hora < $3::timestamptz + ($4 * interval '1 minute')
            AND $3::timestamptz < a.data_hora + (s.duracao_minutos * interval '1 minute')`,
         [tenantId, profissionalId, dataHora, servicoInfo.duracao_minutos]
@@ -1460,21 +1525,50 @@ async function start() {
       }
     }
 
-    const { rows: clienteRows } = await pool.query(
-      `INSERT INTO clientes (tenant_id, nome, telefone)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (tenant_id, telefone) DO UPDATE SET nome = COALESCE(EXCLUDED.nome, clientes.nome)
-       RETURNING id`,
-      [tenantId, clienteNome || null, clienteTelefone]
-    );
-    const clienteId = clienteRows[0].id;
+    // US64 — cliente, agendamento e o lançamento financeiro automático
+    // (CA "Cenário 1") precisam nascer juntos: um crash entre o INSERT do
+    // agendamento e o do financeiro não pode deixar receita prevista órfã
+    // nem um agendamento sem o lançamento correspondente.
+    const client = await pool.connect();
+    let agendamentoId;
+    try {
+      await client.query('BEGIN');
 
-    const { rows: criado } = await pool.query(
-      `INSERT INTO agendamentos (tenant_id, cliente_id, profissional_id, servico_id, data_hora, encaixe, origem, observacoes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING id`,
-      [tenantId, clienteId, profissionalId, servicoId, dataHora, !!encaixe, origemFinal, observacoes || null]
-    );
+      const { rows: clienteRows } = await client.query(
+        `INSERT INTO clientes (tenant_id, nome, telefone)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (tenant_id, telefone) DO UPDATE SET nome = COALESCE(EXCLUDED.nome, clientes.nome)
+         RETURNING id`,
+        [tenantId, clienteNome || null, clienteTelefone]
+      );
+      const clienteId = clienteRows[0].id;
+
+      const { rows: criado } = await client.query(
+        `INSERT INTO agendamentos (tenant_id, cliente_id, profissional_id, servico_id, data_hora, encaixe, origem, observacoes)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING id`,
+        [tenantId, clienteId, profissionalId, servicoId, dataHora, !!encaixe, origemFinal, observacoes || null]
+      );
+      agendamentoId = criado[0].id;
+
+      // Agendamento nasce sempre 'confirmado' (default da coluna) — receita
+      // prevista, nunca realizada, na criação.
+      await sincronizarLancamentoFinanceiro(client, {
+        tenantId,
+        agendamentoId,
+        servicoNome: servicoInfo.nome,
+        servicoPreco: servicoInfo.preco,
+        dataHora,
+        statusAgendamento: 'confirmado',
+      });
+
+      await client.query('COMMIT');
+    } catch (erro) {
+      await client.query('ROLLBACK');
+      throw erro;
+    } finally {
+      client.release();
+    }
 
     const { rows: detalhado } = await pool.query(
       `SELECT a.id, a.data_hora, a.status, a.encaixe, a.origem, a.observacoes, a.updated_at,
@@ -1486,7 +1580,7 @@ async function start() {
        JOIN profissionais p ON p.id = a.profissional_id
        JOIN servicos s ON s.id = a.servico_id
        WHERE a.id = $1`,
-      [criado[0].id]
+      [agendamentoId]
     );
 
     reply.code(201);
@@ -1956,9 +2050,10 @@ async function start() {
     return { modulos: rows };
   });
 
-  // ---------- Financeiro (US18) ----------
-  // Livro-caixa manual simples (entrada/saída) — primeira funcionalidade real
-  // do módulo "financeiro", só acessível a quem tem o módulo ativo.
+  // ---------- Financeiro (US18/US64) ----------
+  // Livro-caixa manual (entrada/saída, US18) + lançamentos automáticos de
+  // agendamento (US64, sincronizados por sincronizarLancamentoFinanceiro) —
+  // só acessível a quem tem o módulo "financeiro" ativo.
   fastify.get(
     '/api/financeiro/lancamentos',
     { preHandler: [fastify.authenticate, fastify.requireModulo('financeiro')] },
@@ -1966,21 +2061,38 @@ async function start() {
       const { tenantId } = request.user;
       const mesRef = request.query.mes || mesAtualBrasilia();
 
+      // LEFT JOIN com agendamentos/clientes/servicos só resolve campos pra
+      // exibição (CA "Cenário 8" — identificar cliente/serviço/data do
+      // atendimento a partir do financeiro); lançamentos manuais (US18) têm
+      // agendamento_id nulo e os três campos vêm null.
       const { rows } = await pool.query(
-        `SELECT id, tipo, valor, descricao, data
-         FROM lancamentos_financeiros
-         WHERE tenant_id = $1 AND to_char(data, 'YYYY-MM') = $2
-         ORDER BY data DESC, criado_em DESC`,
+        `SELECT l.id, l.tipo, l.valor, l.descricao, l.data, l.status, l.agendamento_id,
+                c.nome AS cliente, s.nome AS servico
+         FROM lancamentos_financeiros l
+         LEFT JOIN agendamentos a ON a.id = l.agendamento_id
+         LEFT JOIN clientes c ON c.id = a.cliente_id
+         LEFT JOIN servicos s ON s.id = a.servico_id
+         WHERE l.tenant_id = $1 AND to_char(l.data, 'YYYY-MM') = $2
+         ORDER BY l.data DESC, l.criado_em DESC`,
         [tenantId, mesRef]
       );
+      const lancamentos = rows.map((r) => ({ ...r, origem: r.agendamento_id ? 'agendamento' : 'manual' }));
 
-      const entradas = rows.filter((r) => r.tipo === 'entrada').reduce((soma, r) => soma + Number(r.valor), 0);
-      const saidas = rows.filter((r) => r.tipo === 'saida').reduce((soma, r) => soma + Number(r.valor), 0);
+      // Cancelado (CA "Cenário 6") não conta em nenhum resumo — não é receita
+      // prevista nem realizada ativa, só fica visível na listagem pra
+      // conferência. previsto/realizado (US64) diferenciam a receita de
+      // agendamento; entradas/saidas/saldo (US18) continuam a soma total do
+      // que está ativo, pra não quebrar os cards que já existiam.
+      const ativos = lancamentos.filter((r) => r.status !== 'cancelado');
+      const entradas = ativos.filter((r) => r.tipo === 'entrada').reduce((soma, r) => soma + Number(r.valor), 0);
+      const saidas = ativos.filter((r) => r.tipo === 'saida').reduce((soma, r) => soma + Number(r.valor), 0);
+      const previsto = ativos.filter((r) => r.tipo === 'entrada' && r.status === 'previsto').reduce((soma, r) => soma + Number(r.valor), 0);
+      const realizado = ativos.filter((r) => r.tipo === 'entrada' && r.status === 'realizado').reduce((soma, r) => soma + Number(r.valor), 0);
 
       return {
         mes: mesRef,
-        lancamentos: rows,
-        resumo: { entradas, saidas, saldo: entradas - saidas },
+        lancamentos,
+        resumo: { entradas, saidas, saldo: entradas - saidas, previsto, realizado },
       };
     }
   );
@@ -1999,14 +2111,17 @@ async function start() {
         return reply.code(400).send({ error: 'Campo "valor" deve ser um número maior que zero' });
       }
 
+      // Lançamento manual: sem agendamento_id, status nasce 'realizado' (é o
+      // default da coluna) — já representa um valor que efetivamente
+      // entrou/saiu, diferente da receita prevista de um agendamento.
       const { rows } = await pool.query(
         `INSERT INTO lancamentos_financeiros (tenant_id, tipo, valor, descricao, data)
          VALUES ($1, $2, $3, $4, COALESCE($5, current_date))
-         RETURNING id, tipo, valor, descricao, data`,
+         RETURNING id, tipo, valor, descricao, data, status, agendamento_id`,
         [tenantId, tipo, valor, descricao || null, data || null]
       );
       reply.code(201);
-      return rows[0];
+      return { ...rows[0], origem: 'manual' };
     }
   );
 

@@ -1200,9 +1200,19 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .badge-encaixe { background: rgba(0, 212, 255, 0.15); color: var(--cyan); }
 .badge-cancelado { background: rgba(255, 107, 107, 0.15); color: #ff6b6b; }
+/* US64 — status do agendamento (Concluído) e do lançamento financeiro de
+   agendamento (Previsto/Realizado, reaproveita .badge-cancelado). */
+.badge-concluido { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
+.badge-previsto { background: rgba(250, 204, 21, 0.15); color: #facc15; }
+.badge-realizado { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
 
 .agendamento-cancelado { opacity: 0.55; }
 .agendamento-cancelado .agendamento-hora { text-decoration: line-through; }
+
+/* Marca "Agendamento" ao lado de cliente num lançamento financeiro
+   originado de agendamento (US64/CA "Cenário 8") — texto simples em vez de
+   .badge (que já é usado pro status logo acima, no mesmo título). */
+.badge-origem-agendamento { color: #6b7099; font-weight: 600; }
 
 /* Listagem de tenants (US26) */
 .badge-status { margin-left: 0; }
