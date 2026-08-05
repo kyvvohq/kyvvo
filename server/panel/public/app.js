@@ -73,6 +73,15 @@ async function verificarStatusConta() {
   // de uma pendência de configuração ao mesmo tempo) e alguns são
   // dispensáveis pelo usuário.
   renderAvisos(construirAvisos(status));
+
+  // US62 — itens de menu restritos ao administrador (Equipe, Minha Empresa,
+  // Cobrança, Preferências) somem pro operador. É só a camada de UX — quem
+  // de fato bloqueia a ação é o backend (fastify.requireAdmin), então um
+  // operador que force a navegação (ou um payload antigo sem `role`) ainda
+  // recebe 403 real das rotas, nunca só "esconder e confiar".
+  document.querySelectorAll('[data-somente-admin]').forEach((el) => {
+    el.hidden = status.role === 'operador';
+  });
 }
 
 // Mensagem + rótulo/destino do botão de ação de cada tipo de aviso. `critico:
@@ -1536,6 +1545,7 @@ async function render() {
   if (menuAtual === 'configuracao') return renderConfiguracao();
   if (menuAtual === 'perfil') return renderPerfil();
   if (menuAtual === 'empresa') return renderMinhaEmpresa();
+  if (menuAtual === 'equipe') return renderEquipe();
   if (menuAtual === 'whatsapp') return renderWhatsapp();
   // "Ajuda" (user menu, PR11) reaproveita o mesmo placeholder "em breve" já
   // usado pros módulos ainda não desenvolvidos.
@@ -2589,6 +2599,232 @@ async function renderPerfil() {
       mostrarToast((resultado && resultado.error) || 'Erro ao salvar. Tente novamente.', 'erro');
       btn.disabled = false;
       btn.textContent = 'Salvar alterações';
+    }
+  });
+}
+
+// ---------- Equipe (US62) ----------
+const EQUIPE_ROLE_LABEL = { administrador: 'Administrador', operador: 'Operador' };
+const EQUIPE_CONVITE_STATUS_LABEL = { pendente: 'Pendente', expirado: 'Expirado', aceito: 'Aceito', cancelado: 'Cancelado' };
+const EQUIPE_CONVITE_STATUS_BADGE = { pendente: 'badge-status-nao-ativado', expirado: 'badge-status-suspenso', aceito: 'badge-status-ativo', cancelado: 'badge-status-inativo' };
+
+async function renderEquipe() {
+  conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
+  const dados = await api('/api/equipe');
+  if (!dados) return;
+
+  let html = `
+    <div class="nav-periodo">
+      <strong>Equipe</strong>
+      <button class="btn-novo-agendamento" id="btn-convidar-membro">+ Convidar membro</button>
+    </div>
+    <h4 class="pagamento-historico-titulo">Membros</h4>
+    <div class="tabela-wrapper">
+      <table class="tabela-tenants">
+        <thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+          ${dados.membros.length ? dados.membros.map(renderEquipeMembroLinha).join('') : '<tr><td colspan="5">Nenhum membro cadastrado.</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+    <h4 class="pagamento-historico-titulo">Convites</h4>
+    <div class="tabela-wrapper">
+      <table class="tabela-tenants">
+        <thead><tr><th>E-mail</th><th>Perfil</th><th>Status</th><th>Expira em</th><th></th></tr></thead>
+        <tbody>
+          ${dados.convites.length ? dados.convites.map(renderEquipeConviteLinha).join('') : '<tr><td colspan="5">Nenhum convite pendente.</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  conteudo.innerHTML = html;
+  document.getElementById('btn-convidar-membro').addEventListener('click', abrirModalConvidarMembro);
+
+  conteudo.querySelectorAll('[data-acao-membro]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const membro = dados.membros.find((m) => m.id === btn.dataset.id);
+      if (!membro) return;
+      if (btn.dataset.acaoMembro === 'desativar' || btn.dataset.acaoMembro === 'reativar') {
+        abrirModalAlterarAtivoMembro(membro);
+      }
+      if (btn.dataset.acaoMembro === 'remover') abrirModalRemoverMembro(membro);
+    });
+  });
+  conteudo.querySelectorAll('[data-acao-convite]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      if (btn.dataset.acaoConvite !== 'cancelar') return;
+      btn.disabled = true;
+      const resultado = await api(`/api/equipe/convites/${btn.dataset.id}`, { method: 'DELETE' });
+      if (resultado && !resultado.error) {
+        mostrarToast('Convite cancelado.', 'sucesso');
+        renderEquipe();
+      } else {
+        mostrarToast((resultado && resultado.error) || 'Erro ao cancelar convite.', 'erro');
+        btn.disabled = false;
+      }
+    });
+  });
+}
+
+function renderEquipeMembroLinha(m) {
+  return `
+    <tr>
+      <td>${m.nome || '—'}</td>
+      <td>${m.email}</td>
+      <td>${EQUIPE_ROLE_LABEL[m.role] || m.role}</td>
+      <td><span class="badge badge-status ${m.ativo ? 'badge-status-ativo' : 'badge-status-inativo'}">${m.ativo ? 'Ativo' : 'Desativado'}</span></td>
+      <td>
+        <button class="btn-secundario" data-acao-membro="${m.ativo ? 'desativar' : 'reativar'}" data-id="${m.id}">${m.ativo ? 'Desativar' : 'Reativar'}</button>
+        <button class="btn-secundario acao-perigo" data-acao-membro="remover" data-id="${m.id}">Remover</button>
+      </td>
+    </tr>
+  `;
+}
+
+function renderEquipeConviteLinha(c) {
+  return `
+    <tr>
+      <td>${c.email}</td>
+      <td>${EQUIPE_ROLE_LABEL[c.role] || c.role}</td>
+      <td><span class="badge badge-status ${EQUIPE_CONVITE_STATUS_BADGE[c.status] || 'badge-status-inativo'}">${EQUIPE_CONVITE_STATUS_LABEL[c.status] || c.status}</span></td>
+      <td>${formatarDataCurtaISO(c.expires_at.slice(0, 10))}</td>
+      <td>${c.status === 'pendente' ? `<button class="btn-secundario acao-perigo" data-acao-convite="cancelar" data-id="${c.id}">Cancelar</button>` : ''}</td>
+    </tr>
+  `;
+}
+
+function abrirModalConvidarMembro() {
+  abrirModal(
+    '<h3>Convidar membro</h3>',
+    `
+      <form id="form-convidar-membro">
+        <div class="modal-erro" id="convidar-membro-erro"></div>
+        <label for="convite-email">E-mail *</label>
+        <input type="email" id="convite-email" data-obrigatorio>
+        <label for="convite-role">Perfil de acesso *</label>
+        <select id="convite-role" data-obrigatorio>
+          <option value="operador">Operador — acesso operacional (agenda, clientes, cadastros)</option>
+          <option value="administrador">Administrador — acesso completo</option>
+        </select>
+        <div class="modal-acoes">
+          <button type="button" class="btn-secundario" id="btn-cancelar-convite">Cancelar</button>
+          <button type="submit" class="btn-primario" id="btn-enviar-convite">Enviar convite</button>
+        </div>
+      </form>
+    `
+  );
+
+  document.getElementById('btn-cancelar-convite').addEventListener('click', fecharModal);
+
+  const form = document.getElementById('form-convidar-membro');
+  form.querySelectorAll('[data-obrigatorio]').forEach((campo) => {
+    campo.addEventListener('input', () => campo.classList.remove('campo-invalido'));
+  });
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const erroEl = document.getElementById('convidar-membro-erro');
+    erroEl.textContent = '';
+    const invalido = validarObrigatorios(form);
+    if (invalido) {
+      erroEl.textContent = 'Preencha os campos obrigatórios destacados em vermelho.';
+      invalido.focus();
+      return;
+    }
+
+    const btn = document.getElementById('btn-enviar-convite');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    const resultado = await api('/api/equipe/convites', {
+      method: 'POST',
+      body: JSON.stringify({
+        email: document.getElementById('convite-email').value.trim(),
+        role: document.getElementById('convite-role').value,
+      }),
+    });
+
+    if (resultado && !resultado.error) {
+      fecharModal();
+      mostrarToast('Convite enviado com sucesso.', 'sucesso');
+      renderEquipe();
+    } else {
+      erroEl.textContent = (resultado && resultado.error) || 'Erro ao enviar convite.';
+      btn.disabled = false;
+      btn.textContent = 'Enviar convite';
+    }
+  });
+}
+
+function abrirModalAlterarAtivoMembro(membro) {
+  const desativando = membro.ativo;
+  abrirModal(
+    `<h3>${desativando ? 'Desativar' : 'Reativar'} membro</h3>`,
+    `
+      <p class="modal-texto">${desativando
+        ? `<strong>${membro.nome || membro.email}</strong> perderá o acesso ao Kyvvo imediatamente. Você pode reativar o acesso quando quiser.`
+        : `<strong>${membro.nome || membro.email}</strong> volta a ter acesso ao Kyvvo.`}</p>
+      <div class="modal-erro" id="alterar-ativo-membro-erro"></div>
+      <div class="modal-acoes">
+        <button class="btn-secundario" id="btn-voltar-alterar-ativo">Voltar</button>
+        <button class="${desativando ? 'btn-perigo' : 'btn-primario'}" id="btn-confirmar-alterar-ativo">Confirmar</button>
+      </div>
+    `
+  );
+
+  document.getElementById('btn-voltar-alterar-ativo').addEventListener('click', fecharModal);
+  document.getElementById('btn-confirmar-alterar-ativo').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-confirmar-alterar-ativo');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    const resultado = await api(`/api/equipe/membros/${membro.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ ativo: !desativando }),
+    });
+
+    if (resultado && !resultado.error) {
+      fecharModal();
+      mostrarToast(`Membro ${desativando ? 'desativado' : 'reativado'} com sucesso.`, 'sucesso');
+      renderEquipe();
+    } else {
+      document.getElementById('alterar-ativo-membro-erro').textContent = (resultado && resultado.error) || 'Erro ao atualizar membro.';
+      btn.disabled = false;
+      btn.textContent = 'Confirmar';
+    }
+  });
+}
+
+function abrirModalRemoverMembro(membro) {
+  abrirModal(
+    '<h3>Remover membro</h3>',
+    `
+      <p class="modal-texto">Remover <strong>${membro.nome || membro.email}</strong> da equipe? Esta ação não pode ser desfeita — a pessoa perde o acesso imediatamente e precisaria de um novo convite pra voltar.</p>
+      <div class="modal-erro" id="remover-membro-erro"></div>
+      <div class="modal-acoes">
+        <button class="btn-secundario" id="btn-voltar-remover-membro">Voltar</button>
+        <button class="btn-perigo" id="btn-confirmar-remover-membro">Remover</button>
+      </div>
+    `
+  );
+
+  document.getElementById('btn-voltar-remover-membro').addEventListener('click', fecharModal);
+  document.getElementById('btn-confirmar-remover-membro').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-confirmar-remover-membro');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    const resultado = await api(`/api/equipe/membros/${membro.id}`, { method: 'DELETE' });
+
+    if (resultado && !resultado.error) {
+      fecharModal();
+      mostrarToast('Membro removido com sucesso.', 'sucesso');
+      renderEquipe();
+    } else {
+      document.getElementById('remover-membro-erro').textContent = (resultado && resultado.error) || 'Erro ao remover membro.';
+      btn.disabled = false;
+      btn.textContent = 'Remover';
     }
   });
 }
