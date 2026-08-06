@@ -12,6 +12,11 @@ const STATUS_BASE = {
   trial_ativo: false,
   dias_restantes: null,
   pagamento_pendente: false,
+  // onboarding_dispensado: true — este arquivo cobre os avisos contextuais
+  // (US59), não o modal de primeiros passos (US66); sem essa flag o modal
+  // abriria sozinho sempre que um teste marcar sem_servicos/sem_profissionais/
+  // whatsapp_desconectado, bloqueando os cliques nos avisos.
+  onboarding_dispensado: true,
   configuracao: { sem_servicos: false, sem_profissionais: false, whatsapp_desconectado: false },
 };
 

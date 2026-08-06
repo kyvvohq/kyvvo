@@ -56,25 +56,17 @@ async function verificarStatusConta() {
     history.replaceState(null, '', location.pathname);
   }
 
-  // US56 — item "Primeiros passos" na sidebar só existe enquanto houver
-  // passo pendente (concluído o checklist, some — não faz sentido continuar
-  // ocupando espaço na sidebar pra sempre). Primeiro acesso com configuração
-  // incompleta é levado direto pro checklist (CA "primeiro acesso identifica
-  // configuração incompleta"); se o tenant já dispensou o checklist antes
-  // (CA "usuário pode retomar o onboarding depois"), o item continua na
-  // sidebar mas o redirecionamento automático não repete a cada login.
-  const menuItemOnboarding = document.getElementById('menu-item-onboarding');
-  const onboardingPendente = construirPassosOnboarding(status).some((p) => !p.feito);
-  if (menuItemOnboarding) menuItemOnboarding.hidden = !onboardingPendente;
-  // `menuAtual === 'agendamento'` (não só `!== 'onboarding'`) de propósito:
-  // 'agendamento' é o valor inicial intocado antes de qualquer navegação —
-  // essa checagem só dispara o redirecionamento automático se o usuário
-  // ainda não clicou em nada desde que a página carregou. Como essa chamada
-  // de status é assíncrona, ela pode resolver depois de o usuário já ter
-  // navegado manualmente pra outra tela; nesse caso `menuAtual` já mudou e o
-  // onboarding não deve sequestrar a navegação em andamento.
-  if (onboardingPendente && !status.onboarding_dispensado && menuAtual === 'agendamento') {
-    selecionarMenu('onboarding');
+  // US66 — modal de primeiros passos exibido automaticamente só no primeiro
+  // acesso elegível, sem ocupar espaço fixo na sidebar (substitui a tela
+  // dedicada + item fixo da US56). `menuAtual === 'agendamento'` (não só
+  // `!== algo`) de propósito: 'agendamento' é o valor inicial intocado antes
+  // de qualquer navegação — essa checagem só abre o modal sozinho se o
+  // usuário ainda não clicou em nada desde que a página carregou. Como essa
+  // chamada de status é assíncrona, ela pode resolver depois de o usuário já
+  // ter navegado manualmente pra outra tela; nesse caso `menuAtual` já mudou
+  // e o onboarding não deve interromper a navegação em andamento.
+  if (onboardingElegivel(status) && menuAtual === 'agendamento') {
+    mostrarModalOnboarding(status);
   }
 
   // CA09 — banner de trial com contador de dias restantes.
@@ -1681,7 +1673,6 @@ async function render() {
   // continuam nos 720px padrão, estreitos de propósito pra formulário.
   conteudo.classList.toggle('conteudo-largo', menuAtual === 'inicio' || menuAtual === 'agendamento');
 
-  if (menuAtual === 'onboarding') return renderOnboarding();
   if (menuAtual === 'inicio') return renderInicio();
   if (menuAtual === 'configuracao') return renderConfiguracao();
   if (menuAtual === 'perfil') return renderPerfil();
@@ -2301,23 +2292,23 @@ function renderGradeHorariosDoDia(dataISO, agendamentos) {
   `;
 }
 
-// ---------- Onboarding (US56) ----------
-// Tela dedicada de "primeiros passos", separada do painel de avisos (US59) e
-// das pendências do Início (US63): aqueles são nudges passivos que convivem
-// com o resto do painel, esta é uma tela sequencial com progresso e "próximo
-// passo recomendado" — pensada pra guiar o primeiro acesso, não pra ficar
-// competindo por atenção depois que o tenant já está operando normalmente.
-async function renderOnboarding() {
-  conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
-  const status = contaStatus || await api('/api/tenant/status');
-  if (!status) return;
+// ---------- Onboarding (US56/US66) ----------
+// Modal de "primeiros passos", separado do painel de avisos (US59) e das
+// pendências do Início (US63): aqueles são nudges passivos que convivem com
+// o resto do painel, este é um modal com progresso e "próximo passo
+// recomendado" — pensado pra guiar o primeiro acesso sem virar tela nem item
+// fixo de menu (US66 substitui a tela dedicada + item fixo da US56).
+function onboardingElegivel(status) {
+  return construirPassosOnboarding(status).some((p) => !p.feito) && !status.onboarding_dispensado;
+}
 
+function mostrarModalOnboarding(status) {
   const passos = construirPassosOnboarding(status);
   const concluidos = passos.filter((p) => p.feito).length;
   const proximoPasso = passos.find((p) => !p.feito);
   const percentual = Math.round((concluidos / passos.length) * 100);
 
-  let html = `
+  const conteudoHtml = `
     <div class="onboarding-cabecalho">
       <h2>Primeiros passos</h2>
       <p>Complete esses passos para deixar o Kyvvo pronto pra receber agendamentos.</p>
@@ -2342,22 +2333,26 @@ async function renderOnboarding() {
       `;
       }).join('')}
     </ul>
-    ${concluidos < passos.length ? '<button class="link-pular-onboarding" id="btn-pular-onboarding">Pular por agora</button>' : ''}
+    <button class="link-pular-onboarding" id="btn-pular-onboarding">Pular por agora</button>
   `;
 
-  conteudo.innerHTML = html;
-  conteudo.querySelectorAll('[data-acao-onboarding-passo]').forEach((btn) => {
-    btn.addEventListener('click', () => selecionarMenu(btn.dataset.acaoOnboardingPasso));
+  const overlay = abrirModal('', conteudoHtml, 'modal-card-onboarding');
+  overlay.querySelectorAll('[data-acao-onboarding-passo]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      fecharModal();
+      selecionarMenu(btn.dataset.acaoOnboardingPasso);
+    });
   });
   const btnPular = document.getElementById('btn-pular-onboarding');
   if (btnPular) {
     btnPular.addEventListener('click', async () => {
-      // Só marca a dispensa pro backend não repetir o redirecionamento
-      // automático no próximo login — o item "Primeiros passos" continua na
-      // sidebar (CA "usuário pode retomar o onboarding depois").
+      // Persiste a dispensa pro modal não reaparecer em novos acessos
+      // (US66/Cenário 3) — diferente de fechar pelo X/clique fora/Esc sem
+      // decidir, que não persiste nada e deixa o modal elegível de novo no
+      // próximo carregamento (US66/Cenário 5).
       await api('/api/onboarding/dispensar', { method: 'POST' });
       if (contaStatus) contaStatus.onboarding_dispensado = true;
-      selecionarMenu('inicio');
+      fecharModal();
     });
   }
 }

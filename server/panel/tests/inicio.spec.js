@@ -121,6 +121,11 @@ test.describe('Início (dashboard)', () => {
           status: 'ativo',
           dias_restantes: null,
           pagamento_pendente: true,
+          // onboarding_dispensado: true — este teste cobre as pendências do
+          // Início (US63), não o modal de primeiros passos (US66); sem essa
+          // flag o modal abriria sozinho (sem_servicos) e bloquearia o clique
+          // no menu "Início" logo abaixo.
+          onboarding_dispensado: true,
           configuracao: { sem_servicos: true, sem_profissionais: false, whatsapp_desconectado: false },
         },
       })
@@ -137,7 +142,16 @@ test.describe('Início (dashboard)', () => {
     await entrarNoPainel(page, { dia: [] });
     await page.route('**/api/tenant/status', (route) =>
       route.fulfill({
-        json: { status: 'ativo', dias_restantes: null, pagamento_pendente: false, configuracao: { sem_servicos: true, sem_profissionais: false, whatsapp_desconectado: false } },
+        // onboarding_dispensado: true — mesmo raciocínio do teste acima: sem
+        // isso o modal de primeiros passos (US66) abriria sozinho e bloquearia
+        // o clique no menu "Início".
+        json: {
+          status: 'ativo',
+          dias_restantes: null,
+          pagamento_pendente: false,
+          onboarding_dispensado: true,
+          configuracao: { sem_servicos: true, sem_profissionais: false, whatsapp_desconectado: false },
+        },
       })
     );
     await page.reload();

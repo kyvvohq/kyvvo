@@ -1,10 +1,11 @@
 const { test, expect } = require('@playwright/test');
 
-// Cobre US56 — checklist de onboarding guiado (serviços, horário de
-// funcionamento e WhatsApp): redirecionamento automático no primeiro acesso
-// com configuração incompleta, item "Primeiros passos" na sidebar, próximo
-// passo recomendado, navegação pros cadastros e "Pular por agora"
-// (dispensa persistida no backend). As chamadas de API são mockadas via
+// Cobre US66 — modal de primeiros passos (serviços, horário de funcionamento
+// e WhatsApp) exibido automaticamente só no primeiro acesso elegível, sem
+// item fixo na sidebar (substitui a tela dedicada + item fixo da US56):
+// checklist com próximo passo recomendado, navegação pros cadastros,
+// "Pular por agora" (dispensa persistida no backend) e reentrada sem
+// reexibir depois de pular/concluir. As chamadas de API são mockadas via
 // page.route — sem dependência de Postgres real.
 
 const STATUS_BASE = {
@@ -33,20 +34,34 @@ async function entrarNoPainel(page, status) {
   await page.goto('/painel.html');
 }
 
-test.describe('Onboarding guiado (US56)', () => {
-  test('configuração completa: sem redirecionamento e item da sidebar escondido', async ({ page }) => {
-    await entrarNoPainel(page, STATUS_BASE);
-    await expect(page.locator('.menu-item[data-menu="agendamento"]')).toHaveClass(/active/);
-    await expect(page.locator('#menu-item-onboarding')).toBeHidden();
-  });
-
-  test('primeiro acesso com serviços pendentes é levado direto pro checklist (CA "primeiro acesso identifica configuração incompleta")', async ({ page }) => {
+test.describe('Modal de primeiros passos (US66)', () => {
+  test('menu lateral nunca tem item fixo de primeiros passos (US66/Cenário 2)', async ({ page }) => {
     const status = { ...STATUS_BASE, configuracao: { ...STATUS_BASE.configuracao, sem_servicos: true } };
     await entrarNoPainel(page, status);
 
-    await expect(page.locator('.menu-item[data-menu="onboarding"]')).toHaveClass(/active/);
+    await expect(page.locator('#menu-item-onboarding')).toHaveCount(0);
+    await expect(page.locator('.menu-item', { hasText: 'Primeiros passos' })).toHaveCount(0);
+    // Navegação principal continua disponível normalmente.
+    await expect(page.locator('.menu-item[data-menu="inicio"]')).toBeVisible();
+    await expect(page.locator('.menu-item[data-menu="agendamento"]')).toBeVisible();
+  });
+
+  test('configuração completa: modal não aparece (US66/Cenário 5 — concluído)', async ({ page }) => {
+    await entrarNoPainel(page, STATUS_BASE);
+    await page.waitForLoadState('networkidle');
+
+    await expect(page.locator('.modal-overlay')).toHaveCount(0);
+    await expect(page.locator('.menu-item[data-menu="agendamento"]')).toHaveClass(/active/);
+  });
+
+  test('primeiro acesso com serviços pendentes mostra o modal automaticamente (US66/Cenário 1)', async ({ page }) => {
+    const status = { ...STATUS_BASE, configuracao: { ...STATUS_BASE.configuracao, sem_servicos: true } };
+    await entrarNoPainel(page, status);
+
+    await expect(page.locator('.modal-overlay')).toBeVisible();
     await expect(page.locator('.onboarding-cabecalho h2')).toHaveText('Primeiros passos');
-    await expect(page.locator('#menu-item-onboarding')).toBeVisible();
+    // A tela por trás continua a mesma (não é mais um redirecionamento de tela).
+    await expect(page.locator('.menu-item[data-menu="agendamento"]')).toHaveClass(/active/);
   });
 
   test('checklist mostra os 3 passos, marca os concluídos e destaca o próximo passo recomendado', async ({ page }) => {
@@ -69,17 +84,19 @@ test.describe('Onboarding guiado (US56)', () => {
     await expect(page.locator('.onboarding-progresso span')).toHaveText('1 de 3 concluídos');
   });
 
-  test('clicar no botão do passo pendente navega direto pro cadastro correspondente', async ({ page }) => {
+  test('clicar no botão do passo pendente fecha o modal e navega pro cadastro correspondente', async ({ page }) => {
     const status = { ...STATUS_BASE, configuracao: { ...STATUS_BASE.configuracao, sem_servicos: true } };
     await entrarNoPainel(page, status);
     await page.route('**/api/servicos', (route) => route.fulfill({ json: { servicos: [] } }));
     await page.route('**/api/profissionais', (route) => route.fulfill({ json: { profissionais: [] } }));
 
     await page.click('[data-acao-onboarding-passo="servicos"]');
+
+    await expect(page.locator('.modal-overlay')).toHaveCount(0);
     await expect(page.locator('.nav-periodo strong')).toHaveText('Serviços');
   });
 
-  test('"Pular por agora" chama a API de dispensa e volta pro Início', async ({ page }) => {
+  test('"Pular por agora" fecha o modal, persiste a dispensa e não bloqueia o painel (US66/Cenário 3)', async ({ page }) => {
     const status = { ...STATUS_BASE, configuracao: { ...STATUS_BASE.configuracao, sem_servicos: true } };
     await entrarNoPainel(page, status);
 
@@ -90,37 +107,55 @@ test.describe('Onboarding guiado (US56)', () => {
     });
 
     await page.click('#btn-pular-onboarding');
-    await expect(page.locator('.menu-item[data-menu="inicio"]')).toHaveClass(/active/);
+
+    await expect(page.locator('.modal-overlay')).toHaveCount(0);
     expect(dispensarChamado).toBe(true);
-    // Item continua na sidebar — checklist ainda incompleto, só o
-    // redirecionamento automático que não deve repetir (CA "retomar depois").
-    await expect(page.locator('#menu-item-onboarding')).toBeVisible();
+    // Painel continua utilizável por trás — nenhum bloqueio de tela.
+    await expect(page.locator('.menu-item[data-menu="agendamento"]')).toHaveClass(/active/);
   });
 
-  test('checklist já dispensado não redireciona automaticamente, mas o item continua acessível na sidebar', async ({ page }) => {
+  test('checklist já dispensado não mostra o modal automaticamente (US66/Cenário 3 — reentrada)', async ({ page }) => {
     const status = {
       ...STATUS_BASE,
       onboarding_dispensado: true,
       configuracao: { ...STATUS_BASE.configuracao, sem_servicos: true },
     };
     await entrarNoPainel(page, status);
+    await page.waitForLoadState('networkidle');
 
+    await expect(page.locator('.modal-overlay')).toHaveCount(0);
     await expect(page.locator('.menu-item[data-menu="agendamento"]')).toHaveClass(/active/);
-    await expect(page.locator('#menu-item-onboarding')).toBeVisible();
+  });
 
-    await page.click('.menu-item[data-menu="onboarding"]');
+  test('fechar o modal sem decidir não persiste nada e ele reaparece no próximo carregamento (US66/Cenário 5)', async ({ page }) => {
+    const status = { ...STATUS_BASE, configuracao: { ...STATUS_BASE.configuracao, sem_servicos: true } };
+    await entrarNoPainel(page, status);
+
+    let dispensarChamado = false;
+    await page.route('**/api/onboarding/dispensar', (route) => {
+      dispensarChamado = true;
+      return route.fulfill({ json: { ok: true } });
+    });
+
+    await expect(page.locator('.modal-overlay')).toBeVisible();
+    await page.click('#modal-close');
+    await expect(page.locator('.modal-overlay')).toHaveCount(0);
+    expect(dispensarChamado).toBe(false);
+
+    await page.reload();
+    await expect(page.locator('.modal-overlay')).toBeVisible();
     await expect(page.locator('.onboarding-cabecalho h2')).toHaveText('Primeiros passos');
   });
 
-  test('checklist completo não mostra "Pular por agora"', async ({ page }) => {
-    await entrarNoPainel(page, STATUS_BASE);
-    await page.waitForLoadState('networkidle');
-    // Item escondido na sidebar (checklist já completo) — desmarca o hidden
-    // só pra conseguir chegar na tela por um clique normal, mesmo sem um
-    // jeito de fazer isso na UI de verdade nesse estado.
-    await page.evaluate(() => { document.getElementById('menu-item-onboarding').hidden = false; });
-    await page.click('.menu-item[data-menu="onboarding"]');
-    await expect(page.locator('.onboarding-progresso span')).toHaveText('3 de 3 concluídos');
-    await expect(page.locator('#btn-pular-onboarding')).toHaveCount(0);
+  test('modal cabe na tela e permanece utilizável em viewport mobile (US66/Cenário 6)', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 700 });
+    const status = { ...STATUS_BASE, configuracao: { ...STATUS_BASE.configuracao, sem_servicos: true } };
+    await entrarNoPainel(page, status);
+
+    const card = page.locator('.modal-card-onboarding');
+    await expect(card).toBeVisible();
+    const box = await card.boundingBox();
+    expect(box.width).toBeLessThanOrEqual(375);
+    await expect(page.locator('#btn-pular-onboarding')).toBeVisible();
   });
 });
