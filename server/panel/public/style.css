@@ -483,6 +483,16 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .link-pular-onboarding:hover { background: transparent; color: #f2f2f7; }
 
+/* US66 — modal de primeiros passos: um pouco mais largo que o modal padrão
+   (420px) pra cada passo (ícone + texto + botão) não ficar espremido. Em
+   telas estreitas o botão de ação desce pra baixo do texto em vez de
+   espremer ao lado (CA "modal responsivo"). */
+.modal-card-onboarding { max-width: 520px; }
+@media (max-width: 480px) {
+  .onboarding-passo { flex-wrap: wrap; }
+  .onboarding-passo .btn-secundario { width: 100%; margin-left: 42px; }
+}
+
 /* User menu (avatar + dropdown, PR11) — substitui o botão "Sair" solto no
    topbar; Meu Perfil/Minha Empresa/Cobrança/Preferências/Ajuda/Sair vivem
    todos dentro do dropdown. */
