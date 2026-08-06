@@ -24,16 +24,26 @@ function tenantDetalheMock(overrides = {}) {
     trial_dias_restantes: null,
     responsavel: { nome: 'Ana Paula', email: 'ana@salaokyvvo.com' },
     modulos_ativos: [{ key: 'agenda_inteligente', nome: 'Agenda Inteligente' }],
+    modulos: [
+      { key: 'agenda_inteligente', nome: 'Agenda Inteligente', obrigatorio: true, ativo: true },
+      { key: 'financeiro', nome: 'Financeiro', obrigatorio: false, ativo: false },
+    ],
     usuarios: [{ id: 'u1', email: 'ana@salaokyvvo.com', nome: 'Ana Paula' }],
     contagens: { servicos: 3, profissionais: 2, total_agendamentos: 12, ultimo_agendamento: '2026-07-10T14:00:00Z', total_clientes: 8 },
     ...overrides,
   };
 }
 
-async function entrarNoDetalheDoTenant(page, detalhe) {
+async function entrarNoDetalheDoTenant(page, detalhe, { historico = [] } = {}) {
+  // Rotas mais específicas são registradas por último — no Playwright, a
+  // rota registrada mais recentemente tem prioridade sobre as anteriores.
   await page.route('**/admin/api/tenants/*', (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
     return route.fulfill({ json: detalhe });
+  });
+  await page.route('**/admin/api/tenants/*/modulos/historico', (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    return route.fulfill({ json: { historico } });
   });
   await page.addInitScript(() => {
     window.localStorage.setItem('kyvvo_admin_token', 'admin-token-fake');
@@ -167,14 +177,112 @@ test.describe('Admin — detalhe do tenant (US28)', () => {
     expect(await toggle.evaluate((el) => el.tagName)).toBe('SPAN');
   });
 
-  test('seção Módulos ativos como chips (CA05)', async ({ page }) => {
+  test('seção Módulos lista ativos e inativos (US65/Cenário 1)', async ({ page }) => {
     await entrarNoDetalheDoTenant(page, tenantDetalheMock());
-    await expect(page.locator('.chip-modulo')).toHaveText('Agenda Inteligente');
+    const secao = page.locator('.secao-detalhe', { hasText: 'Módulos' }).first();
+    await expect(secao).toContainText('Agenda Inteligente');
+    await expect(secao).toContainText('Financeiro');
+    await expect(page.locator('tr[data-modulo="agenda_inteligente"] .toggle-modulo')).toBeChecked();
+    await expect(page.locator('tr[data-modulo="financeiro"] .toggle-modulo')).not.toBeChecked();
   });
 
-  test('sem módulos ativos, mostra mensagem vazia (CA05)', async ({ page }) => {
-    await entrarNoDetalheDoTenant(page, tenantDetalheMock({ modulos_ativos: [] }));
-    await expect(page.getByText('Nenhum módulo ativo')).toBeVisible();
+  test('ativar módulo inativo pela interface (US65/Cenário 2)', async ({ page }) => {
+    await entrarNoDetalheDoTenant(page, tenantDetalheMock());
+    let corpoEnviado = null;
+    await page.route('**/admin/api/tenants/t1/modulos/financeiro', (route) => {
+      corpoEnviado = route.request().postDataJSON();
+      return route.fulfill({
+        json: {
+          modulos: [
+            { key: 'agenda_inteligente', nome: 'Agenda Inteligente', obrigatorio: true, ativo: true },
+            { key: 'financeiro', nome: 'Financeiro', obrigatorio: false, ativo: true },
+          ],
+        },
+      });
+    });
+
+    await page.check('tr[data-modulo="financeiro"] .toggle-modulo');
+
+    expect(corpoEnviado).toEqual({ ativo: true });
+    await expect(page.locator('.toast-sucesso')).toContainText('Módulo ativado com sucesso.');
+    await expect(page.locator('tr[data-modulo="financeiro"] .toggle-modulo')).toBeChecked();
+  });
+
+  test('desativar módulo ativo pela interface (US65/Cenário 3)', async ({ page }) => {
+    await entrarNoDetalheDoTenant(page, tenantDetalheMock({
+      modulos: [
+        { key: 'agenda_inteligente', nome: 'Agenda Inteligente', obrigatorio: true, ativo: true },
+        { key: 'financeiro', nome: 'Financeiro', obrigatorio: false, ativo: true },
+      ],
+    }));
+    let corpoEnviado = null;
+    await page.route('**/admin/api/tenants/t1/modulos/financeiro', (route) => {
+      corpoEnviado = route.request().postDataJSON();
+      return route.fulfill({
+        json: {
+          modulos: [
+            { key: 'agenda_inteligente', nome: 'Agenda Inteligente', obrigatorio: true, ativo: true },
+            { key: 'financeiro', nome: 'Financeiro', obrigatorio: false, ativo: false },
+          ],
+        },
+      });
+    });
+
+    await page.uncheck('tr[data-modulo="financeiro"] .toggle-modulo');
+
+    expect(corpoEnviado).toEqual({ ativo: false });
+    await expect(page.locator('.toast-sucesso')).toContainText('Módulo desativado com sucesso.');
+    await expect(page.locator('tr[data-modulo="financeiro"] .toggle-modulo')).not.toBeChecked();
+  });
+
+  test('módulo obrigatório aparece bloqueado para remoção (US65/Cenário 4)', async ({ page }) => {
+    await entrarNoDetalheDoTenant(page, tenantDetalheMock());
+    const linha = page.locator('tr[data-modulo="agenda_inteligente"]');
+    await expect(linha.locator('.toggle-modulo')).toBeChecked();
+    await expect(linha.locator('.toggle-modulo')).toBeDisabled();
+    await expect(linha).toContainText('obrigatório');
+  });
+
+  test('erro do backend ao tentar desativar módulo obrigatório reverte o toggle (US65/Cenário 4)', async ({ page }) => {
+    // Mesmo com o toggle desabilitado no front, a API é a fonte de verdade —
+    // se ela recusar, a interface precisa refletir o erro sem quebrar.
+    await entrarNoDetalheDoTenant(page, tenantDetalheMock());
+    await page.route('**/admin/api/tenants/t1/modulos/agenda_inteligente', (route) => {
+      return route.fulfill({
+        status: 400,
+        json: { error: 'O módulo "Agenda Inteligente" é obrigatório e não pode ser desativado.' },
+      });
+    });
+
+    await page.evaluate(() => {
+      document.querySelector('tr[data-modulo="agenda_inteligente"] .toggle-modulo').disabled = false;
+    });
+    await page.uncheck('tr[data-modulo="agenda_inteligente"] .toggle-modulo');
+
+    await expect(page.locator('.toast-erro')).toContainText('obrigatório e não pode ser desativado');
+    await expect(page.locator('tr[data-modulo="agenda_inteligente"] .toggle-modulo')).toBeChecked();
+  });
+
+  test('histórico de alterações de módulos em ordem cronológica (US65/Cenário 5)', async ({ page }) => {
+    await entrarNoDetalheDoTenant(page, tenantDetalheMock(), {
+      historico: [
+        { modulo_key: 'financeiro', modulo_nome: 'Financeiro', acao: 'desativado', alterado_por_nome: 'Equipe Kyvvo', alterado_em: '2026-08-05T10:00:00Z' },
+        { modulo_key: 'financeiro', modulo_nome: 'Financeiro', acao: 'ativado', alterado_por_nome: 'Equipe Kyvvo', alterado_em: '2026-08-01T09:00:00Z' },
+      ],
+    });
+
+    const secao = page.locator('.secao-detalhe', { hasText: 'Histórico de alterações de módulos' });
+    const linhas = secao.locator('tbody tr');
+    await expect(linhas).toHaveCount(2);
+    await expect(linhas.nth(0)).toContainText('Desativado');
+    await expect(linhas.nth(1)).toContainText('Ativado');
+    await expect(secao).toContainText('Equipe Kyvvo');
+  });
+
+  test('sem histórico, mostra mensagem vazia (US65/Cenário 5)', async ({ page }) => {
+    await entrarNoDetalheDoTenant(page, tenantDetalheMock(), { historico: [] });
+    const secao = page.locator('.secao-detalhe', { hasText: 'Histórico de alterações de módulos' });
+    await expect(secao).toContainText('Nenhuma alteração registrada ainda.');
   });
 
   test('seção Atividade recente (CA06)', async ({ page }) => {

@@ -1482,6 +1482,20 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .vazio-inline { color: #6b7099; font-size: 14px; }
 
+/* US65 — selo do módulo obrigatório na tela de gestão de módulos do tenant */
+.badge-obrigatorio {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 2px 8px;
+  border-radius: 100px;
+  margin-left: 8px;
+  background: rgba(250, 204, 21, 0.15);
+  color: #facc15;
+}
+
 .tabela-wrapper { overflow-x: auto; margin-bottom: 16px; }
 
 .tabela-tenants {

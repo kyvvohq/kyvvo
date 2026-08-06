@@ -3069,6 +3069,21 @@ async function start() {
     return 'Inativo';
   }
 
+  // US65 — catálogo completo de módulos com o estado (ativo/inativo) daquele
+  // tenant específico, pra gestão de módulos por salão no portal Admin. LEFT
+  // JOIN porque um módulo sem linha em tenant_modulos conta como inativo
+  // (COALESCE), não fica de fora da lista.
+  async function modulosDoTenantParaAdmin(tenantId) {
+    const { rows } = await pool.query(
+      `SELECT m.key, m.nome, m.obrigatorio, COALESCE(tm.ativo, false) AS ativo
+       FROM modulos m
+       LEFT JOIN tenant_modulos tm ON tm.tenant_id = $1 AND tm.modulo_key = m.key
+       ORDER BY m.nome`,
+      [tenantId]
+    );
+    return rows;
+  }
+
   fastify.post('/admin/api/auth/login', async (request, reply) => {
     const { email, senha } = request.body || {};
     if (!email || !senha) {
@@ -3182,6 +3197,10 @@ async function start() {
        ORDER BY m.nome`,
       [id]
     );
+    // US65 — catálogo completo (ativos e inativos) pra tela de gestão de
+    // módulos (CA01); `modulos_ativos` acima continua existindo só pro modal
+    // antigo de edição da listagem (US16/app.js).
+    const modulos = await modulosDoTenantParaAdmin(id);
     const { rows: usuarios } = await pool.query('SELECT id, email, nome FROM usuarios WHERE tenant_id = $1 ORDER BY nome', [id]);
     // Responsável = primeiro usuário cadastrado do tenant (US28/CA03) — mesmo
     // critério (criado_em ASC) usado na listagem (US26); consulta separada
@@ -3216,9 +3235,90 @@ async function start() {
       trial_dias_restantes: trial.trialDiasRestantes,
       responsavel,
       modulos_ativos: modulosAtivos,
+      modulos,
       usuarios,
       contagens: contagemRows[0],
     };
+  });
+
+  // US65/CA02-CA06 — ativa ou desativa um módulo pra um tenant específico.
+  // Bloqueia desativação de módulo obrigatório (CA04) e registra auditoria
+  // de toda alteração de estado (CA05) na mesma transação do upsert.
+  fastify.patch('/admin/api/tenants/:id/modulos/:moduloKey', { preHandler: [fastify.authenticateAdmin] }, async (request, reply) => {
+    const { id, moduloKey } = request.params;
+    const { ativo } = request.body || {};
+    if (typeof ativo !== 'boolean') {
+      return reply.code(400).send({ error: 'Campo "ativo" deve ser um booleano.' });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const { rows: tenantRows } = await client.query('SELECT id FROM tenants WHERE id = $1 FOR UPDATE', [id]);
+      if (!tenantRows[0]) {
+        await client.query('ROLLBACK');
+        return reply.code(404).send({ error: 'Tenant não encontrado' });
+      }
+
+      const { rows: moduloRows } = await client.query('SELECT key, nome, obrigatorio FROM modulos WHERE key = $1', [moduloKey]);
+      const modulo = moduloRows[0];
+      if (!modulo) {
+        await client.query('ROLLBACK');
+        return reply.code(404).send({ error: 'Módulo não encontrado' });
+      }
+
+      if (modulo.obrigatorio && !ativo) {
+        await client.query('ROLLBACK');
+        return reply.code(400).send({ error: `O módulo "${modulo.nome}" é obrigatório e não pode ser desativado.` });
+      }
+
+      const { rows: atualRows } = await client.query(
+        'SELECT ativo FROM tenant_modulos WHERE tenant_id = $1 AND modulo_key = $2 FOR UPDATE',
+        [id, moduloKey]
+      );
+      const estadoAnterior = atualRows[0] ? atualRows[0].ativo : false;
+
+      await client.query(
+        `INSERT INTO tenant_modulos (tenant_id, modulo_key, ativo)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (tenant_id, modulo_key) DO UPDATE SET ativo = $3`,
+        [id, moduloKey, ativo]
+      );
+
+      if (estadoAnterior !== ativo) {
+        await client.query(
+          `INSERT INTO log_modulos_tenant (tenant_id, modulo_key, acao, estado_anterior, estado_novo, alterado_por)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [id, moduloKey, ativo ? 'ativado' : 'desativado', estadoAnterior, ativo, request.admin.adminId]
+        );
+      }
+
+      await client.query('COMMIT');
+    } catch (erro) {
+      await client.query('ROLLBACK');
+      throw erro;
+    } finally {
+      client.release();
+    }
+
+    return { modulos: await modulosDoTenantParaAdmin(id) };
+  });
+
+  // US65/CA05 — histórico cronológico das alterações de módulos de um tenant.
+  fastify.get('/admin/api/tenants/:id/modulos/historico', { preHandler: [fastify.authenticateAdmin] }, async (request) => {
+    const { id } = request.params;
+    const { rows } = await pool.query(
+      `SELECT l.modulo_key, m.nome AS modulo_nome, l.acao, l.estado_anterior, l.estado_novo, l.alterado_em, a.nome AS alterado_por_nome
+       FROM log_modulos_tenant l
+       JOIN modulos m ON m.key = l.modulo_key
+       LEFT JOIN kyvvo_admins a ON a.id = l.alterado_por
+       WHERE l.tenant_id = $1
+       ORDER BY l.alterado_em DESC
+       LIMIT 20`,
+      [id]
+    );
+    return { historico: rows };
   });
 
   fastify.post('/admin/api/tenants', { preHandler: [fastify.authenticateAdmin] }, async (request, reply) => {
