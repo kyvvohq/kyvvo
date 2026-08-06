@@ -78,6 +78,26 @@ function idDaUrl() {
   return decodeURIComponent(partes[partes.length - 1]);
 }
 
+// Duplicado intencionalmente do app.js do painel admin (mesmo raciocínio de
+// isolamento entre as telas admin — ver comentário no topo do arquivo).
+function mostrarToast(mensagem, tipo = 'sucesso') {
+  let container = document.getElementById('toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    container.className = 'toast-container';
+    document.body.appendChild(container);
+  }
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${tipo}`;
+  toast.textContent = (tipo === 'sucesso' ? '✅ ' : '❌ ') + mensagem;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.classList.add('toast-saindo');
+    setTimeout(() => toast.remove(), 250);
+  }, 4000);
+}
+
 function renderSecaoNegocio(t) {
   return `
     <section class="secao-detalhe">
@@ -160,14 +180,79 @@ function renderSecaoStatus(t) {
   `;
 }
 
+// US65 — cada módulo do catálogo aparece com seu estado (ativo/inativo) e um
+// toggle pra alterar. Módulo obrigatório (CA04) vem sempre ativo, com o
+// toggle desabilitado e uma explicação no title.
+function renderLinhaModulo(m) {
+  const bloqueado = Boolean(m.obrigatorio);
+  return `
+    <tr data-modulo="${escapeHtml(m.key)}">
+      <td>
+        ${escapeHtml(m.nome)}
+        ${bloqueado ? '<span class="badge-obrigatorio" title="Módulo obrigatório: não pode ser desativado">obrigatório</span>' : ''}
+      </td>
+      <td>
+        <label class="toggle-switch" title="${bloqueado ? 'Módulo obrigatório não pode ser desativado' : ''}">
+          <input
+            type="checkbox"
+            class="toggle-modulo"
+            data-modulo-key="${escapeHtml(m.key)}"
+            ${m.ativo ? 'checked' : ''}
+            ${bloqueado ? 'disabled' : ''}
+          >
+          <span class="toggle-switch-trilho"></span>
+        </label>
+      </td>
+    </tr>
+  `;
+}
+
 function renderSecaoModulos(t) {
-  const chips = t.modulos_ativos.length
-    ? t.modulos_ativos.map((m) => `<span class="chip-modulo">${escapeHtml(m.nome)}</span>`).join('')
-    : '<span class="vazio-inline">Nenhum módulo ativo</span>';
+  const modulos = t.modulos || [];
   return `
     <section class="secao-detalhe">
-      <h3>Módulos ativos</h3>
-      <div class="chips-modulos">${chips}</div>
+      <h3>Módulos</h3>
+      ${
+        modulos.length
+          ? `
+        <div class="tabela-wrapper">
+          <table class="tabela-tenants">
+            <thead><tr><th>Módulo</th><th>Ativo</th></tr></thead>
+            <tbody>${modulos.map(renderLinhaModulo).join('')}</tbody>
+          </table>
+        </div>
+      `
+          : '<span class="vazio-inline">Nenhum módulo disponível</span>'
+      }
+    </section>
+  `;
+}
+
+function renderLinhaHistoricoModulo(h) {
+  return `
+    <tr>
+      <td>${escapeHtml(h.modulo_nome)}</td>
+      <td>${h.acao === 'ativado' ? 'Ativado' : 'Desativado'}</td>
+      <td>${escapeHtml(h.alterado_por_nome || '—')}</td>
+      <td>${formatarDataHora(h.alterado_em)}</td>
+    </tr>
+  `;
+}
+
+function renderSecaoHistoricoModulos(historico) {
+  return `
+    <section class="secao-detalhe">
+      <h3>Histórico de alterações de módulos</h3>
+      <div class="tabela-wrapper">
+        <table class="tabela-tenants">
+          <thead><tr><th>Módulo</th><th>Ação</th><th>Alterado por</th><th>Data</th></tr></thead>
+          <tbody>${
+            historico.length
+              ? historico.map(renderLinhaHistoricoModulo).join('')
+              : '<tr><td colspan="4">Nenhuma alteração registrada ainda.</td></tr>'
+          }</tbody>
+        </table>
+      </div>
     </section>
   `;
 }
@@ -184,11 +269,75 @@ function renderSecaoAtividade(t) {
   `;
 }
 
+// Estado da tela mantido em memória pra poder re-renderizar só as seções de
+// módulos/histórico depois de um toggle, sem refazer o GET completo do
+// tenant (que não muda com a alteração de módulo).
+let tenantAtual = null;
+let idTenantAtual = null;
+
+async function carregarHistoricoModulos(id) {
+  const resultado = await api(`/admin/api/tenants/${encodeURIComponent(id)}/modulos/historico`).catch(() => null);
+  return (resultado && resultado.historico) || [];
+}
+
+function renderPagina(data, historico) {
+  conteudo.innerHTML = `
+    <a class="topbar-nav-link" href="/admin/painel.html">← Voltar para lista</a>
+    <h2 class="titulo-detalhe">${escapeHtml(data.nome)}</h2>
+    ${renderSecaoNegocio(data)}
+    ${renderSecaoNumeroNovo(data)}
+    ${renderSecaoResponsavel(data)}
+    ${renderSecaoStatus(data)}
+    ${renderSecaoModulos(data)}
+    ${renderSecaoHistoricoModulos(historico)}
+    ${renderSecaoAtividade(data)}
+  `;
+  wireEventosModulos();
+}
+
+// US65 — alterna um módulo pro tenant da tela atual. Em caso de sucesso,
+// atualiza só os módulos (resposta do PATCH já vem com o catálogo
+// atualizado) e recarrega o histórico, sem refazer o GET completo do
+// tenant. Em caso de erro (ex.: módulo obrigatório), reverte o toggle
+// visualmente.
+async function alterarModulo(moduloKey, ativo, checkbox) {
+  checkbox.disabled = true;
+  const resultado = await api(`/admin/api/tenants/${encodeURIComponent(idTenantAtual)}/modulos/${encodeURIComponent(moduloKey)}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ ativo }),
+  });
+  checkbox.disabled = false;
+  if (!resultado) return;
+
+  if (resultado.error) {
+    checkbox.checked = !ativo;
+    mostrarToast(resultado.error, 'erro');
+    return;
+  }
+
+  mostrarToast(`Módulo ${ativo ? 'ativado' : 'desativado'} com sucesso.`, 'sucesso');
+  tenantAtual.modulos = resultado.modulos;
+  const historico = await carregarHistoricoModulos(idTenantAtual);
+  renderPagina(tenantAtual, historico);
+}
+
+function wireEventosModulos() {
+  conteudo.querySelectorAll('.toggle-modulo').forEach((checkbox) => {
+    checkbox.addEventListener('change', () => {
+      alterarModulo(checkbox.dataset.moduloKey, checkbox.checked, checkbox);
+    });
+  });
+}
+
 async function renderDetalhe() {
   conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
 
   const id = idDaUrl();
-  const data = await api(`/admin/api/tenants/${encodeURIComponent(id)}`);
+  idTenantAtual = id;
+  const [data, historico] = await Promise.all([
+    api(`/admin/api/tenants/${encodeURIComponent(id)}`),
+    carregarHistoricoModulos(id),
+  ]);
   if (!data) return;
 
   if (data.error) {
@@ -199,16 +348,8 @@ async function renderDetalhe() {
     return;
   }
 
-  conteudo.innerHTML = `
-    <a class="topbar-nav-link" href="/admin/painel.html">← Voltar para lista</a>
-    <h2 class="titulo-detalhe">${escapeHtml(data.nome)}</h2>
-    ${renderSecaoNegocio(data)}
-    ${renderSecaoNumeroNovo(data)}
-    ${renderSecaoResponsavel(data)}
-    ${renderSecaoStatus(data)}
-    ${renderSecaoModulos(data)}
-    ${renderSecaoAtividade(data)}
-  `;
+  tenantAtual = data;
+  renderPagina(data, historico);
 }
 
 renderDetalhe();
