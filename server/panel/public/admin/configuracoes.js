@@ -41,6 +41,11 @@ function formatarPreco(preco) {
   return preco != null ? `R$ ${Number(preco).toFixed(2).replace('.', ',')}` : '—';
 }
 
+// US67/CA04 — rótulos de exibição dos eixos estruturais da grade 2x2
+// (somente leitura no admin, ver renderLinhaPlano).
+const TECNOLOGIA_LABELS = { bot: 'Bot', ia: 'IA' };
+const TIPO_NUMERO_LABELS = { proprio: 'Número próprio', kyvvo: 'Número Kyvvo' };
+
 function formatarDataHora(iso) {
   if (!iso) return '—';
   const d = new Date(iso);
@@ -88,7 +93,10 @@ function render() {
       <div class="tabela-wrapper">
         <table class="tabela-tenants">
           <thead>
-            <tr><th>Plano</th><th>Descrição</th><th>Preço mensal</th><th>Limite de disparos</th><th>Ativo</th><th></th></tr>
+            <tr>
+              <th>Plano</th><th>Descrição</th><th>Slug</th><th>Tecnologia</th><th>Tipo número</th>
+              <th>Preço mensal</th><th>Limite de disparos</th><th>Destaque</th><th>Badge</th><th>Ativo</th><th></th>
+            </tr>
           </thead>
           <tbody>${dados.planos.map(renderLinhaPlano).join('')}</tbody>
         </table>
@@ -129,16 +137,27 @@ function render() {
 
 function renderLinhaPlano(plano) {
   const editando = planosEmEdicao.has(plano.chave);
-  const toggleClasse = plano.ativo ? 'toggle-on' : 'toggle-off';
+  const toggleAtivoClasse = plano.ativo ? 'toggle-on' : 'toggle-off';
+  const toggleDestaqueClasse = plano.destaque ? 'toggle-on' : 'toggle-off';
+  // Slug/Tecnologia/Tipo número são identificadores estruturais da grade
+  // 2x2 — somente leitura em qualquer modo (US67/CA04).
+  const colunasSomenteLeitura = `
+    <td data-testid="slug-${plano.chave}">${escapeHtml(plano.slug || plano.chave)}</td>
+    <td>${escapeHtml(TECNOLOGIA_LABELS[plano.tecnologia] || plano.tecnologia || '—')}</td>
+    <td>${escapeHtml(TIPO_NUMERO_LABELS[plano.tipo_numero] || plano.tipo_numero || '—')}</td>
+  `;
 
   if (editando) {
     return `
       <tr data-plano="${plano.chave}">
         <td>${escapeHtml(plano.nome)}</td>
         <td><input type="text" class="input-plano-descricao" value="${escapeHtml(plano.descricao || '')}"></td>
+        ${colunasSomenteLeitura}
         <td><input type="number" step="0.01" min="1" class="input-plano-preco" value="${plano.preco_mensal}"></td>
         <td><input type="number" step="1" min="0" class="input-plano-limite" value="${plano.limite_disparos ?? ''}" placeholder="ilimitado"></td>
-        <td><span class="toggle-readonly toggle-clicavel ${toggleClasse}" data-acao="toggle-ativo-plano" data-chave="${plano.chave}"></span></td>
+        <td><span class="toggle-readonly toggle-clicavel ${toggleDestaqueClasse}" data-acao="toggle-destaque-plano" data-chave="${plano.chave}"></span></td>
+        <td><input type="text" class="input-plano-badge" value="${escapeHtml(plano.badge || '')}" placeholder="ex: Mais popular"></td>
+        <td><span class="toggle-readonly toggle-clicavel ${toggleAtivoClasse}" data-acao="toggle-ativo-plano" data-chave="${plano.chave}"></span></td>
         <td class="celula-acoes-plano">
           <div class="modal-erro" data-erro-plano="${plano.chave}"></div>
           <button class="btn-secundario btn-tabela" data-acao="cancelar-plano" data-chave="${plano.chave}">Cancelar</button>
@@ -152,9 +171,12 @@ function renderLinhaPlano(plano) {
     <tr data-plano="${plano.chave}">
       <td>${escapeHtml(plano.nome)}</td>
       <td>${escapeHtml(plano.descricao || '—')}</td>
+      ${colunasSomenteLeitura}
       <td>${formatarPreco(plano.preco_mensal)}</td>
       <td>${plano.limite_disparos != null ? plano.limite_disparos : 'Ilimitado'}</td>
-      <td><span class="toggle-readonly toggle-clicavel ${toggleClasse}" data-acao="toggle-ativo-plano" data-chave="${plano.chave}"></span></td>
+      <td><span class="toggle-readonly toggle-clicavel ${toggleDestaqueClasse}" data-acao="toggle-destaque-plano" data-chave="${plano.chave}"></span></td>
+      <td>${escapeHtml(plano.badge || '—')}</td>
+      <td><span class="toggle-readonly toggle-clicavel ${toggleAtivoClasse}" data-acao="toggle-ativo-plano" data-chave="${plano.chave}"></span></td>
       <td class="celula-acoes-plano">
         <button class="btn-secundario btn-tabela" data-acao="editar-plano" data-chave="${plano.chave}">Editar</button>
       </td>
@@ -207,6 +229,9 @@ function wireEventos() {
   conteudo.querySelectorAll('[data-acao="toggle-ativo-plano"]').forEach((toggle) => {
     toggle.addEventListener('click', () => alternarAtivoPlano(toggle.dataset.chave));
   });
+  conteudo.querySelectorAll('[data-acao="toggle-destaque-plano"]').forEach((toggle) => {
+    toggle.addEventListener('click', () => alternarDestaquePlano(toggle.dataset.chave));
+  });
 
   conteudo.querySelectorAll('[data-acao="editar-config"]').forEach((btn) => {
     btn.addEventListener('click', () => { sistemaEmEdicao.add(btn.dataset.chave); render(); });
@@ -224,6 +249,7 @@ async function salvarPlano(chave) {
   const descricao = linha.querySelector('.input-plano-descricao').value.trim();
   const precoMensal = linha.querySelector('.input-plano-preco').value;
   const limiteBruto = linha.querySelector('.input-plano-limite').value.trim();
+  const badge = linha.querySelector('.input-plano-badge').value.trim();
   const erroEl = linha.querySelector(`[data-erro-plano="${chave}"]`);
   erroEl.textContent = '';
 
@@ -238,6 +264,7 @@ async function salvarPlano(chave) {
       descricao,
       preco_mensal: Number(precoMensal),
       limite_disparos: limiteBruto === '' ? null : Number(limiteBruto),
+      badge: badge === '' ? null : badge,
     }),
   });
 
@@ -259,6 +286,21 @@ async function alternarAtivoPlano(chave) {
 
   if (resultado && !resultado.error) {
     mostrarToast(`Plano ${resultado.ativo ? 'ativado' : 'desativado'} com sucesso.`, 'sucesso');
+    await carregar();
+  } else {
+    mostrarToast((resultado && resultado.error) || 'Erro ao atualizar plano.', 'erro');
+  }
+}
+
+async function alternarDestaquePlano(chave) {
+  const plano = dados.planos.find((p) => p.chave === chave);
+  const resultado = await api(`/admin/api/configuracoes/planos/${chave}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ destaque: !plano.destaque }),
+  });
+
+  if (resultado && !resultado.error) {
+    mostrarToast(`Destaque ${resultado.destaque ? 'ativado' : 'desativado'} com sucesso.`, 'sucesso');
     await carregar();
   } else {
     mostrarToast((resultado && resultado.error) || 'Erro ao atualizar plano.', 'erro');

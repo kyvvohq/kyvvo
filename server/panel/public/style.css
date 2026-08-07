@@ -1846,6 +1846,61 @@ textarea:focus { outline: none; border-color: var(--accent); }
   line-height: 1.5;
 }
 
+/* US67/CA06 — prévia do plano vindo de ?plano= (ver cadastro.html). Sem essa
+   regra, o display:flex abaixo tem mais especificidade que o UA stylesheet
+   pro atributo [hidden] sozinho, e o card nunca some. */
+.cadastro-plano[hidden] {
+  display: none;
+}
+
+.cadastro-plano {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: rgba(124, 92, 252, 0.08);
+  border: 1px solid rgba(124, 92, 252, 0.3);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+}
+
+.cadastro-plano-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.cadastro-plano-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #a1a5c4;
+}
+
+.cadastro-plano-nome {
+  font-size: 14px;
+}
+
+.cadastro-plano-preco {
+  font-size: 12px;
+  color: var(--accent-light);
+}
+
+.cadastro-plano-trocar-label {
+  font-size: 11px;
+  color: #a1a5c4;
+  white-space: nowrap;
+}
+
+.cadastro-plano select {
+  width: auto;
+  max-width: 160px;
+  font-size: 12px;
+  padding: 6px 8px;
+}
+
 /* Erro inline por campo (CA02). O input inválido ganha borda vermelha. */
 .field-error {
   color: #ff6b6b;
