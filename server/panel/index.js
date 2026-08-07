@@ -136,11 +136,15 @@ let PLANOS_CACHE = {};
 // Plano que um tenant sem plano escolhido (trial ou nulo) contrata ao
 // cadastrar pagamento — qual plano é o "padrão" é uma decisão de produto,
 // não uma configuração de preço, por isso continua fixo no código.
-const PLANO_PADRAO_CHAVE = 'profissional';
+// US67: sucessor do antigo 'profissional' na grade 2x2 (mesmo limite de
+// disparos e mesma tecnologia liberada no trial — ver MODULOS_TRIAL).
+const PLANO_PADRAO_CHAVE = 'professional';
 
 async function carregarPlanos() {
   const { rows } = await pool.query(
-    'SELECT chave, nome, descricao, preco_mensal, limite_disparos, ativo FROM planos'
+    `SELECT chave, slug, nome, descricao, tecnologia, tipo_numero, preco_mensal,
+            limite_disparos, destaque, badge, ativo
+       FROM planos`
   );
   PLANOS_CACHE = Object.fromEntries(rows.map((r) => [r.chave, r]));
 }
@@ -672,6 +676,22 @@ async function start() {
   fastify.get('/api/segmentos', async () => {
     const { rows } = await pool.query('SELECT id, nome FROM segmentos WHERE ativo = true ORDER BY id');
     return { segmentos: rows };
+  });
+
+  // US67/CA01 — catálogo público de planos (grade 2x2), consultado sem
+  // autenticação tanto pela landing (outra origem) quanto pelo cadastro
+  // (CA06, pra pré-selecionar o plano vindo de ?plano=). Só planos ativos —
+  // os desativados pela migration 045 (chaves legadas) não aparecem aqui,
+  // mas continuam resolvendo preço no checkout de quem já os tem.
+  fastify.get('/api/planos', async () => {
+    const { rows } = await pool.query(
+      `SELECT slug, nome, descricao, tecnologia, tipo_numero, preco_mensal,
+              limite_disparos, destaque, badge
+         FROM planos
+        WHERE ativo = true
+        ORDER BY preco_mensal ASC`
+    );
+    return rows.map((p) => ({ ...p, preco_mensal: Number(p.preco_mensal) }));
   });
 
 
@@ -3427,7 +3447,8 @@ async function start() {
 
   fastify.get('/admin/api/configuracoes', { preHandler: [fastify.authenticateAdmin] }, async () => {
     const { rows: planosRows } = await pool.query(
-      `SELECT chave, nome, descricao, preco_mensal, limite_disparos, ativo, atualizado_em
+      `SELECT chave, slug, nome, descricao, tecnologia, tipo_numero, preco_mensal,
+              limite_disparos, destaque, badge, ativo, atualizado_em
        FROM planos ORDER BY preco_mensal ASC`
     );
     // pg devolve NUMERIC como string (evita perda de precisão) — converte pra
@@ -3445,12 +3466,21 @@ async function start() {
     return { planos, sistema, log };
   });
 
-  // CA03/CA05/CA09 — atualiza um plano (descrição/preço/limite/ativo). Preço
-  // mínimo de R$1 (CA03), e cada campo alterado grava uma linha própria no log
-  // de auditoria (CA05/CA07) na mesma transação da atualização.
+  // CA03/CA05/CA09/US67-CA04 — atualiza um plano (descrição/preço/limite/
+  // destaque/badge/ativo). `slug`, `tecnologia` e `tipo_numero` são
+  // identificadores estruturais e não são aceitos aqui (somente leitura).
+  // Preço mínimo de R$1 (CA03), e cada campo alterado grava uma linha própria
+  // no log de auditoria (CA05/CA07) na mesma transação da atualização.
   fastify.patch('/admin/api/configuracoes/planos/:chave', { preHandler: [fastify.authenticateAdmin] }, async (request, reply) => {
     const { chave } = request.params;
-    const { descricao, preco_mensal: precoMensal, limite_disparos: limiteDisparos, ativo } = request.body || {};
+    const {
+      descricao,
+      preco_mensal: precoMensal,
+      limite_disparos: limiteDisparos,
+      destaque,
+      badge,
+      ativo,
+    } = request.body || {};
 
     if (precoMensal !== undefined && !(Number(precoMensal) >= 1)) {
       return reply.code(400).send({ error: 'Preço mensal deve ser no mínimo R$ 1,00.' });
@@ -3471,12 +3501,15 @@ async function start() {
            descricao = COALESCE($2, descricao),
            preco_mensal = COALESCE($3, preco_mensal),
            limite_disparos = COALESCE($4, limite_disparos),
-           ativo = COALESCE($5, ativo),
+           destaque = COALESCE($5, destaque),
+           badge = COALESCE($6, badge),
+           ativo = COALESCE($7, ativo),
            atualizado_em = now(),
-           atualizado_por = $6
+           atualizado_por = $8
          WHERE chave = $1
-         RETURNING chave, nome, descricao, preco_mensal, limite_disparos, ativo, atualizado_em`,
-        [chave, descricao, precoMensal, limiteDisparos, ativo, request.admin.adminId]
+         RETURNING chave, slug, nome, descricao, tecnologia, tipo_numero, preco_mensal,
+                   limite_disparos, destaque, badge, ativo, atualizado_em`,
+        [chave, descricao, precoMensal, limiteDisparos, destaque, badge, ativo, request.admin.adminId]
       );
       const novo = atualizadoRows[0];
 
@@ -3484,6 +3517,8 @@ async function start() {
         ['descricao', anterior.descricao, novo.descricao],
         ['preco_mensal', anterior.preco_mensal, novo.preco_mensal],
         ['limite_disparos', anterior.limite_disparos, novo.limite_disparos],
+        ['destaque', anterior.destaque, novo.destaque],
+        ['badge', anterior.badge, novo.badge],
         ['ativo', anterior.ativo, novo.ativo],
       ];
       for (const [campo, valorAnterior, valorNovo] of camposComparados) {

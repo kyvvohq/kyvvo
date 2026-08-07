@@ -18,6 +18,16 @@
     <h1 class="cadastro-titulo">Crie sua conta grátis</h1>
     <p class="cadastro-sub">Comece agora seu trial de 14 dias. Sem cartão de crédito.</p>
 
+    <div class="cadastro-plano" id="cadastro-plano" hidden>
+      <div class="cadastro-plano-info">
+        <span class="cadastro-plano-label">Plano selecionado</span>
+        <strong class="cadastro-plano-nome" id="cadastro-plano-nome"></strong>
+        <span class="cadastro-plano-preco" id="cadastro-plano-preco"></span>
+      </div>
+      <label class="cadastro-plano-trocar-label" for="cadastro-plano-select">Trocar plano</label>
+      <select id="cadastro-plano-select"></select>
+    </div>
+
     <form id="form-cadastro" novalidate>
       <label for="nome_responsavel">Nome Responsável</label>
       <input type="text" id="nome_responsavel" autocomplete="name" placeholder="Nome completo do responsável">
@@ -126,6 +136,50 @@
     .catch(() => {
       mostrarErroCampo('segmento', 'Não foi possível carregar os segmentos. Tente novamente.');
     });
+
+  // US67/CA06 — plano vindo da landing via ?plano=<slug> (CTA de cada card):
+  // mostra nome/preço pré-selecionados e deixa trocar de plano sem voltar
+  // pra landing. Guardado em sessionStorage pra sobreviver até a tela de
+  // pagamento (US32) sem precisar propagar o parâmetro por link em link.
+  const planoBox = document.getElementById('cadastro-plano');
+  const planoNomeEl = document.getElementById('cadastro-plano-nome');
+  const planoPrecoEl = document.getElementById('cadastro-plano-preco');
+  const planoSelect = document.getElementById('cadastro-plano-select');
+
+  function formatarPrecoPlano(valor) {
+    return `R$ ${Number(valor).toFixed(2).replace('.', ',')}/mês`;
+  }
+
+  function exibirPlanoSelecionado(planos, slug) {
+    const plano = planos.find((p) => p.slug === slug) || planos[0];
+    if (!plano) return;
+    planoNomeEl.textContent = plano.nome;
+    planoPrecoEl.textContent = formatarPrecoPlano(plano.preco_mensal);
+    planoSelect.value = plano.slug;
+    planoBox.hidden = false;
+    sessionStorage.setItem('kyvvo_plano_selecionado', plano.slug);
+  }
+
+  const slugDaUrl = new URLSearchParams(window.location.search).get('plano');
+  if (slugDaUrl) {
+    fetch('/api/planos')
+      .then((res) => {
+        if (!res.ok) throw new Error('status ' + res.status);
+        return res.json();
+      })
+      .then((planos) => {
+        if (!planos.length) return;
+        planoSelect.innerHTML = planos
+          .map((p) => `<option value="${p.slug}">${p.nome} — ${formatarPrecoPlano(p.preco_mensal)}</option>`)
+          .join('');
+        exibirPlanoSelecionado(planos, slugDaUrl);
+        planoSelect.addEventListener('change', () => exibirPlanoSelecionado(planos, planoSelect.value));
+      })
+      .catch(() => {
+        // Sem o catálogo não dá pra mostrar nome/preço com segurança (CA06)
+        // — segue o cadastro normalmente, só sem a prévia do plano.
+      });
+  }
 
   const validadores = {
     nome_responsavel: (v) => (v.trim().length >= 2 ? '' : 'Informe o nome do responsável.'),

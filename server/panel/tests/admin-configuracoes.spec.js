@@ -54,7 +54,7 @@ test.describe('Admin — Configurações do sistema (US38)', () => {
 
     const linhaEmpresarial = page.locator('tr[data-plano="empresarial"]');
     await expect(linhaEmpresarial).toContainText('Ilimitado');
-    await expect(linhaEmpresarial.locator('.toggle-clicavel')).toHaveClass(/toggle-off/);
+    await expect(linhaEmpresarial.locator('[data-acao="toggle-ativo-plano"]')).toHaveClass(/toggle-off/);
   });
 
   test('link "Configurações" está disponível no painel admin', async ({ page }) => {
@@ -136,7 +136,7 @@ test.describe('Admin — Configurações do sistema (US38)', () => {
       });
     });
 
-    await page.click('tr[data-plano="empresarial"] .toggle-clicavel');
+    await page.click('tr[data-plano="empresarial"] [data-acao="toggle-ativo-plano"]');
 
     await expect(page.locator('.toast-sucesso')).toHaveText(/ativado/);
     expect(corpoEnviado).toMatchObject({ ativo: true });
@@ -192,5 +192,73 @@ test.describe('Admin — Configurações do sistema (US38)', () => {
 
     const linhaLog = page.locator('.tabela-tenants').last().locator('tbody tr').first();
     await expect(linhaLog).toContainText('Nenhuma alteração registrada ainda.');
+  });
+});
+
+// US67 — grade 2x2 (tecnologia bot/ia x tipo_numero proprio/kyvvo): o
+// catálogo de planos ganha 4 planos com slug/tecnologia/tipo_numero
+// (somente leitura) e destaque/badge (editáveis).
+function planosGrade2x2() {
+  return [
+    { chave: 'starter', slug: 'starter', nome: 'Starter', descricao: 'Bot de agendamento + número próprio', tecnologia: 'bot', tipo_numero: 'proprio', preco_mensal: 79.9, limite_disparos: 100, destaque: false, badge: null, ativo: true, atualizado_em: '2026-08-01T10:00:00Z' },
+    { chave: 'business', slug: 'business', nome: 'Business', descricao: 'Bot de agendamento + número Kyvvo pronto', tecnologia: 'bot', tipo_numero: 'kyvvo', preco_mensal: 119.9, limite_disparos: 100, destaque: false, badge: null, ativo: true, atualizado_em: '2026-08-01T10:00:00Z' },
+    { chave: 'professional', slug: 'professional', nome: 'Professional', descricao: 'IA conversacional + número próprio', tecnologia: 'ia', tipo_numero: 'proprio', preco_mensal: 149.9, limite_disparos: 500, destaque: false, badge: null, ativo: true, atualizado_em: '2026-08-01T10:00:00Z' },
+    { chave: 'enterprise', slug: 'enterprise', nome: 'Enterprise', descricao: 'IA conversacional + número Kyvvo pronto', tecnologia: 'ia', tipo_numero: 'kyvvo', preco_mensal: 179.9, limite_disparos: 500, destaque: true, badge: 'Mais popular', ativo: true, atualizado_em: '2026-08-01T10:00:00Z' },
+  ];
+}
+
+test.describe('Admin — Configurações — grade 2x2 de planos (US67/CA04)', () => {
+  test('exibe os 4 planos com slug, tecnologia e tipo de número', async ({ page }) => {
+    await entrarEmConfiguracoes(page, configuracoesMock({ planos: planosGrade2x2() }));
+
+    for (const slug of ['starter', 'business', 'professional', 'enterprise']) {
+      await expect(page.locator(`tr[data-plano="${slug}"]`)).toBeVisible();
+    }
+
+    const linhaEnterprise = page.locator('tr[data-plano="enterprise"]');
+    await expect(linhaEnterprise.locator('[data-testid="slug-enterprise"]')).toHaveText('enterprise');
+    await expect(linhaEnterprise).toContainText('IA');
+    await expect(linhaEnterprise).toContainText('Número Kyvvo');
+    await expect(linhaEnterprise).toContainText('Mais popular');
+  });
+
+  test('slug, tecnologia e tipo de número não têm botão de edição (somente leitura)', async ({ page }) => {
+    await entrarEmConfiguracoes(page, configuracoesMock({ planos: planosGrade2x2() }));
+
+    await page.click('tr[data-plano="enterprise"] [data-acao="editar-plano"]');
+    const slugCell = page.getByTestId('slug-enterprise');
+    await expect(slugCell.locator('input')).toHaveCount(0);
+  });
+
+  test('edita o badge de um plano (CA04)', async ({ page }) => {
+    await entrarEmConfiguracoes(page, configuracoesMock({ planos: planosGrade2x2() }));
+
+    let corpoEnviado = null;
+    await page.route('**/admin/api/configuracoes/planos/professional', (route) => {
+      corpoEnviado = route.request().postDataJSON();
+      return route.fulfill({ json: { ...planosGrade2x2()[2], badge: 'Recomendado' } });
+    });
+
+    await page.click('tr[data-plano="professional"] [data-acao="editar-plano"]');
+    await page.fill('tr[data-plano="professional"] .input-plano-badge', 'Recomendado');
+    await page.click('tr[data-plano="professional"] [data-acao="salvar-plano"]');
+
+    await expect(page.locator('.toast-sucesso')).toHaveText(/Preço atualizado/);
+    expect(corpoEnviado).toMatchObject({ badge: 'Recomendado' });
+  });
+
+  test('alterna o destaque de um plano imediatamente, sem modo de edição (CA04)', async ({ page }) => {
+    await entrarEmConfiguracoes(page, configuracoesMock({ planos: planosGrade2x2() }));
+
+    let corpoEnviado = null;
+    await page.route('**/admin/api/configuracoes/planos/starter', (route) => {
+      corpoEnviado = route.request().postDataJSON();
+      return route.fulfill({ json: { ...planosGrade2x2()[0], destaque: true } });
+    });
+
+    await page.click('tr[data-plano="starter"] [data-acao="toggle-destaque-plano"]');
+
+    await expect(page.locator('.toast-sucesso')).toHaveText(/Destaque ativado/);
+    expect(corpoEnviado).toMatchObject({ destaque: true });
   });
 });
