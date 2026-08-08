@@ -3428,6 +3428,22 @@ async function renderConfiguracao() {
   const almocoInicio = (configuracao.horario_almoco_inicio || '12:00').slice(0, 5);
   const almocoFim = (configuracao.horario_almoco_fim || '13:00').slice(0, 5);
 
+  // US69/CA06 — modo de atendimento é somente leitura aqui: quem altera é o
+  // admin Kyvvo (vinculado ao plano contratado), não o dono do salão.
+  const modoIa = configuracao.tecnologia === 'ia';
+  const modoAtendimentoHtml = `
+    <div class="perfil-form" style="margin-bottom:24px">
+      <label>Modo de atendimento</label>
+      <div class="modal-texto">
+        <span class="badge ${modoIa ? 'badge-modo-ia' : 'badge-modo-bot'}">
+          ${modoIa ? '✨ IA — Linguagem natural' : '🤖 Bot — Menus numerados'}
+        </span>
+      </div>
+      <div class="modal-texto">${escapeHtml(configuracao.plano_atual || '')}</div>
+      ${modoIa ? '' : '<div class="modal-texto"><a href="mailto:suporte@kyvvo.com.br">Fale conosco para fazer upgrade</a></div>'}
+    </div>
+  `;
+
   const toggleDias = NOMES_DIAS.map((nome, idx) => `
     <label class="dia-toggle-cel">
       <span class="dia-toggle-nome">${nome.slice(0, 3)}</span>
@@ -3439,6 +3455,7 @@ async function renderConfiguracao() {
   `).join('');
 
   conteudo.innerHTML = `
+    ${modoAtendimentoHtml}
     <form class="perfil-form" id="form-config">
       <label>Dias em que ${infoSegmento(configuracao.segmento).dias} funciona (aparecem na agenda)</label>
       <div class="dias-grid">${toggleDias}</div>
