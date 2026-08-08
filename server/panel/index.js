@@ -2530,6 +2530,39 @@ async function start() {
   // Livro-caixa manual (entrada/saída, US18) + lançamentos automáticos de
   // agendamento (US64, sincronizados por sincronizarLancamentoFinanceiro) —
   // só acessível a quem tem o módulo "financeiro" ativo.
+
+  // US70/CA01 — resumo financeiro pra tela inicial (4 cards): só receita
+  // (tipo='entrada', mesmo recorte de `previsto`/`realizado` já usado no
+  // resumo mensal do financeiro em si) hoje e no mês corrente, em horário de
+  // Brasília. `cancelado` nunca entra (não está em nenhum FILTER abaixo).
+  fastify.get(
+    '/api/financeiro/resumo-dashboard',
+    { preHandler: [fastify.authenticate, fastify.requireModulo('financeiro'), fastify.requireAdmin] },
+    async (request) => {
+      const { tenantId } = request.user;
+      const hoje = dataAtualBrasilia();
+      const mesRef = mesAtualBrasilia();
+
+      const { rows } = await pool.query(
+        `SELECT
+           COALESCE(SUM(valor) FILTER (WHERE status = 'realizado' AND data = $2), 0) AS realizado_hoje,
+           COALESCE(SUM(valor) FILTER (WHERE status = 'previsto'  AND data = $2), 0) AS previsto_hoje,
+           COALESCE(SUM(valor) FILTER (WHERE status = 'realizado' AND to_char(data, 'YYYY-MM') = $3), 0) AS realizado_mes,
+           COALESCE(SUM(valor) FILTER (WHERE status = 'previsto'  AND to_char(data, 'YYYY-MM') = $3), 0) AS previsto_mes
+         FROM lancamentos_financeiros
+         WHERE tenant_id = $1 AND tipo = 'entrada'`,
+        [tenantId, hoje, mesRef]
+      );
+      const r = rows[0];
+      return {
+        realizado_hoje: Number(r.realizado_hoje),
+        previsto_hoje: Number(r.previsto_hoje),
+        realizado_mes: Number(r.realizado_mes),
+        previsto_mes: Number(r.previsto_mes),
+      };
+    }
+  );
+
   fastify.get(
     '/api/financeiro/lancamentos',
     // US62 — dinheiro é visão de administrador; operador não acessa.

@@ -875,6 +875,23 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .financeiro-entrada { color: #4ade80; }
 .financeiro-saida { color: #ff6b6b; }
+.financeiro-previsto { color: var(--cyan); }
+
+/* US70 — faixa de 4 cards financeiros na tela inicial, reaproveita o visual
+   de .financeiro-resumo-card mas em 4 colunas e clicável (navega pro
+   Financeiro). */
+.inicio-financeiro-resumo {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin: 4px 0 20px;
+}
+.inicio-financeiro-resumo .financeiro-resumo-card { cursor: pointer; transition: border-color 0.15s; }
+.inicio-financeiro-resumo .financeiro-resumo-card:hover { border-color: var(--accent-light); }
+
+@media (max-width: 640px) {
+  .inicio-financeiro-resumo { grid-template-columns: repeat(2, 1fr); }
+}
 
 /* Cards de 3 linhas na aba Pagamento (PR5): label / valor principal /
    subtítulo — substitui o texto corrido de antes ("Nome — R$ valor" numa
