@@ -686,7 +686,7 @@ async function start() {
   fastify.get('/api/planos', async () => {
     const { rows } = await pool.query(
       `SELECT slug, nome, descricao, tecnologia, tipo_numero, preco_mensal,
-              limite_disparos, destaque, badge
+              limite_disparos, destaque, badge, headline_diferencial, frase_beneficio
          FROM planos
         WHERE ativo = true
         ORDER BY preco_mensal ASC`
@@ -3448,7 +3448,7 @@ async function start() {
   fastify.get('/admin/api/configuracoes', { preHandler: [fastify.authenticateAdmin] }, async () => {
     const { rows: planosRows } = await pool.query(
       `SELECT chave, slug, nome, descricao, tecnologia, tipo_numero, preco_mensal,
-              limite_disparos, destaque, badge, ativo, atualizado_em
+              limite_disparos, destaque, badge, headline_diferencial, frase_beneficio, ativo, atualizado_em
        FROM planos ORDER BY preco_mensal ASC`
     );
     // pg devolve NUMERIC como string (evita perda de precisão) — converte pra
@@ -3479,11 +3479,22 @@ async function start() {
       limite_disparos: limiteDisparos,
       destaque,
       badge,
+      headline_diferencial: headlineDiferencial,
+      frase_beneficio: fraseBeneficio,
       ativo,
     } = request.body || {};
 
     if (precoMensal !== undefined && !(Number(precoMensal) >= 1)) {
       return reply.code(400).send({ error: 'Preço mensal deve ser no mínimo R$ 1,00.' });
+    }
+    // US73/CA01/CA04 — mesmo limite de 120 caracteres da migration, validado
+    // aqui também (o CHECK do banco é a garantia final, isso só evita um
+    // round-trip de erro genérico de constraint).
+    if (headlineDiferencial !== undefined && headlineDiferencial !== null && headlineDiferencial.length > 120) {
+      return reply.code(400).send({ error: 'Headline de diferencial deve ter no máximo 120 caracteres.' });
+    }
+    if (fraseBeneficio !== undefined && fraseBeneficio !== null && fraseBeneficio.length > 120) {
+      return reply.code(400).send({ error: 'Frase de benefício deve ter no máximo 120 caracteres.' });
     }
 
     const client = await pool.connect();
@@ -3503,13 +3514,15 @@ async function start() {
            limite_disparos = COALESCE($4, limite_disparos),
            destaque = COALESCE($5, destaque),
            badge = COALESCE($6, badge),
-           ativo = COALESCE($7, ativo),
+           headline_diferencial = COALESCE($7, headline_diferencial),
+           frase_beneficio = COALESCE($8, frase_beneficio),
+           ativo = COALESCE($9, ativo),
            atualizado_em = now(),
-           atualizado_por = $8
+           atualizado_por = $10
          WHERE chave = $1
          RETURNING chave, slug, nome, descricao, tecnologia, tipo_numero, preco_mensal,
-                   limite_disparos, destaque, badge, ativo, atualizado_em`,
-        [chave, descricao, precoMensal, limiteDisparos, destaque, badge, ativo, request.admin.adminId]
+                   limite_disparos, destaque, badge, headline_diferencial, frase_beneficio, ativo, atualizado_em`,
+        [chave, descricao, precoMensal, limiteDisparos, destaque, badge, headlineDiferencial, fraseBeneficio, ativo, request.admin.adminId]
       );
       const novo = atualizadoRows[0];
 
@@ -3519,6 +3532,8 @@ async function start() {
         ['limite_disparos', anterior.limite_disparos, novo.limite_disparos],
         ['destaque', anterior.destaque, novo.destaque],
         ['badge', anterior.badge, novo.badge],
+        ['headline_diferencial', anterior.headline_diferencial, novo.headline_diferencial],
+        ['frase_beneficio', anterior.frase_beneficio, novo.frase_beneficio],
         ['ativo', anterior.ativo, novo.ativo],
       ];
       for (const [campo, valorAnterior, valorNovo] of camposComparados) {

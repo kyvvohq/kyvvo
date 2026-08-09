@@ -94,7 +94,7 @@ function render() {
         <table class="tabela-tenants">
           <thead>
             <tr>
-              <th>Plano</th><th>Descrição</th><th>Slug</th><th>Tecnologia</th><th>Tipo número</th>
+              <th>Plano</th><th>Descrição</th><th>Headline (diferencial)</th><th>Frase de benefício</th><th>Slug</th><th>Tecnologia</th><th>Tipo número</th>
               <th>Preço mensal</th><th>Limite de disparos</th><th>Destaque</th><th>Badge</th><th>Ativo</th><th></th>
             </tr>
           </thead>
@@ -152,6 +152,14 @@ function renderLinhaPlano(plano) {
       <tr data-plano="${plano.chave}">
         <td>${escapeHtml(plano.nome)}</td>
         <td><input type="text" class="input-plano-descricao" value="${escapeHtml(plano.descricao || '')}"></td>
+        <td>
+          <input type="text" class="input-plano-headline" data-testid="input-headline-${plano.chave}" value="${escapeHtml(plano.headline_diferencial || '')}">
+          <div class="contador-caracteres" data-contador="headline-${plano.chave}"></div>
+        </td>
+        <td>
+          <input type="text" class="input-plano-frase" data-testid="input-frase-${plano.chave}" value="${escapeHtml(plano.frase_beneficio || '')}">
+          <div class="contador-caracteres" data-contador="frase-${plano.chave}"></div>
+        </td>
         ${colunasSomenteLeitura}
         <td><input type="number" step="0.01" min="1" class="input-plano-preco" value="${plano.preco_mensal}"></td>
         <td><input type="number" step="1" min="0" class="input-plano-limite" value="${plano.limite_disparos ?? ''}" placeholder="ilimitado"></td>
@@ -161,7 +169,7 @@ function renderLinhaPlano(plano) {
         <td class="celula-acoes-plano">
           <div class="modal-erro" data-erro-plano="${plano.chave}"></div>
           <button class="btn-secundario btn-tabela" data-acao="cancelar-plano" data-chave="${plano.chave}">Cancelar</button>
-          <button class="btn-primario btn-tabela" data-acao="salvar-plano" data-chave="${plano.chave}">Salvar</button>
+          <button class="btn-primario btn-tabela" data-testid="salvar-${plano.chave}" data-acao="salvar-plano" data-chave="${plano.chave}">Salvar</button>
         </td>
       </tr>
     `;
@@ -171,6 +179,8 @@ function renderLinhaPlano(plano) {
     <tr data-plano="${plano.chave}">
       <td>${escapeHtml(plano.nome)}</td>
       <td>${escapeHtml(plano.descricao || '—')}</td>
+      <td>${escapeHtml(plano.headline_diferencial || '—')}</td>
+      <td>${escapeHtml(plano.frase_beneficio || '—')}</td>
       ${colunasSomenteLeitura}
       <td>${formatarPreco(plano.preco_mensal)}</td>
       <td>${plano.limite_disparos != null ? plano.limite_disparos : 'Ilimitado'}</td>
@@ -226,6 +236,13 @@ function wireEventos() {
   conteudo.querySelectorAll('[data-acao="salvar-plano"]').forEach((btn) => {
     btn.addEventListener('click', () => salvarPlano(btn.dataset.chave));
   });
+  // US73/CA04 — contador de caracteres + bloqueio do Salvar em tempo real
+  // (não só no submit) quando headline/frase passam de 120 caracteres.
+  conteudo.querySelectorAll('tr[data-plano] .input-plano-headline, tr[data-plano] .input-plano-frase').forEach((input) => {
+    const chave = input.closest('tr').dataset.plano;
+    input.addEventListener('input', () => validarLimitesCopyPlano(chave));
+    validarLimitesCopyPlano(chave);
+  });
   conteudo.querySelectorAll('[data-acao="toggle-ativo-plano"]').forEach((toggle) => {
     toggle.addEventListener('click', () => alternarAtivoPlano(toggle.dataset.chave));
   });
@@ -244,15 +261,47 @@ function wireEventos() {
   });
 }
 
+// US73/CA04 — contador + bloqueio de Salvar quando headline/frase passam de
+// 120 (mesmo limite do CHECK da migration 048); não mexe no texto do erro se
+// ele veio de outra validação (preço, erro do backend).
+function validarLimitesCopyPlano(chave) {
+  const linha = conteudo.querySelector(`tr[data-plano="${chave}"]`);
+  if (!linha) return;
+  const headline = linha.querySelector('.input-plano-headline');
+  const frase = linha.querySelector('.input-plano-frase');
+  if (!headline || !frase) return;
+  const erroEl = linha.querySelector(`[data-erro-plano="${chave}"]`);
+  const salvarBtn = linha.querySelector('[data-acao="salvar-plano"]');
+  const contadorHeadline = linha.querySelector(`[data-contador="headline-${chave}"]`);
+  const contadorFrase = linha.querySelector(`[data-contador="frase-${chave}"]`);
+  if (contadorHeadline) contadorHeadline.textContent = `${headline.value.length}/120`;
+  if (contadorFrase) contadorFrase.textContent = `${frase.value.length}/120`;
+
+  const acimaDoLimite = headline.value.length > 120 || frase.value.length > 120;
+  if (acimaDoLimite) {
+    erroEl.textContent = 'Headline e frase de benefício têm o máximo de 120 caracteres.';
+    salvarBtn.disabled = true;
+  } else if (erroEl.textContent.startsWith('Headline e frase')) {
+    erroEl.textContent = '';
+    salvarBtn.disabled = false;
+  }
+}
+
 async function salvarPlano(chave) {
   const linha = conteudo.querySelector(`tr[data-plano="${chave}"]`);
   const descricao = linha.querySelector('.input-plano-descricao').value.trim();
+  const headlineDiferencial = linha.querySelector('.input-plano-headline').value.trim();
+  const fraseBeneficio = linha.querySelector('.input-plano-frase').value.trim();
   const precoMensal = linha.querySelector('.input-plano-preco').value;
   const limiteBruto = linha.querySelector('.input-plano-limite').value.trim();
   const badge = linha.querySelector('.input-plano-badge').value.trim();
   const erroEl = linha.querySelector(`[data-erro-plano="${chave}"]`);
   erroEl.textContent = '';
 
+  if (headlineDiferencial.length > 120 || fraseBeneficio.length > 120) {
+    erroEl.textContent = 'Headline e frase de benefício têm o máximo de 120 caracteres.';
+    return;
+  }
   if (!(Number(precoMensal) >= 1)) {
     erroEl.textContent = 'Preço mensal deve ser no mínimo R$ 1,00.';
     return;
@@ -262,6 +311,8 @@ async function salvarPlano(chave) {
     method: 'PATCH',
     body: JSON.stringify({
       descricao,
+      headline_diferencial: headlineDiferencial,
+      frase_beneficio: fraseBeneficio,
       preco_mensal: Number(precoMensal),
       limite_disparos: limiteBruto === '' ? null : Number(limiteBruto),
       badge: badge === '' ? null : badge,

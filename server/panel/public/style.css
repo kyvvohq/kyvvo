@@ -1668,6 +1668,14 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   margin-top: 8px;
 }
 
+/* US73 — contador de caracteres dos campos de copy de diferencial dos
+   planos (headline/frase de benefício) no admin. */
+.contador-caracteres {
+  color: #a1a5c4;
+  font-size: 11px;
+  margin-top: 4px;
+}
+
 /* Banner de cobrança futura no modal de pagamento durante o trial (US37) */
 .trial-banner-cobranca-futura {
   background: rgba(74, 222, 128, 0.08);

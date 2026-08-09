@@ -200,10 +200,10 @@ test.describe('Admin — Configurações do sistema (US38)', () => {
 // (somente leitura) e destaque/badge (editáveis).
 function planosGrade2x2() {
   return [
-    { chave: 'starter', slug: 'starter', nome: 'Starter', descricao: 'Bot de agendamento + número próprio', tecnologia: 'bot', tipo_numero: 'proprio', preco_mensal: 79.9, limite_disparos: 100, destaque: false, badge: null, ativo: true, atualizado_em: '2026-08-01T10:00:00Z' },
-    { chave: 'business', slug: 'business', nome: 'Business', descricao: 'Bot de agendamento + número Kyvvo pronto', tecnologia: 'bot', tipo_numero: 'kyvvo', preco_mensal: 119.9, limite_disparos: 100, destaque: false, badge: null, ativo: true, atualizado_em: '2026-08-01T10:00:00Z' },
-    { chave: 'professional', slug: 'professional', nome: 'Professional', descricao: 'IA conversacional + número próprio', tecnologia: 'ia', tipo_numero: 'proprio', preco_mensal: 149.9, limite_disparos: 500, destaque: false, badge: null, ativo: true, atualizado_em: '2026-08-01T10:00:00Z' },
-    { chave: 'enterprise', slug: 'enterprise', nome: 'Enterprise', descricao: 'IA conversacional + número Kyvvo pronto', tecnologia: 'ia', tipo_numero: 'kyvvo', preco_mensal: 179.9, limite_disparos: 500, destaque: true, badge: 'Mais popular', ativo: true, atualizado_em: '2026-08-01T10:00:00Z' },
+    { chave: 'starter', slug: 'starter', nome: 'Starter', descricao: 'Bot de agendamento + número próprio', tecnologia: 'bot', tipo_numero: 'proprio', preco_mensal: 79.9, limite_disparos: 100, destaque: false, badge: null, headline_diferencial: 'Seu número, atendimento guiado', frase_beneficio: 'A cliente escolhe o serviço e o horário por listas e botões.', ativo: true, atualizado_em: '2026-08-01T10:00:00Z' },
+    { chave: 'business', slug: 'business', nome: 'Business', descricao: 'Bot de agendamento + número Kyvvo pronto', tecnologia: 'bot', tipo_numero: 'kyvvo', preco_mensal: 119.9, limite_disparos: 100, destaque: false, badge: null, headline_diferencial: 'Número pronto, zero configuração', frase_beneficio: 'A gente entrega o número já ativo.', ativo: true, atualizado_em: '2026-08-01T10:00:00Z' },
+    { chave: 'professional', slug: 'professional', nome: 'Professional', descricao: 'IA conversacional + número próprio', tecnologia: 'ia', tipo_numero: 'proprio', preco_mensal: 149.9, limite_disparos: 500, destaque: false, badge: null, headline_diferencial: 'Seu número, atendimento que conversa', frase_beneficio: 'A cliente escreve como fala e o bot resolve.', ativo: true, atualizado_em: '2026-08-01T10:00:00Z' },
+    { chave: 'enterprise', slug: 'enterprise', nome: 'Enterprise', descricao: 'IA conversacional + número Kyvvo pronto', tecnologia: 'ia', tipo_numero: 'kyvvo', preco_mensal: 179.9, limite_disparos: 500, destaque: true, badge: 'Mais popular', headline_diferencial: 'Número pronto, atendimento premium', frase_beneficio: 'Sem configuração, atendimento completo.', ativo: true, atualizado_em: '2026-08-01T10:00:00Z' },
   ];
 }
 
@@ -260,5 +260,61 @@ test.describe('Admin — Configurações — grade 2x2 de planos (US67/CA04)', (
 
     await expect(page.locator('.toast-sucesso')).toHaveText(/Destaque ativado/);
     expect(corpoEnviado).toMatchObject({ destaque: true });
+  });
+});
+
+// US73/CA04 — copy de diferencial (headline + frase de benefício) editável
+// no admin, com limite de 120 caracteres validado em tempo real.
+test.describe('Admin — Configurações — copy de diferencial dos planos (US73/CA04)', () => {
+  test('exibe headline e frase de benefício de cada plano (somente leitura)', async ({ page }) => {
+    await entrarEmConfiguracoes(page, configuracoesMock({ planos: planosGrade2x2() }));
+
+    const linhaSmart = page.locator('tr[data-plano="professional"]');
+    await expect(linhaSmart).toContainText('Seu número, atendimento que conversa');
+    await expect(linhaSmart).toContainText('A cliente escreve como fala e o bot resolve.');
+  });
+
+  test('edita a headline e a frase de benefício', async ({ page }) => {
+    await entrarEmConfiguracoes(page, configuracoesMock({ planos: planosGrade2x2() }));
+
+    let corpoEnviado = null;
+    await page.route('**/admin/api/configuracoes/planos/professional', (route) => {
+      corpoEnviado = route.request().postDataJSON();
+      return route.fulfill({ json: { ...planosGrade2x2()[2], headline_diferencial: 'Atendimento que conversa' } });
+    });
+
+    await page.click('tr[data-plano="professional"] [data-acao="editar-plano"]');
+    await page.fill('[data-testid="input-headline-professional"]', 'Atendimento que conversa');
+    await page.click('[data-testid="salvar-professional"]');
+
+    await expect(page.locator('.toast-sucesso')).toHaveText(/Preço atualizado/);
+    expect(corpoEnviado.headline_diferencial).toBe('Atendimento que conversa');
+  });
+
+  test('bloqueia salvar acima de 120 caracteres e mostra o contador', async ({ page }) => {
+    await entrarEmConfiguracoes(page, configuracoesMock({ planos: planosGrade2x2() }));
+
+    let chamou = false;
+    await page.route('**/admin/api/configuracoes/planos/professional', () => { chamou = true; });
+
+    await page.click('tr[data-plano="professional"] [data-acao="editar-plano"]');
+    await page.fill('[data-testid="input-frase-professional"]', 'a'.repeat(121));
+
+    await expect(page.locator('[data-testid="salvar-professional"]')).toBeDisabled();
+    await expect(page.locator('tr[data-plano="professional"] [data-erro-plano="professional"]')).toHaveText(/máximo de 120/i);
+
+    await page.click('[data-testid="salvar-professional"]', { force: true });
+    expect(chamou).toBe(false);
+  });
+
+  test('volta a permitir salvar ao corrigir o texto pro limite', async ({ page }) => {
+    await entrarEmConfiguracoes(page, configuracoesMock({ planos: planosGrade2x2() }));
+
+    await page.click('tr[data-plano="professional"] [data-acao="editar-plano"]');
+    await page.fill('[data-testid="input-frase-professional"]', 'a'.repeat(121));
+    await expect(page.locator('[data-testid="salvar-professional"]')).toBeDisabled();
+
+    await page.fill('[data-testid="input-frase-professional"]', 'a'.repeat(50));
+    await expect(page.locator('[data-testid="salvar-professional"]')).toBeEnabled();
   });
 });
