@@ -10,13 +10,14 @@ async function mockSegmentos(page) {
   await page.route('**/api/segmentos', (route) => route.fulfill({ json: SEGMENTOS_MOCK }));
 }
 
+// US77 — Segmento saiu do cadastro e Telefone só existe atrás do checkbox
+// "Uso outro número para ligações"; US79 exige marcar o aceite de termos.
 async function preencherCamposValidos(page) {
   await page.fill('#nome_responsavel', 'Ana Souza');
-  await page.fill('#email', 'ana@salao.com');
-  await page.selectOption('#segmento', '1');
-  await page.fill('#telefone', '(34) 98888-7777');
   await page.fill('#whatsapp', '(34) 99999-9999');
+  await page.fill('#email', 'ana@salao.com');
   await page.fill('#senha', 'Senha123');
+  await page.check('#aceite_termos');
 }
 
 test.describe('Cadastro — proteção contra envio duplicado (US80.4)', () => {
