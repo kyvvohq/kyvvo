@@ -16,7 +16,7 @@
   <div class="card card-cadastro">
     <div class="logo">ky<span class="logo-vv">vv</span>o</div>
     <h1 class="cadastro-titulo">Crie sua conta grátis</h1>
-    <p class="cadastro-sub">Comece agora seu trial de 14 dias. Sem cartão de crédito.</p>
+    <p class="cadastro-sub">14 dias grátis. Avisamos antes de qualquer cobrança.</p>
 
     <div class="cadastro-plano" id="cadastro-plano" hidden>
       <div class="cadastro-plano-info">
@@ -52,6 +52,7 @@
         <li id="req-maiuscula" role="checkbox" aria-checked="false">1 letra maiúscula</li>
         <li id="req-numero" role="checkbox" aria-checked="false">1 número</li>
       </ul>
+      <div class="forca-senha" id="forca-senha" data-testid="forca-senha" hidden></div>
       <div class="field-error" id="erro-senha"></div>
 
       <label class="dia-checkbox" style="margin-top: 16px">
@@ -75,7 +76,7 @@
         Quero receber novidades e promoções do Kyvvo por e-mail ou WhatsApp.
       </label>
 
-      <button type="submit" id="btn-criar">Começar grátis</button>
+      <button type="submit" id="btn-criar">Criar minha conta</button>
       <div class="erro" id="erro-geral" role="alert"></div>
     </form>
 
@@ -138,7 +139,44 @@
     });
   }
 
-  senhaInput.addEventListener('input', () => atualizarChecklistSenha(senhaInput.value));
+  // US80.2 — indicador de força, calculado por pontuação simples (tamanho +
+  // variedade de caracteres). Some pontos por cada regra cumprida; o corte
+  // em 3/5 mantém 'abc12345' (tamanho + minúscula + número = 3) em "média" e
+  // uma senha longa com maiúscula/minúscula/número/especial (6) em "forte".
+  const forcaSenhaEl = document.getElementById('forca-senha');
+
+  const CLASSE_POR_FORCA = { fraca: 'fraca', média: 'media', forte: 'forte' };
+
+  function calcularForcaSenha(valor) {
+    let pontos = 0;
+    if (valor.length >= 8) pontos += 1;
+    if (valor.length >= 12) pontos += 1;
+    if (/[a-z]/.test(valor)) pontos += 1;
+    if (/[A-Z]/.test(valor)) pontos += 1;
+    if (/\d/.test(valor)) pontos += 1;
+    if (/[^A-Za-z0-9]/.test(valor)) pontos += 1;
+    if (pontos <= 2) return 'fraca';
+    if (pontos <= 4) return 'média';
+    return 'forte';
+  }
+
+  function atualizarForcaSenha(valor) {
+    if (!valor) {
+      forcaSenhaEl.hidden = true;
+      forcaSenhaEl.textContent = '';
+      forcaSenhaEl.className = 'forca-senha';
+      return;
+    }
+    const forca = calcularForcaSenha(valor);
+    forcaSenhaEl.hidden = false;
+    forcaSenhaEl.textContent = 'Força da senha: ' + forca;
+    forcaSenhaEl.className = 'forca-senha forca-senha--' + CLASSE_POR_FORCA[forca];
+  }
+
+  senhaInput.addEventListener('input', () => {
+    atualizarChecklistSenha(senhaInput.value);
+    atualizarForcaSenha(senhaInput.value);
+  });
 
   function validarTelefone(valor) {
     let d = (valor || '').replace(/\D/g, '');
@@ -395,7 +433,7 @@
       enviando = false;
       btn.disabled = false;
       btn.classList.remove('loading');
-      btn.textContent = 'Começar grátis';
+      btn.textContent = 'Criar minha conta';
     }
   });
 </script>
