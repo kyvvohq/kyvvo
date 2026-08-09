@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<script>
+  if (!localStorage.getItem('kyvvo_token')) {
+    window.location.href = '/login.html';
+  }
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Configure seu negócio — Kyvvo</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%237c5cfc'/%3E%3Ctext x='16' y='22' font-family='Arial,sans-serif' font-size='15' font-weight='800' fill='white' text-anchor='middle'%3Evv%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Syne:wght@400;600;700;800&display=swap">
+<link rel="stylesheet" href="/style.css">
+<script src="/analytics.js"></script>
+</head>
+<body>
+<div class="center-screen">
+  <div class="card card-cadastro">
+    <div class="logo">ky<span class="logo-vv">vv</span>o</div>
+    <h1 class="cadastro-titulo">Configure seu negócio</h1>
+    <p class="cadastro-sub">Só mais alguns detalhes pra deixar o Kyvvo pronto pra você. Pode pular e continuar depois.</p>
+
+    <div class="wizard-progresso">
+      <span class="wizard-progresso-texto" id="wizard-progresso-texto">Passo 1 de 3</span>
+      <div class="wizard-progresso-barra"><div class="wizard-progresso-preenchido" id="wizard-progresso-preenchido"></div></div>
+    </div>
+
+    <form id="form-onboarding" novalidate>
+      <div class="wizard-passo" id="wizard-passo-1" data-passo="1">
+        <label for="nome_negocio">Nome do negócio</label>
+        <input type="text" id="nome_negocio" autocomplete="organization" placeholder="Ex: Studio Bela" aria-describedby="erro-nome_negocio" aria-invalid="false">
+        <div class="field-apoio">Usado no seu painel e nas mensagens enviadas às clientes.</div>
+        <div class="field-error" id="erro-nome_negocio"></div>
+      </div>
+
+      <!-- US82.4 troca este select nativo por cartões selecionáveis. -->
+      <div class="wizard-passo" id="wizard-passo-2" data-passo="2" hidden>
+        <label for="segmento">Segmento</label>
+        <select id="segmento">
+          <option value="">Selecione um segmento</option>
+        </select>
+      </div>
+
+      <!-- US82.5 troca a lista livre por sugestões conforme o segmento escolhido. -->
+      <div class="wizard-passo" id="wizard-passo-3" data-passo="3" hidden>
+        <label for="novo_servico">Principais serviços</label>
+        <div class="wizard-servico-adicionar">
+          <input type="text" id="novo_servico" placeholder="Ex: Corte de cabelo">
+          <button type="button" id="btn-adicionar-servico" class="btn-secundario">Adicionar</button>
+        </div>
+        <ul class="wizard-servicos-lista" id="wizard-servicos-lista"></ul>
+      </div>
+
+      <div class="wizard-nav">
+        <button type="button" id="btn-voltar" class="btn-secundario" hidden>Voltar</button>
+        <button type="button" id="btn-avancar" class="btn-primario">Avançar</button>
+      </div>
+    </form>
+
+    <button type="button" id="btn-pular" class="wizard-pular">Fazer isso depois</button>
+  </div>
+</div>
+<script>
+  const TOTAL_PASSOS = 3;
+  let passoAtual = 1;
+
+  const textoProgresso = document.getElementById('wizard-progresso-texto');
+  const barraPreenchida = document.getElementById('wizard-progresso-preenchido');
+  const btnVoltar = document.getElementById('btn-voltar');
+  const btnAvancar = document.getElementById('btn-avancar');
+  const btnPular = document.getElementById('btn-pular');
+
+  const nomeNegocioInput = document.getElementById('nome_negocio');
+  const erroNomeNegocio = document.getElementById('erro-nome_negocio');
+
+  function passoEl(n) {
+    return document.getElementById('wizard-passo-' + n);
+  }
+
+  // CA02 do US82 — indicador "Passo X de 3" e navegação entre passos sem
+  // recarregar a página; os campos preservam o valor ao voltar porque os
+  // passos só têm a visibilidade alternada (hidden), nunca são recriados.
+  function renderizarPasso() {
+    for (let n = 1; n <= TOTAL_PASSOS; n++) {
+      passoEl(n).hidden = n !== passoAtual;
+    }
+    textoProgresso.textContent = `Passo ${passoAtual} de ${TOTAL_PASSOS}`;
+    barraPreenchida.style.width = `${(passoAtual / TOTAL_PASSOS) * 100}%`;
+    btnVoltar.hidden = passoAtual === 1;
+    btnAvancar.textContent = passoAtual === TOTAL_PASSOS ? 'Concluir' : 'Avançar';
+  }
+
+  // Único passo com validação nesta subtask (US82.2): nome do negócio é
+  // obrigatório pra avançar (CA02). Segmento (US82.4) e serviços (US82.5)
+  // ficam livres por enquanto — a granularização dessas telas é escopo das
+  // subtasks correspondentes.
+  function validarPassoAtual() {
+    if (passoAtual !== 1) return true;
+    const valor = nomeNegocioInput.value.trim();
+    const valido = valor.length >= 2;
+    erroNomeNegocio.textContent = valido ? '' : 'Informe o nome do seu negócio.';
+    nomeNegocioInput.classList.toggle('invalid', !valido);
+    nomeNegocioInput.setAttribute('aria-invalid', String(!valido));
+    if (!valido) nomeNegocioInput.focus();
+    return valido;
+  }
+
+  nomeNegocioInput.addEventListener('input', () => {
+    if (nomeNegocioInput.classList.contains('invalid')) validarPassoAtual();
+  });
+
+  btnAvancar.addEventListener('click', () => {
+    if (!validarPassoAtual()) return;
+    if (passoAtual < TOTAL_PASSOS) {
+      passoAtual += 1;
+      renderizarPasso();
+      return;
+    }
+    // Concluir: a persistência (PATCH/POST /api/onboarding) e a baixa da
+    // flag onboarding_pendente são escopo da US82.6 — por ora, concluir só
+    // leva de volta ao painel, igual "Fazer isso depois".
+    window.location.href = '/painel.html';
+  });
+
+  btnVoltar.addEventListener('click', () => {
+    if (passoAtual > 1) {
+      passoAtual -= 1;
+      renderizarPasso();
+    }
+  });
+
+  // CA02 — "Fazer isso depois" nunca bloqueia o acesso ao produto; a conta
+  // segue com onboarding_pendente=true (setado no cadastro, US77) até essa
+  // pessoa concluir ou o time implementar a baixa da flag (US82.6).
+  btnPular.addEventListener('click', () => {
+    if (window.kyvvoCapture) window.kyvvoCapture('onboarding_pulado', { passo: passoAtual });
+    window.location.href = '/painel.html';
+  });
+
+  // Segmentos vêm do mesmo catálogo dinâmico já usado antes da US77 remover
+  // o select de cadastro.html (endpoint público /api/segmentos, sem
+  // autenticação). US82.4 substitui este select por cartões.
+  fetch('/api/segmentos')
+    .then((res) => (res.ok ? res.json() : { segmentos: [] }))
+    .then(({ segmentos }) => {
+      const select = document.getElementById('segmento');
+      (segmentos || []).forEach((seg) => {
+        const option = document.createElement('option');
+        option.value = seg.id;
+        option.textContent = seg.nome;
+        select.appendChild(option);
+      });
+    })
+    .catch(() => {
+      // Sem o catálogo, o passo de segmento simplesmente fica só com a opção
+      // vazia — não bloqueia o resto do wizard (nada aqui é obrigatório).
+    });
+
+  const servicosAdicionados = [];
+  const listaServicos = document.getElementById('wizard-servicos-lista');
+  const novoServicoInput = document.getElementById('novo_servico');
+
+  function renderizarServicos() {
+    listaServicos.innerHTML = servicosAdicionados
+      .map(
+        (nome, indice) =>
+          `<li class="wizard-servico-item">${nome}<button type="button" class="wizard-servico-remover" data-indice="${indice}" aria-label="Remover ${nome}">×</button></li>`
+      )
+      .join('');
+  }
+
+  function adicionarServico() {
+    const nome = novoServicoInput.value.trim();
+    if (!nome) return;
+    servicosAdicionados.push(nome);
+    novoServicoInput.value = '';
+    renderizarServicos();
+    novoServicoInput.focus();
+  }
+
+  document.getElementById('btn-adicionar-servico').addEventListener('click', adicionarServico);
+  novoServicoInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      adicionarServico();
+    }
+  });
+  listaServicos.addEventListener('click', (e) => {
+    const btn = e.target.closest('.wizard-servico-remover');
+    if (!btn) return;
+    servicosAdicionados.splice(Number(btn.dataset.indice), 1);
+    renderizarServicos();
+  });
+
+  renderizarPasso();
+</script>
+</body>
+</html>
