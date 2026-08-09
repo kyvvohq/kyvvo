@@ -566,34 +566,96 @@ async function executarAcaoIA({ intent, params, tenantId, clienteId }) {
     );
     if (conflito.length) throw new Error('HorarioIndisponivel');
 
-    if (intent === 'reagendar') {
-      const { rows: existente } = await pool.query(
-        `SELECT id FROM agendamentos WHERE tenant_id = $1 AND cliente_id = $2 AND status = 'confirmado' AND data_hora > now() ORDER BY data_hora ASC LIMIT 1`,
-        [tenantId, clienteId]
-      );
-      if (existente[0]) {
-        await pool.query('UPDATE agendamentos SET data_hora = $1, profissional_id = $2, updated_at = now() WHERE id = $3', [params.dataHoraISO, profissional.id, existente[0].id]);
-        return { ok: true, agendamentoId: existente[0].id };
-      }
-    }
+    // US64 (mesmo padrão de POST/PATCH /api/agendamentos) — o agendamento e o
+    // lançamento financeiro precisam nascer/atualizar juntos, atomicamente.
+    // Sem isso, agendamentos criados pela IA nunca apareciam em
+    // /api/financeiro/resumo (que soma lancamentos_financeiros, não
+    // agendamentos direto) — bug relatado em produção.
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
 
-    const { rows: novo } = await pool.query(
-      `INSERT INTO agendamentos (tenant_id, cliente_id, profissional_id, servico_id, data_hora, status, origem)
-       VALUES ($1, $2, $3, $4, $5, 'confirmado', 'whatsapp')
-       RETURNING id`,
-      [tenantId, clienteId, profissional.id, servico ? servico.id : null, params.dataHoraISO]
-    );
-    return { ok: true, agendamentoId: novo[0].id };
+      if (intent === 'reagendar') {
+        const { rows: existente } = await client.query(
+          `SELECT a.id, s.nome AS servico_nome, s.preco AS servico_preco
+             FROM agendamentos a
+             LEFT JOIN servicos s ON s.id = a.servico_id
+            WHERE a.tenant_id = $1 AND a.cliente_id = $2 AND a.status = 'confirmado' AND a.data_hora > now()
+            ORDER BY a.data_hora ASC LIMIT 1`,
+          [tenantId, clienteId]
+        );
+        if (existente[0]) {
+          await client.query('UPDATE agendamentos SET data_hora = $1, profissional_id = $2, updated_at = now() WHERE id = $3', [params.dataHoraISO, profissional.id, existente[0].id]);
+          await sincronizarLancamentoFinanceiro(client, {
+            tenantId,
+            agendamentoId: existente[0].id,
+            servicoNome: existente[0].servico_nome,
+            servicoPreco: existente[0].servico_preco,
+            dataHora: params.dataHoraISO,
+            statusAgendamento: 'confirmado',
+          });
+          await client.query('COMMIT');
+          return { ok: true, agendamentoId: existente[0].id };
+        }
+      }
+
+      const { rows: novo } = await client.query(
+        `INSERT INTO agendamentos (tenant_id, cliente_id, profissional_id, servico_id, data_hora, status, origem)
+         VALUES ($1, $2, $3, $4, $5, 'confirmado', 'whatsapp')
+         RETURNING id`,
+        [tenantId, clienteId, profissional.id, servico ? servico.id : null, params.dataHoraISO]
+      );
+      await sincronizarLancamentoFinanceiro(client, {
+        tenantId,
+        agendamentoId: novo[0].id,
+        servicoNome: servico ? servico.nome : null,
+        servicoPreco: servico ? servico.preco : null,
+        dataHora: params.dataHoraISO,
+        statusAgendamento: 'confirmado',
+      });
+      await client.query('COMMIT');
+      return { ok: true, agendamentoId: novo[0].id };
+    } catch (erro) {
+      await client.query('ROLLBACK');
+      throw erro;
+    } finally {
+      client.release();
+    }
   }
 
   if (intent === 'cancelar') {
     const { rows: existente } = await pool.query(
-      `SELECT id FROM agendamentos WHERE tenant_id = $1 AND cliente_id = $2 AND status = 'confirmado' AND data_hora > now() ORDER BY data_hora ASC LIMIT 1`,
+      `SELECT a.id, a.data_hora, s.nome AS servico_nome, s.preco AS servico_preco
+         FROM agendamentos a
+         LEFT JOIN servicos s ON s.id = a.servico_id
+        WHERE a.tenant_id = $1 AND a.cliente_id = $2 AND a.status = 'confirmado' AND a.data_hora > now()
+        ORDER BY a.data_hora ASC LIMIT 1`,
       [tenantId, clienteId]
     );
     if (!existente[0]) throw new Error('NenhumAgendamentoParaCancelar');
-    await pool.query("UPDATE agendamentos SET status = 'cancelado', updated_at = now() WHERE id = $1", [existente[0].id]);
-    return { ok: true, agendamentoId: existente[0].id };
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("UPDATE agendamentos SET status = 'cancelado', updated_at = now() WHERE id = $1", [existente[0].id]);
+      // Sincroniza o lançamento pra 'cancelado' (sai da soma de previsto/
+      // realizado) — mesmo padrão de PATCH /api/agendamentos ao cancelar.
+      await sincronizarLancamentoFinanceiro(client, {
+        tenantId,
+        agendamentoId: existente[0].id,
+        servicoNome: existente[0].servico_nome,
+        servicoPreco: existente[0].servico_preco,
+        dataHora: existente[0].data_hora,
+        statusAgendamento: 'cancelado',
+      });
+      await client.query('COMMIT');
+      return { ok: true, agendamentoId: existente[0].id };
+    } catch (erro) {
+      await client.query('ROLLBACK');
+      throw erro;
+    } finally {
+      client.release();
+    }
   }
 
   // 'consultar', 'unknown' e 'fallback_humano' não têm efeito no banco —
