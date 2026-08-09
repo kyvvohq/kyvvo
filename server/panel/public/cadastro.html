@@ -14,7 +14,7 @@
 <body>
 <div class="center-screen">
   <div class="card card-cadastro">
-    <div class="logo">ky<span class="logo-vv">vv</span>o</div>
+    <a class="logo" href="/">ky<span class="logo-vv">vv</span>o</a>
     <h1 class="cadastro-titulo">Crie sua conta grátis</h1>
     <p class="cadastro-sub">Comece agora seu trial de 14 dias. Sem cartão de crédito.</p>
 
@@ -29,22 +29,22 @@
     </div>
 
     <form id="form-cadastro" novalidate>
-      <label for="nome_responsavel">Nome Responsável</label>
-      <input type="text" id="nome_responsavel" autocomplete="name" placeholder="Nome completo do responsável" aria-describedby="erro-nome_responsavel" aria-invalid="false">
+      <label for="nome_responsavel">Nome Responsável<span class="obrigatorio" aria-hidden="true">*</span></label>
+      <input type="text" id="nome_responsavel" autocomplete="name" placeholder="Nome completo do responsável" aria-describedby="erro-nome_responsavel" aria-invalid="false" required aria-required="true">
       <div class="field-error" id="erro-nome_responsavel"></div>
 
-      <label for="whatsapp">WhatsApp</label>
-      <input type="tel" id="whatsapp" autocomplete="tel" inputmode="numeric" placeholder="(34) 99999-9999" aria-describedby="erro-whatsapp" aria-invalid="false">
+      <label for="whatsapp">WhatsApp<span class="obrigatorio" aria-hidden="true">*</span></label>
+      <input type="tel" id="whatsapp" autocomplete="tel" inputmode="numeric" placeholder="(34) 99999-9999" aria-describedby="erro-whatsapp" aria-invalid="false" required aria-required="true">
       <div class="field-apoio">É por aqui que suas clientes vão agendar.</div>
       <div class="field-error" id="erro-whatsapp"></div>
 
-      <label for="email">E-mail</label>
-      <input type="email" id="email" autocomplete="email" aria-describedby="erro-email" aria-invalid="false">
+      <label for="email">E-mail<span class="obrigatorio" aria-hidden="true">*</span></label>
+      <input type="email" id="email" autocomplete="email" aria-describedby="erro-email" aria-invalid="false" required aria-required="true">
       <div class="field-error" id="erro-email"></div>
 
-      <label for="senha">Senha</label>
+      <label for="senha">Senha<span class="obrigatorio" aria-hidden="true">*</span></label>
       <div class="senha-wrapper">
-        <input type="password" id="senha" autocomplete="new-password" aria-describedby="senha-requisitos erro-senha" aria-invalid="false">
+        <input type="password" id="senha" autocomplete="new-password" aria-describedby="senha-requisitos erro-senha" aria-invalid="false" required aria-required="true">
         <button type="button" id="btn-toggle-senha" class="toggle-senha" aria-label="Mostrar senha" tabindex="-1">👁</button>
       </div>
       <ul class="senha-requisitos" id="senha-requisitos">

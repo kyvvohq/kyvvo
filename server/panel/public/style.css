@@ -48,12 +48,14 @@ body {
 }
 
 .logo {
+  display: block;
   font-size: 24px;
   font-weight: 800;
   letter-spacing: -0.03em;
   color: #f2f2f7;
   margin-bottom: 24px;
   text-align: center;
+  text-decoration: none;
 }
 
 /* Mesmo tratamento da wordmark "kyvvo" usado na landing (server/public/
@@ -114,8 +116,21 @@ input {
 }
 
 input:focus {
-  outline: none;
+  outline: 2px solid var(--accent-light);
+  outline-offset: 2px;
   border-color: var(--accent);
+}
+
+input::placeholder {
+  color: #a1a5c4;
+  opacity: 1;
+}
+
+/* Marcador visual de campo obrigatório (US81.2), ao lado do texto da label
+   — o required/aria-required no input já cobre a semântica. */
+.obrigatorio {
+  color: #ff6b6b;
+  margin-left: 3px;
 }
 
 .senha-wrapper {
@@ -1799,7 +1814,7 @@ select {
   font-size: 15px;
 }
 
-select:focus { outline: none; border-color: var(--accent); }
+select:focus { outline: 2px solid var(--accent-light); outline-offset: 2px; border-color: var(--accent); }
 
 textarea {
   width: 100%;
@@ -1813,7 +1828,7 @@ textarea {
   resize: vertical;
 }
 
-textarea:focus { outline: none; border-color: var(--accent); }
+textarea:focus { outline: 2px solid var(--accent-light); outline-offset: 2px; border-color: var(--accent); }
 
 /* Destaque de campo obrigatório não preenchido (ST09.2) */
 .campo-invalido,
