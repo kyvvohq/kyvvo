@@ -1909,6 +1909,13 @@ textarea:focus { outline: none; border-color: var(--accent); }
   min-height: 14px;
 }
 
+/* US77 — texto de apoio abaixo de um campo (ex: WhatsApp no cadastro). */
+.field-apoio {
+  color: #a1a5c4;
+  font-size: 12px;
+  margin-top: 6px;
+}
+
 input.invalid, select.invalid {
   border-color: #ff6b6b;
 }

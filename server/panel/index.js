@@ -719,9 +719,16 @@ async function start() {
         error: 'A senha deve ter no mínimo 8 caracteres, 1 número e 1 letra maiúscula.',
       });
     }
-    const segmentoId = parseInt(segmentoIdBruto, 10);
-    if (!Number.isInteger(segmentoId)) {
-      return reply.code(400).send({ error: 'Selecione seu segmento.' });
+    // US77/CA04 — segmento sai do formulário de cadastro (migra pro
+    // onboarding, US82) e passa a ser opcional aqui; sem ele, a conta nasce
+    // com onboarding_pendente=true. Continua aceito quando enviado, pra não
+    // quebrar nenhum outro chamador que ainda mande o campo.
+    let segmentoId = null;
+    if (segmentoIdBruto !== undefined && segmentoIdBruto !== null && segmentoIdBruto !== '') {
+      segmentoId = parseInt(segmentoIdBruto, 10);
+      if (!Number.isInteger(segmentoId)) {
+        return reply.code(400).send({ error: 'Selecione um segmento válido.' });
+      }
     }
     // Telefone usa a mesma validação/formato do WhatsApp (DDD + número), mas
     // sem checagem de unicidade — diferente do WhatsApp, pode repetir entre
@@ -744,14 +751,20 @@ async function start() {
     if (whatsappRows.length > 0) {
       return reply.code(409).send({ error: 'Este número de WhatsApp já está associado a uma conta.' });
     }
-    const { rows: segmentoRows } = await pool.query(
-      'SELECT slug FROM segmentos WHERE id = $1 AND ativo = true',
-      [segmentoId]
-    );
-    if (!segmentoRows[0]) {
-      return reply.code(400).send({ error: 'Selecione um segmento válido.' });
+    let segmentoSlug = null;
+    if (segmentoId !== null) {
+      const { rows: segmentoRows } = await pool.query(
+        'SELECT slug FROM segmentos WHERE id = $1 AND ativo = true',
+        [segmentoId]
+      );
+      if (!segmentoRows[0]) {
+        return reply.code(400).send({ error: 'Selecione um segmento válido.' });
+      }
+      segmentoSlug = segmentoRows[0].slug;
     }
-    const segmentoSlug = segmentoRows[0].slug;
+    // US77/CA04 — sem segmento no cadastro, a conta fica pendente de
+    // onboarding (US82 recolhe segmento + nome do negócio depois do login).
+    const onboardingPendente = segmentoId === null;
 
     const client = await pool.connect();
     try {
@@ -764,10 +777,10 @@ async function start() {
       // tenant pode ajustá-lo depois em Minha Empresa (US33).
       const trialExpira = new Date(Date.now() + TRIAL_DIAS * 24 * 60 * 60 * 1000);
       const { rows: tenantRows } = await client.query(
-        `INSERT INTO tenants (nome, telefone, whatsapp, segmento, segmento_id, plano, status, trial_expires_at)
-         VALUES ($1, $2, $3, $4, $5, 'trial', 'trial', $6)
+        `INSERT INTO tenants (nome, telefone, whatsapp, segmento, segmento_id, plano, status, trial_expires_at, onboarding_pendente)
+         VALUES ($1, $2, $3, $4, $5, 'trial', 'trial', $6, $7)
          RETURNING id`,
-        [nomeLimpo, telefone, whatsapp, segmentoSlug, segmentoId, trialExpira.toISOString()]
+        [nomeLimpo, telefone, whatsapp, segmentoSlug, segmentoId, trialExpira.toISOString(), onboardingPendente]
       );
       const tenantId = tenantRows[0].id;
 
@@ -814,6 +827,8 @@ async function start() {
         email: emailLimpo,
         email_verified: false,
         email_mascarado: tokenService.mascararEmail(emailLimpo),
+        segmento: segmentoSlug,
+        onboarding_pendente: onboardingPendente,
       };
     } catch (erro) {
       await client.query('ROLLBACK');
