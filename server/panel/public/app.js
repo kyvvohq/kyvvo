@@ -593,6 +593,7 @@ function abrirModalNovoAgendamento(prefill) {
 
         <label for="novo-ag-telefone">Telefone *</label>
         <input type="tel" id="novo-ag-telefone" data-obrigatorio placeholder="11999999999" autocomplete="off">
+        <div class="campo-aviso" id="novo-ag-cliente-aviso"></div>
 
         <label for="novo-ag-servico">Serviço *</label>
         <select id="novo-ag-servico" data-obrigatorio><option value="">Carregando serviços...</option></select>
@@ -629,6 +630,32 @@ function abrirModalNovoAgendamento(prefill) {
     const limpar = () => campo.classList.remove('campo-invalido');
     campo.addEventListener('input', limpar);
     campo.addEventListener('change', limpar);
+  });
+
+  // Telefone já é chave única por tenant na tabela clientes (001_init.sql) —
+  // ao digitar um telefone já cadastrado, carrega o nome existente
+  // automaticamente. Evita redigitar o nome de um cliente recorrente e evita
+  // que um nome digitado errado sobrescreva o nome já salvo (POST
+  // /api/agendamentos faz ON CONFLICT DO UPDATE do nome pelo telefone).
+  const nomeInput = document.getElementById('novo-ag-nome');
+  const telefoneInput = document.getElementById('novo-ag-telefone');
+  const clienteAvisoEl = document.getElementById('novo-ag-cliente-aviso');
+  let buscaClienteTimeout;
+  let ultimoTelefoneBuscado = '';
+  telefoneInput.addEventListener('input', () => {
+    clearTimeout(buscaClienteTimeout);
+    const digitos = telefoneInput.value.replace(/\D/g, '');
+    if (digitos === ultimoTelefoneBuscado) return;
+    clienteAvisoEl.textContent = '';
+    if (digitos.length < 10) return;
+    buscaClienteTimeout = setTimeout(async () => {
+      ultimoTelefoneBuscado = digitos;
+      const resultado = await api(`/api/clientes/buscar-por-telefone?telefone=${digitos}`);
+      if (resultado && resultado.cliente) {
+        nomeInput.value = resultado.cliente.nome || '';
+        clienteAvisoEl.textContent = 'Cliente já cadastrado — nome carregado automaticamente.';
+      }
+    }, 400);
   });
 
   // Popula serviços (reutiliza GET /api/servicos, como no encaixe da ST08.6).
