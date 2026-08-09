@@ -1,7 +1,7 @@
 // Página de Configurações da área admin da Kyvvo (US38) — preços dos planos
 // e configurações gerais do sistema, antes hardcoded no código, agora
 // editáveis aqui sem precisar de deploy. Consome GET/PATCH
-// /admin/api/configuracoes*.
+// /api/configuracoes*.
 
 // token / identificação do admin / dropdown "Sair" agora vivem em shell.js
 // (US53), carregado antes deste script em todas as páginas admin.
@@ -17,7 +17,7 @@ async function api(path, options = {}) {
   });
   if (res.status === 401) {
     localStorage.removeItem('kyvvo_admin_token');
-    window.location.href = '/admin/login.html';
+    window.location.href = '/login.html';
     return null;
   }
   return res.json();
@@ -84,7 +84,7 @@ const sistemaEmEdicao = new Set();
 
 async function carregar() {
   conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
-  dados = await api('/admin/api/configuracoes');
+  dados = await api('/api/configuracoes');
   if (!dados) return;
   render();
 }
@@ -356,7 +356,7 @@ async function salvarPlano(chave) {
     return;
   }
 
-  const resultado = await api(`/admin/api/configuracoes/planos/${chave}`, {
+  const resultado = await api(`/api/configuracoes/planos/${chave}`, {
     method: 'PATCH',
     body: JSON.stringify({
       nome,
@@ -382,7 +382,7 @@ async function salvarPlano(chave) {
 
 async function alternarAtivoPlano(chave) {
   const plano = dados.planos.find((p) => p.chave === chave);
-  const resultado = await api(`/admin/api/configuracoes/planos/${chave}`, {
+  const resultado = await api(`/api/configuracoes/planos/${chave}`, {
     method: 'PATCH',
     body: JSON.stringify({ ativo: !plano.ativo }),
   });
@@ -397,7 +397,7 @@ async function alternarAtivoPlano(chave) {
 
 async function alternarDestaquePlano(chave) {
   const plano = dados.planos.find((p) => p.chave === chave);
-  const resultado = await api(`/admin/api/configuracoes/planos/${chave}`, {
+  const resultado = await api(`/api/configuracoes/planos/${chave}`, {
     method: 'PATCH',
     body: JSON.stringify({ destaque: !plano.destaque }),
   });
@@ -425,7 +425,7 @@ async function salvarConfigSistema(chave) {
     return;
   }
 
-  const resultado = await api('/admin/api/configuracoes/sistema', {
+  const resultado = await api('/api/configuracoes/sistema', {
     method: 'PATCH',
     body: JSON.stringify({ [chave]: valor }),
   });

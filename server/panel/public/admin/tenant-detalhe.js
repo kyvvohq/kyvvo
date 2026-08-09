@@ -1,5 +1,5 @@
 // Página de detalhe do tenant da área admin da Kyvvo (US28) — consome
-// GET /admin/api/tenants/:id (dados consolidados). Chegou aqui a partir de
+// GET /api/tenants/:id (dados consolidados). Chegou aqui a partir de
 // um clique na linha/"Ver detalhes" da listagem (US26/US27).
 
 // token / identificação do admin / dropdown "Sair" agora vivem em shell.js
@@ -16,7 +16,7 @@ async function api(path, options = {}) {
   });
   if (res.status === 401) {
     localStorage.removeItem('kyvvo_admin_token');
-    window.location.href = '/admin/login.html';
+    window.location.href = '/login.html';
     return null;
   }
   return res.json();
@@ -116,7 +116,7 @@ function renderSecaoNegocio(t) {
 // CA (US39.1) — pedido de "Novo número" ainda não atendido: o tenant já
 // confirmou que quer um número fornecido pela Kyvvo (POST
 // /api/whatsapp/solicitar-numero-novo) e ainda não tem meta_phone_number_id
-// (i.e., nenhum número foi vinculado ainda via /admin/whatsapp.html — ver
+// (i.e., nenhum número foi vinculado ainda via /whatsapp.html — ver
 // migration 037/US39.2). Só aparece enquanto o pedido está pendente.
 function renderSecaoNumeroNovo(t) {
   if (!t.novo_numero_solicitado_em || t.meta_phone_number_id) return '';
@@ -125,7 +125,7 @@ function renderSecaoNumeroNovo(t) {
       <h3>Pedido de número novo</h3>
       <p><strong>Solicitado em:</strong> ${formatarDataHora(t.novo_numero_solicitado_em)}</p>
       <p><strong>DDD de preferência:</strong> ${t.novo_numero_ddd_preferencia ? escapeHtml(t.novo_numero_ddd_preferencia) : 'Sem preferência'}</p>
-      <p class="vazio-inline">Vincule um número em <a class="topbar-nav-link" href="/admin/whatsapp.html">Admin → WhatsApp → Números prontos</a> quando houver um disponível.</p>
+      <p class="vazio-inline">Vincule um número em <a class="topbar-nav-link" href="/whatsapp.html">Admin → WhatsApp → Números prontos</a> quando houver um disponível.</p>
     </section>
   `;
 }
@@ -276,13 +276,13 @@ let tenantAtual = null;
 let idTenantAtual = null;
 
 async function carregarHistoricoModulos(id) {
-  const resultado = await api(`/admin/api/tenants/${encodeURIComponent(id)}/modulos/historico`).catch(() => null);
+  const resultado = await api(`/api/tenants/${encodeURIComponent(id)}/modulos/historico`).catch(() => null);
   return (resultado && resultado.historico) || [];
 }
 
 function renderPagina(data, historico) {
   conteudo.innerHTML = `
-    <a class="topbar-nav-link" href="/admin/painel.html">← Voltar para lista</a>
+    <a class="topbar-nav-link" href="/painel.html">← Voltar para lista</a>
     <h2 class="titulo-detalhe">${escapeHtml(data.nome)}</h2>
     ${renderSecaoNegocio(data)}
     ${renderSecaoNumeroNovo(data)}
@@ -302,7 +302,7 @@ function renderPagina(data, historico) {
 // visualmente.
 async function alterarModulo(moduloKey, ativo, checkbox) {
   checkbox.disabled = true;
-  const resultado = await api(`/admin/api/tenants/${encodeURIComponent(idTenantAtual)}/modulos/${encodeURIComponent(moduloKey)}`, {
+  const resultado = await api(`/api/tenants/${encodeURIComponent(idTenantAtual)}/modulos/${encodeURIComponent(moduloKey)}`, {
     method: 'PATCH',
     body: JSON.stringify({ ativo }),
   });
@@ -335,14 +335,14 @@ async function renderDetalhe() {
   const id = idDaUrl();
   idTenantAtual = id;
   const [data, historico] = await Promise.all([
-    api(`/admin/api/tenants/${encodeURIComponent(id)}`),
+    api(`/api/tenants/${encodeURIComponent(id)}`),
     carregarHistoricoModulos(id),
   ]);
   if (!data) return;
 
   if (data.error) {
     conteudo.innerHTML = `
-      <a class="topbar-nav-link" href="/admin/painel.html">← Voltar para lista</a>
+      <a class="topbar-nav-link" href="/painel.html">← Voltar para lista</a>
       <div class="vazio">${escapeHtml(data.error)}</div>
     `;
     return;

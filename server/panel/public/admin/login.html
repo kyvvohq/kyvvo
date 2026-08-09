@@ -41,7 +41,7 @@
   const toggleSenhaBtn = document.getElementById('btn-toggle-senha');
 
   if (localStorage.getItem('kyvvo_admin_token')) {
-    window.location.href = '/admin/painel.html';
+    window.location.href = '/painel.html';
   }
 
   toggleSenhaBtn.addEventListener('click', () => {
@@ -65,7 +65,7 @@
     btn.textContent = 'Entrando...';
 
     try {
-      const res = await fetch('/admin/api/auth/login', {
+      const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -84,7 +84,7 @@
 
       localStorage.setItem('kyvvo_admin_token', data.token);
       localStorage.setItem('kyvvo_admin_nome', data.nome || '');
-      window.location.href = '/admin/painel.html';
+      window.location.href = '/painel.html';
     } catch (err) {
       erroEl.textContent = 'Erro de conexão. Tente novamente.';
     } finally {

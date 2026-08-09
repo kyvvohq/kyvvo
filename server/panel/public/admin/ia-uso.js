@@ -1,6 +1,6 @@
 // Dashboard de consumo da IA (US68) — volume de mensagens/conversas por
 // tenant e custo real estimado em R$, calculado a partir dos tokens
-// capturados em cada turno do assistente. Consome GET /admin/api/ia-uso.
+// capturados em cada turno do assistente. Consome GET /api/ia-uso.
 // Custo é uma ESTIMATIVA: usa o preço oficial do Claude Haiku 4.5
 // (US$1/US$5 por milhão de tokens de entrada/saída) e uma cotação USD→BRL
 // fixa definida no servidor — não é uma cotação ao vivo.
@@ -19,7 +19,7 @@ async function api(path, options = {}) {
   });
   if (res.status === 401) {
     localStorage.removeItem('kyvvo_admin_token');
-    window.location.href = '/admin/login.html';
+    window.location.href = '/login.html';
     return null;
   }
   return res.json();
@@ -59,7 +59,7 @@ async function carregar() {
   if (carregando) return;
   carregando = true;
   conteudo.innerHTML = '<div class="vazio">Carregando consumo da IA...</div>';
-  const dados = await api(`/admin/api/ia-uso?dias=${diasSelecionado}`);
+  const dados = await api(`/api/ia-uso?dias=${diasSelecionado}`);
   carregando = false;
   if (!dados) return;
   render(dados);

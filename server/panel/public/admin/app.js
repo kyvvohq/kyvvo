@@ -1,6 +1,6 @@
 // Área admin da Kyvvo — CRUD, busca, ordenação e paginação de tenants, tudo
 // numa única tela. Clicar numa linha da tabela navega pro detalhe
-// consolidado do tenant em /admin/tenants/:id.
+// consolidado do tenant em /tenants/:id.
 
 // token / identificação do admin / dropdown "Sair" agora vivem em shell.js
 // (US53), carregado antes deste script em todas as páginas admin.
@@ -16,7 +16,7 @@ async function api(path, options = {}) {
   });
   if (res.status === 401) {
     localStorage.removeItem('kyvvo_admin_token');
-    window.location.href = '/admin/login.html';
+    window.location.href = '/login.html';
     return null;
   }
   return res.json();
@@ -196,7 +196,7 @@ function renderLinha(t) {
         ${t.ativo ? `<button type="button" class="btn-acao-tabela" data-testid="btn-alterar-modo-${escapeHtml(t.id)}" data-tenant-acao="alterar-modo" data-id="${escapeHtml(t.id)}">Alterar</button>` : ''}
       </td>
       <td class="td-acoes">
-        <a class="btn-ver-detalhes" href="/admin/tenants/${encodeURIComponent(t.id)}">Ver detalhes</a>
+        <a class="btn-ver-detalhes" href="/tenants/${encodeURIComponent(t.id)}">Ver detalhes</a>
         <button type="button" class="btn-acao-tabela" data-tenant-acao="editar" data-id="${escapeHtml(t.id)}">Editar</button>
         <button type="button" class="btn-acao-tabela${t.ativo ? ' acao-perigo' : ''}" data-tenant-acao="alternar" data-id="${escapeHtml(t.id)}">${t.ativo ? 'Desativar' : 'Ativar'}</button>
       </td>
@@ -228,7 +228,7 @@ async function renderTenants() {
   if (estado.search) {
     params.set('search', estado.search);
   }
-  const data = await api(`/admin/api/tenants?${params.toString()}`);
+  const data = await api(`/api/tenants?${params.toString()}`);
   if (!data) return;
 
   tenantsAtuais = data.tenants || [];
@@ -317,12 +317,12 @@ conteudo.addEventListener('click', (e) => {
 
   const tr = e.target.closest('.tabela-tenants tbody tr');
   if (tr && !e.target.closest('a') && !e.target.closest('button')) {
-    window.location.href = `/admin/tenants/${encodeURIComponent(tr.dataset.id)}`;
+    window.location.href = `/tenants/${encodeURIComponent(tr.dataset.id)}`;
   }
 });
 
 async function alternarAtivoTenant(tenant) {
-  const resultado = await api(`/admin/api/tenants/${tenant.id}`, {
+  const resultado = await api(`/api/tenants/${tenant.id}`, {
     method: 'PATCH',
     body: JSON.stringify({ ativo: !tenant.ativo }),
   });
@@ -371,7 +371,7 @@ async function abrirModalTrocaModo(tenant) {
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner"></span>';
 
-    const resultado = await api(`/admin/api/tenants/${tenant.id}/modo`, {
+    const resultado = await api(`/api/tenants/${tenant.id}/modo`, {
       method: 'PATCH',
       body: JSON.stringify({ tecnologia: destino }),
     });
@@ -394,7 +394,7 @@ async function abrirModalTenant(tenantResumo) {
   let detalhe = tenantResumo;
 
   if (editando) {
-    detalhe = await api(`/admin/api/tenants/${tenantResumo.id}`);
+    detalhe = await api(`/api/tenants/${tenantResumo.id}`);
     if (!detalhe) return;
   }
 
@@ -495,7 +495,7 @@ async function abrirModalTenant(tenantResumo) {
       };
     }
 
-    const resultado = await api(editando ? `/admin/api/tenants/${detalhe.id}` : '/admin/api/tenants', {
+    const resultado = await api(editando ? `/api/tenants/${detalhe.id}` : '/api/tenants', {
       method: editando ? 'PATCH' : 'POST',
       body: JSON.stringify(payload),
     });

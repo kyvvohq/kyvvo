@@ -23,7 +23,7 @@ document.getElementById('user-menu-avatar').textContent = iniciaisAdmin(adminNom
 document.getElementById('btn-sair').addEventListener('click', () => {
   localStorage.removeItem('kyvvo_admin_token');
   localStorage.removeItem('kyvvo_admin_nome');
-  window.location.href = '/admin/login.html';
+  window.location.href = '/login.html';
 });
 
 // User menu (avatar + dropdown) — mesmo comportamento do painel do tenant
