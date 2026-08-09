@@ -435,22 +435,32 @@ async function montarContextoIA(tenant) {
     ? servicos.map((s) => `- ${s.nome} (${s.duracao_minutos}min, R$ ${Number(s.preco).toFixed(2)})`).join('\n')
     : '(nenhum serviço cadastrado ainda)';
 
+  // Cada slot lista o texto amigável E o ISO exato lado a lado — a IA nunca
+  // reconstrói o ISO sozinha (já causou bug real: ano errado, "2024" em vez
+  // do ano corrente, quando só o texto formatado era mostrado). Ela só copia
+  // o valor entre colchetes.
   const listaDisponibilidade = disponibilidade.length
     ? disponibilidade.map((p) => {
         const horarios = p.slots.slice(0, 8).map((s) => {
           const d = new Date(s.dataHoraISO);
-          return d.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+          const texto = d.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+          return `${texto} [${s.dataHoraISO}]`;
         }).join(', ');
         return `- ${p.profissional}: ${horarios}`;
       }).join('\n')
     : '(sem horários livres nos próximos dias)';
 
+  const agoraBrasilia = new Date(Date.now() - OFFSET_BRASILIA_MINUTOS * 60000);
+  const hojeFormatado = agoraBrasilia.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' });
+
   return `Você é a atendente virtual do salão "${tenant.nome}", via WhatsApp. Responda em português do Brasil, de forma breve, calorosa e direta — como uma recepcionista experiente, nunca como um robô.
+
+Hoje é ${hojeFormatado}.
 
 SERVIÇOS DISPONÍVEIS:
 ${listaServicos}
 
-HORÁRIOS LIVRES (próximos ${IA_DIAS_DISPONIBILIDADE} dias, use exatamente estes — nunca invente outro):
+HORÁRIOS LIVRES (próximos ${IA_DIAS_DISPONIBILIDADE} dias — cada horário mostra o texto e, entre colchetes, o valor ISO exato que você deve copiar em "dataHoraISO"; nunca invente ou monte um ISO por conta própria):
 ${listaDisponibilidade}
 
 Sua tarefa é ajudar o cliente a AGENDAR, REAGENDAR ou CANCELAR um horário, ou CONSULTAR informações do salão. Você NUNCA executa a ação diretamente — você só entende a intenção do cliente e devolve um JSON estruturado; quem executa é o sistema.
@@ -461,7 +471,7 @@ Responda SEMPRE e SOMENTE com um objeto JSON válido (sem texto antes/depois, se
 Regras:
 - Use intent "unknown" quando a mensagem não deixar clara a intenção — nesse caso "resposta" deve pedir o esclarecimento que falta.
 - Use intent "agendar"/"reagendar" SÓ quando já tiver serviço, profissional (ou "qualquer um") e data/hora confirmados pelo cliente na conversa — antes disso, pergunte o que falta usando intent "unknown".
-- "dataHoraISO" deve ser um dos horários listados acima em HORÁRIOS LIVRES (copie o valor ISO exato correspondente), nunca um horário inventado.
+- "dataHoraISO" deve ser exatamente um dos valores entre colchetes [ ] listados acima em HORÁRIOS LIVRES — copie o texto entre colchetes literalmente, nunca monte ou invente um ISO novo.
 - Use intent "cancelar" quando o cliente quiser cancelar um agendamento existente (não precisa de dataHoraISO nesse caso).
 - Use intent "fallback_humano" quando o cliente pedir explicitamente para falar com uma pessoa, reclamar de forma que a IA não deva resolver sozinha, ou quando a conversa estiver claramente travada após tentativas de esclarecimento.
 - "resposta" é sempre em linguagem natural, nunca contém JSON nem menciona "intent"/"params".`;
@@ -552,7 +562,7 @@ async function executarAcaoIA({ intent, params, tenantId, clienteId }) {
 
     const { rows: novo } = await pool.query(
       `INSERT INTO agendamentos (tenant_id, cliente_id, profissional_id, servico_id, data_hora, status, origem)
-       VALUES ($1, $2, $3, $4, $5, 'confirmado', 'ia')
+       VALUES ($1, $2, $3, $4, $5, 'confirmado', 'whatsapp')
        RETURNING id`,
       [tenantId, clienteId, profissional.id, servico ? servico.id : null, params.dataHoraISO]
     );
