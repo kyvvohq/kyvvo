@@ -198,12 +198,14 @@ test.describe('Admin — Configurações do sistema (US38)', () => {
 // US67 — grade 2x2 (tecnologia bot/ia x tipo_numero proprio/kyvvo): o
 // catálogo de planos ganha 4 planos com slug/tecnologia/tipo_numero
 // (somente leitura) e destaque/badge (editáveis).
+// US72 — nome/slug renomeados pelo eixo de valor; `chave` (identificador
+// interno, usado em data-plano/rota do PATCH) nunca muda.
 function planosGrade2x2() {
   return [
-    { chave: 'starter', slug: 'starter', nome: 'Starter', descricao: 'Bot de agendamento + número próprio', tecnologia: 'bot', tipo_numero: 'proprio', preco_mensal: 79.9, limite_disparos: 100, destaque: false, badge: null, ativo: true, atualizado_em: '2026-08-01T10:00:00Z' },
-    { chave: 'business', slug: 'business', nome: 'Business', descricao: 'Bot de agendamento + número Kyvvo pronto', tecnologia: 'bot', tipo_numero: 'kyvvo', preco_mensal: 119.9, limite_disparos: 100, destaque: false, badge: null, ativo: true, atualizado_em: '2026-08-01T10:00:00Z' },
-    { chave: 'professional', slug: 'professional', nome: 'Professional', descricao: 'IA conversacional + número próprio', tecnologia: 'ia', tipo_numero: 'proprio', preco_mensal: 149.9, limite_disparos: 500, destaque: false, badge: null, ativo: true, atualizado_em: '2026-08-01T10:00:00Z' },
-    { chave: 'enterprise', slug: 'enterprise', nome: 'Enterprise', descricao: 'IA conversacional + número Kyvvo pronto', tecnologia: 'ia', tipo_numero: 'kyvvo', preco_mensal: 179.9, limite_disparos: 500, destaque: true, badge: 'Mais popular', ativo: true, atualizado_em: '2026-08-01T10:00:00Z' },
+    { chave: 'starter', slug: 'essencial', nome: 'Essencial', descricao: 'Bot de agendamento + número próprio', tecnologia: 'bot', tipo_numero: 'proprio', preco_mensal: 79.9, limite_disparos: 100, destaque: false, badge: null, headline_diferencial: 'Seu número, atendimento guiado', frase_beneficio: 'A cliente escolhe o serviço e o horário por listas e botões.', herda_de: null, features: [{ id: 'f1', label: 'Fluxo guiado', ordem: 1 }], limites: { conversas_mes: 100, profissionais: 3, unidades: 1 }, ativo: true, atualizado_em: '2026-08-01T10:00:00Z' },
+    { chave: 'business', slug: 'essencial-plus', nome: 'Essencial Plus', descricao: 'Bot de agendamento + número Kyvvo pronto', tecnologia: 'bot', tipo_numero: 'kyvvo', preco_mensal: 119.9, limite_disparos: 100, destaque: false, badge: null, headline_diferencial: 'Número pronto, zero configuração', frase_beneficio: 'A gente entrega o número já ativo.', herda_de: 'starter', features: [], limites: { conversas_mes: 100, profissionais: 3, unidades: 1 }, ativo: true, atualizado_em: '2026-08-01T10:00:00Z' },
+    { chave: 'professional', slug: 'smart', nome: 'Smart', descricao: 'IA conversacional + número próprio', tecnologia: 'ia', tipo_numero: 'proprio', preco_mensal: 149.9, limite_disparos: 500, destaque: false, badge: null, headline_diferencial: 'Seu número, atendimento que conversa', frase_beneficio: 'A cliente escreve como fala e o bot resolve.', herda_de: 'starter', features: [{ id: 'f2', label: 'Bot entende linguagem natural', ordem: 1 }], limites: { conversas_mes: 500, profissionais: 5, unidades: 1 }, ativo: true, atualizado_em: '2026-08-01T10:00:00Z' },
+    { chave: 'enterprise', slug: 'smart-plus', nome: 'Smart Plus', descricao: 'IA conversacional + número Kyvvo pronto', tecnologia: 'ia', tipo_numero: 'kyvvo', preco_mensal: 179.9, limite_disparos: 500, destaque: true, badge: 'Mais popular', headline_diferencial: 'Número pronto, atendimento premium', frase_beneficio: 'Sem configuração, atendimento completo.', herda_de: 'professional', features: [], limites: { conversas_mes: null, profissionais: 5, unidades: 1 }, ativo: true, atualizado_em: '2026-08-01T10:00:00Z' },
   ];
 }
 
@@ -211,12 +213,13 @@ test.describe('Admin — Configurações — grade 2x2 de planos (US67/CA04)', (
   test('exibe os 4 planos com slug, tecnologia e tipo de número', async ({ page }) => {
     await entrarEmConfiguracoes(page, configuracoesMock({ planos: planosGrade2x2() }));
 
-    for (const slug of ['starter', 'business', 'professional', 'enterprise']) {
-      await expect(page.locator(`tr[data-plano="${slug}"]`)).toBeVisible();
+    for (const chave of ['starter', 'business', 'professional', 'enterprise']) {
+      await expect(page.locator(`tr[data-plano="${chave}"]`)).toBeVisible();
     }
 
     const linhaEnterprise = page.locator('tr[data-plano="enterprise"]');
-    await expect(linhaEnterprise.locator('[data-testid="slug-enterprise"]')).toHaveText('enterprise');
+    await expect(linhaEnterprise).toContainText('Smart Plus');
+    await expect(linhaEnterprise.locator('[data-testid="slug-enterprise"]')).toHaveText('smart-plus');
     await expect(linhaEnterprise).toContainText('IA');
     await expect(linhaEnterprise).toContainText('Número Kyvvo');
     await expect(linhaEnterprise).toContainText('Mais popular');
@@ -260,5 +263,172 @@ test.describe('Admin — Configurações — grade 2x2 de planos (US67/CA04)', (
 
     await expect(page.locator('.toast-sucesso')).toHaveText(/Destaque ativado/);
     expect(corpoEnviado).toMatchObject({ destaque: true });
+  });
+});
+
+// US74/CA05 — diferenciais (3 campos fixos) e limites de uso editáveis no
+// admin.
+test.describe('Admin — Configurações — diferenciais e limites dos planos (US74/CA05)', () => {
+  test('exibe as features e os limites de cada plano (somente leitura)', async ({ page }) => {
+    await entrarEmConfiguracoes(page, configuracoesMock({ planos: planosGrade2x2() }));
+
+    const linhaSmart = page.locator('tr[data-plano="professional"]');
+    await expect(linhaSmart).toContainText('Bot entende linguagem natural');
+    await expect(linhaSmart).toContainText('Conversas/mês: 500');
+
+    const linhaSmartPlus = page.locator('tr[data-plano="enterprise"]');
+    await expect(linhaSmartPlus).toContainText('Conversas/mês: Ilimitado');
+  });
+
+  test('adiciona uma feature e persiste', async ({ page }) => {
+    await entrarEmConfiguracoes(page, configuracoesMock({ planos: planosGrade2x2() }));
+
+    let corpoEnviado = null;
+    await page.route('**/admin/api/configuracoes/planos/business', (route) => {
+      corpoEnviado = route.request().postDataJSON();
+      return route.fulfill({ json: { ...planosGrade2x2()[1] } });
+    });
+
+    await page.click('tr[data-plano="business"] [data-acao="editar-plano"]');
+    await page.fill('[data-testid="input-feature-1-business"]', 'Número virtual gerenciado pelo Kyvvo');
+    await page.click('[data-testid="salvar-business"]');
+
+    await expect(page.locator('.toast-sucesso')).toHaveText(/Preço atualizado/);
+    expect(corpoEnviado.features).toEqual(['Número virtual gerenciado pelo Kyvvo']);
+  });
+
+  test('só 3 campos de feature existem — impossível adicionar uma 4ª', async ({ page }) => {
+    await entrarEmConfiguracoes(page, configuracoesMock({ planos: planosGrade2x2() }));
+
+    await page.click('tr[data-plano="professional"] [data-acao="editar-plano"]');
+    await expect(page.locator('[data-testid="input-feature-1-professional"]')).toBeVisible();
+    await expect(page.locator('[data-testid="input-feature-2-professional"]')).toBeVisible();
+    await expect(page.locator('[data-testid="input-feature-3-professional"]')).toBeVisible();
+    await expect(page.locator('[data-testid="input-feature-4-professional"]')).toHaveCount(0);
+  });
+
+  test('salva limite em branco como ilimitado (null)', async ({ page }) => {
+    await entrarEmConfiguracoes(page, configuracoesMock({ planos: planosGrade2x2() }));
+
+    let corpoEnviado = null;
+    await page.route('**/admin/api/configuracoes/planos/enterprise', (route) => {
+      corpoEnviado = route.request().postDataJSON();
+      return route.fulfill({ json: { ...planosGrade2x2()[3] } });
+    });
+
+    await page.click('tr[data-plano="enterprise"] [data-acao="editar-plano"]');
+    await page.fill('[data-testid="input-limite-conversas_mes-enterprise"]', '');
+    await page.click('[data-testid="salvar-enterprise"]');
+
+    await expect(page.locator('.toast-sucesso')).toHaveText(/Preço atualizado/);
+    expect(corpoEnviado.limites.conversas_mes).toBeNull();
+  });
+
+  test('edita o valor numérico de um limite', async ({ page }) => {
+    await entrarEmConfiguracoes(page, configuracoesMock({ planos: planosGrade2x2() }));
+
+    let corpoEnviado = null;
+    await page.route('**/admin/api/configuracoes/planos/professional', (route) => {
+      corpoEnviado = route.request().postDataJSON();
+      return route.fulfill({ json: { ...planosGrade2x2()[2] } });
+    });
+
+    await page.click('tr[data-plano="professional"] [data-acao="editar-plano"]');
+    await page.fill('[data-testid="input-limite-profissionais-professional"]', '8');
+    await page.click('[data-testid="salvar-professional"]');
+
+    expect(corpoEnviado.limites.profissionais).toBe(8);
+  });
+});
+
+// US73/CA04 — copy de diferencial (headline + frase de benefício) editável
+// no admin, com limite de 120 caracteres validado em tempo real.
+test.describe('Admin — Configurações — copy de diferencial dos planos (US73/CA04)', () => {
+  test('exibe headline e frase de benefício de cada plano (somente leitura)', async ({ page }) => {
+    await entrarEmConfiguracoes(page, configuracoesMock({ planos: planosGrade2x2() }));
+
+    const linhaSmart = page.locator('tr[data-plano="professional"]');
+    await expect(linhaSmart).toContainText('Seu número, atendimento que conversa');
+    await expect(linhaSmart).toContainText('A cliente escreve como fala e o bot resolve.');
+  });
+
+  test('edita a headline e a frase de benefício', async ({ page }) => {
+    await entrarEmConfiguracoes(page, configuracoesMock({ planos: planosGrade2x2() }));
+
+    let corpoEnviado = null;
+    await page.route('**/admin/api/configuracoes/planos/professional', (route) => {
+      corpoEnviado = route.request().postDataJSON();
+      return route.fulfill({ json: { ...planosGrade2x2()[2], headline_diferencial: 'Atendimento que conversa' } });
+    });
+
+    await page.click('tr[data-plano="professional"] [data-acao="editar-plano"]');
+    await page.fill('[data-testid="input-headline-professional"]', 'Atendimento que conversa');
+    await page.click('[data-testid="salvar-professional"]');
+
+    await expect(page.locator('.toast-sucesso')).toHaveText(/Preço atualizado/);
+    expect(corpoEnviado.headline_diferencial).toBe('Atendimento que conversa');
+  });
+
+  test('bloqueia salvar acima de 120 caracteres e mostra o contador', async ({ page }) => {
+    await entrarEmConfiguracoes(page, configuracoesMock({ planos: planosGrade2x2() }));
+
+    let chamou = false;
+    await page.route('**/admin/api/configuracoes/planos/professional', () => { chamou = true; });
+
+    await page.click('tr[data-plano="professional"] [data-acao="editar-plano"]');
+    await page.fill('[data-testid="input-frase-professional"]', 'a'.repeat(121));
+
+    await expect(page.locator('[data-testid="salvar-professional"]')).toBeDisabled();
+    await expect(page.locator('tr[data-plano="professional"] [data-erro-plano="professional"]')).toHaveText(/máximo de 120/i);
+
+    await page.click('[data-testid="salvar-professional"]', { force: true });
+    expect(chamou).toBe(false);
+  });
+
+  test('volta a permitir salvar ao corrigir o texto pro limite', async ({ page }) => {
+    await entrarEmConfiguracoes(page, configuracoesMock({ planos: planosGrade2x2() }));
+
+    await page.click('tr[data-plano="professional"] [data-acao="editar-plano"]');
+    await page.fill('[data-testid="input-frase-professional"]', 'a'.repeat(121));
+    await expect(page.locator('[data-testid="salvar-professional"]')).toBeDisabled();
+
+    await page.fill('[data-testid="input-frase-professional"]', 'a'.repeat(50));
+    await expect(page.locator('[data-testid="salvar-professional"]')).toBeEnabled();
+  });
+});
+
+// US72/CA04 — nome do plano passa a ser editável no painel admin, sem
+// alterar o slug (que continua estrutural/somente leitura).
+test.describe('Admin — Configurações — editar nome do plano (US72/CA04)', () => {
+  test('edita o nome de um plano sem enviar slug no payload', async ({ page }) => {
+    await entrarEmConfiguracoes(page, configuracoesMock({ planos: planosGrade2x2() }));
+
+    let corpoEnviado = null;
+    await page.route('**/admin/api/configuracoes/planos/professional', (route) => {
+      corpoEnviado = route.request().postDataJSON();
+      return route.fulfill({ json: { ...planosGrade2x2()[2], nome: 'Smart IA' } });
+    });
+
+    await page.click('tr[data-plano="professional"] [data-acao="editar-plano"]');
+    await page.fill('[data-testid="input-nome-professional"]', 'Smart IA');
+    await page.click('[data-testid="salvar-professional"]');
+
+    await expect(page.locator('.toast-sucesso')).toHaveText(/Preço atualizado/);
+    expect(corpoEnviado.nome).toBe('Smart IA');
+    expect(corpoEnviado.slug).toBeUndefined();
+  });
+
+  test('nome em branco não salva e mostra erro', async ({ page }) => {
+    await entrarEmConfiguracoes(page, configuracoesMock({ planos: planosGrade2x2() }));
+
+    let chamou = false;
+    await page.route('**/admin/api/configuracoes/planos/professional', () => { chamou = true; });
+
+    await page.click('tr[data-plano="professional"] [data-acao="editar-plano"]');
+    await page.fill('[data-testid="input-nome-professional"]', '   ');
+    await page.click('[data-testid="salvar-professional"]');
+
+    await expect(page.locator('tr[data-plano="professional"] [data-erro-plano="professional"]')).toHaveText(/em branco/);
+    expect(chamou).toBe(false);
   });
 });

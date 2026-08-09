@@ -875,6 +875,73 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .financeiro-entrada { color: #4ade80; }
 .financeiro-saida { color: #ff6b6b; }
+.financeiro-previsto { color: var(--cyan); }
+
+/* US71 — abas Mês/Semana/Dia da página /financeiro. Mesmo visual de .tab/
+   .subtabs (agenda), mas num container próprio renderizado dentro de
+   #conteudo — .subtabs é fixo/global e só aparece com o menu "agendamento"
+   ativo (ver toggle em app.js), não dá pra reaproveitar o elemento. */
+.subtabs-financeiro {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.btn-detalhamento-financeiro { width: auto; margin: 4px 0 16px; }
+
+/* US71/CA02 — gráfico de barras (realizado x previsto) por semana do mês,
+   sem biblioteca de gráficos: barras são só divs com height em %. */
+.financeiro-grafico {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  height: 140px;
+  padding: 16px 8px 0;
+  margin-bottom: 20px;
+  background: #12162a;
+  border: 1px solid #232847;
+  border-radius: 10px;
+}
+
+.financeiro-grafico-coluna {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+}
+
+.financeiro-grafico-barras {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+}
+
+.financeiro-grafico-barra { width: 14px; border-radius: 3px 3px 0 0; min-height: 2px; }
+.financeiro-grafico-barra-realizado { background: #4ade80; }
+.financeiro-grafico-barra-previsto { background: var(--cyan); }
+.financeiro-grafico-label { font-size: 11px; color: #a1a5c4; margin-top: 6px; }
+
+/* US70 — faixa de 4 cards financeiros na tela inicial, reaproveita o visual
+   de .financeiro-resumo-card mas em 4 colunas e clicável (navega pro
+   Financeiro). */
+.inicio-financeiro-resumo {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin: 4px 0 20px;
+}
+.inicio-financeiro-resumo .financeiro-resumo-card { cursor: pointer; transition: border-color 0.15s; }
+.inicio-financeiro-resumo .financeiro-resumo-card:hover { border-color: var(--accent-light); }
+
+@media (max-width: 640px) {
+  .inicio-financeiro-resumo { grid-template-columns: repeat(2, 1fr); }
+}
 
 /* Cards de 3 linhas na aba Pagamento (PR5): label / valor principal /
    subtítulo — substitui o texto corrido de antes ("Nome — R$ valor" numa
@@ -1330,6 +1397,11 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 /* Pagamentos (US32) */
 .badge-status-inadimplente { background: rgba(255, 107, 107, 0.15); color: #ff6b6b; }
 
+/* Modo de atendimento do tenant — bot (menus, cinza) x ia (conversacional,
+   roxo, US69). Usado tanto na listagem admin quanto no portal do salão. */
+.badge-modo-bot { background: rgba(161, 165, 196, 0.15); color: #a1a5c4; }
+.badge-modo-ia { background: rgba(124, 92, 252, 0.15); color: var(--accent); }
+
 /* Status de cada cobrança no histórico da aba de Pagamentos */
 .badge-pagamento-pending { background: rgba(250, 204, 21, 0.15); color: #facc15; }
 .badge-pagamento-confirmado { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
@@ -1435,6 +1507,15 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .celula-acoes-plano { white-space: nowrap; }
 .celula-acoes-plano .modal-erro { white-space: normal; max-width: 220px; }
+
+/* US74 — diferenciais (3 campos fixos) e limites de uso por plano. */
+.celula-features-plano input,
+.celula-limites-plano input { margin-bottom: 6px; }
+.limite-editor-linha { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.limite-editor-linha input { width: 70px !important; min-width: 70px !important; }
+.limite-editor-linha label { font-size: 12px; color: #a1a5c4; white-space: nowrap; }
+.lista-features-plano { list-style: none; font-size: 13px; color: #a1a5c4; }
+.lista-features-plano li { margin-bottom: 2px; }
 
 .tabela-tenants input[type="text"],
 .tabela-tenants input[type="number"],
@@ -1666,6 +1747,14 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   font-size: 13px;
   min-height: 16px;
   margin-top: 8px;
+}
+
+/* US73 — contador de caracteres dos campos de copy de diferencial dos
+   planos (headline/frase de benefício) no admin. */
+.contador-caracteres {
+  color: #a1a5c4;
+  font-size: 11px;
+  margin-top: 4px;
 }
 
 /* Banner de cobrança futura no modal de pagamento durante o trial (US37) */
