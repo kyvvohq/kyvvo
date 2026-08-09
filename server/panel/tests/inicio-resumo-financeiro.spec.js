@@ -42,6 +42,11 @@ async function entrarNoPainel(page, { status = statusMock(), temFinanceiro = tru
     if (route.request().method() !== 'GET') return route.fallback();
     return route.fulfill({ json: { mes: '2026-07', lancamentos: [], resumo: { entradas: 0, saidas: 0, saldo: 0 } } });
   });
+  // US71 — CA03 navega pro Financeiro já numa aba (Dia/Mês) que busca seu
+  // próprio resumo por período; mockado aqui pra não depender de rede real.
+  await page.route('**/api/financeiro/resumo?periodo=**', (route) =>
+    route.fulfill({ json: { periodo: 'dia', referencia: '2026-07-01', realizado: 0, previsto: 0, total: 0 } })
+  );
   await page.addInitScript(() => {
     window.localStorage.setItem('kyvvo_token', 'fake-jwt-token');
     window.localStorage.setItem('kyvvo_nome', 'Ana');
