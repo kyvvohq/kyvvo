@@ -1088,6 +1088,15 @@ conteudo.addEventListener('click', (e) => {
     return;
   }
 
+  // US70/CA03 — cards do resumo financeiro na tela inicial abrem o
+  // Financeiro no mês corrente (garante que "hoje" está incluído na lista).
+  const cardFinanceiroBtn = e.target.closest('[data-card-financeiro-nav]');
+  if (cardFinanceiroBtn) {
+    mesFinanceiroRef = new Date();
+    selecionarMenu('modulo:financeiro');
+    return;
+  }
+
   // "+" ao passar o mouse numa linha de horário (Dia/Semana) ou numa
   // célula de dia (Semana/Mês) — abre Novo agendamento pré-preenchido.
   const addHorarioBtn = e.target.closest('[data-add-horario]');
@@ -2419,10 +2428,11 @@ function construirPendenciasInicio(status) {
 async function renderInicio() {
   conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
   const iso = formatarDataISO(new Date());
-  const [data, status, modulosResultado] = await Promise.all([
+  const [data, status, modulosResultado, resumoFinanceiro] = await Promise.all([
     api(`/api/agendamentos?view=dia&data=${iso}`),
     api('/api/tenant/status').catch(() => null),
     api('/api/tenant/modulos').catch(() => null),
+    api('/api/financeiro/resumo-dashboard').catch(() => null),
   ]);
   if (!data) return;
 
@@ -2432,6 +2442,11 @@ async function renderInicio() {
 
   const pendencias = construirPendenciasInicio(status);
   const temFinanceiro = ((modulosResultado && modulosResultado.modulos) || []).some((m) => m.key === 'financeiro');
+  // US70/CA01-CA02 — resumo só aparece pra quem tem o módulo ativo E pode
+  // ver dinheiro (mesma restrição do endpoint: requireAdmin, US62); operador
+  // nunca chama a rota certo, mas também não faz sentido mostrar os cards
+  // vazios pra ele.
+  const podeVerFinanceiro = temFinanceiro && status && status.role !== 'operador' && !!resumoFinanceiro;
 
   // CA "estado vazio orienta próxima ação" — se não há agendamento nenhum e
   // existe uma pendência de configuração conhecida, a mensagem aponta a
@@ -2452,6 +2467,33 @@ async function renderInicio() {
       ${temFinanceiro ? '<button class="btn-secundario" data-acao-atalho-inicio="modulo:financeiro">Financeiro</button>' : ''}
     </div>
   `;
+
+  // US70/CA02-CA03 — faixa de 4 cards com o resumo financeiro do dia/mês;
+  // cada card navega pro Financeiro (a US71 ainda vai trazer o recorte por
+  // dia/semana lá dentro — por ora os 4 cards abrem a mesma visão mensal,
+  // que já inclui os lançamentos de hoje).
+  if (podeVerFinanceiro) {
+    html += `
+      <div class="inicio-financeiro-resumo" data-testid="cards-financeiro-resumo">
+        <div class="financeiro-resumo-card" data-testid="card-realizado-hoje" data-card-financeiro-nav="1">
+          <div class="financeiro-resumo-label">Realizado hoje</div>
+          <div class="financeiro-entrada">${formatarPreco(resumoFinanceiro.realizado_hoje)}</div>
+        </div>
+        <div class="financeiro-resumo-card" data-testid="card-previsto-hoje" data-card-financeiro-nav="1">
+          <div class="financeiro-resumo-label">Previsto hoje</div>
+          <div class="financeiro-previsto">${formatarPreco(resumoFinanceiro.previsto_hoje)}</div>
+        </div>
+        <div class="financeiro-resumo-card" data-testid="card-realizado-mes" data-card-financeiro-nav="1">
+          <div class="financeiro-resumo-label">Realizado no mês</div>
+          <div class="financeiro-entrada">${formatarPreco(resumoFinanceiro.realizado_mes)}</div>
+        </div>
+        <div class="financeiro-resumo-card" data-testid="card-previsto-mes" data-card-financeiro-nav="1">
+          <div class="financeiro-resumo-label">Previsto no mês</div>
+          <div class="financeiro-previsto">${formatarPreco(resumoFinanceiro.previsto_mes)}</div>
+        </div>
+      </div>
+    `;
+  }
 
   if (pendencias.length) {
     html += `
