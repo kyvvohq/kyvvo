@@ -1,0 +1,30 @@
+name: Auditoria de acessibilidade — Painel
+
+on:
+  pull_request:
+    paths:
+      - 'server/panel/**'
+
+jobs:
+  axe-cadastro:
+    name: axe — cadastro
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server/panel
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Instalar navegador do Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Rodar auditoria axe (US81.5) — bloqueia merge em violação crítica
+        run: npx playwright test tests/cadastro-acessibilidade-axe.spec.js
