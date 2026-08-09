@@ -1,7 +1,7 @@
 // Página de Versão da área admin (US66) — mostra separadamente a versão do
 // front (window.KYVVO_FRONT_VERSION, definida em admin/version.js, gravada
 // no HTML/JS que o navegador já carregou) e a versão do back (GET
-// /admin/api/versao, consultada ao vivo no servidor a cada carregamento).
+// /api/versao, consultada ao vivo no servidor a cada carregamento).
 // As duas costumam bater; quando divergem, é sinal de JS em cache
 // desatualizado no navegador (mesmo tipo de problema que motivou esta
 // página) — resolvido com um hard refresh.
@@ -20,7 +20,7 @@ async function api(path, options = {}) {
   });
   if (res.status === 401) {
     localStorage.removeItem('kyvvo_admin_token');
-    window.location.href = '/admin/login.html';
+    window.location.href = '/login.html';
     return null;
   }
   return res.json();
@@ -42,7 +42,7 @@ async function carregar() {
   const frontCommit = window.KYVVO_FRONT_VERSION && window.KYVVO_FRONT_VERSION !== '__COMMIT_SHA__'
     ? window.KYVVO_FRONT_VERSION
     : null;
-  const back = await api('/admin/api/versao');
+  const back = await api('/api/versao');
   if (!back) return;
 
   const divergem = frontCommit && back.commit && frontCommit !== back.commit;

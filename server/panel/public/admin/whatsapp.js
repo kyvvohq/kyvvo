@@ -1,7 +1,7 @@
 // Página de status do WhatsApp na área admin — mostra se a API oficial da
 // Meta (Cloud API) está conectada de verdade (token + phone_number_id com
 // permissão), sem precisar entrar no painel da Meta ou no servidor pra
-// diagnosticar. Consome GET /admin/api/whatsapp/status, que chama a Graph
+// diagnosticar. Consome GET /api/whatsapp/status, que chama a Graph
 // API da Meta ao vivo com as credenciais configuradas no ambiente.
 
 // token / identificação do admin / dropdown "Sair" agora vivem em shell.js
@@ -18,7 +18,7 @@ async function api(path, options = {}) {
   });
   if (res.status === 401) {
     localStorage.removeItem('kyvvo_admin_token');
-    window.location.href = '/admin/login.html';
+    window.location.href = '/login.html';
     return null;
   }
   return res.json();
@@ -79,9 +79,9 @@ async function carregar() {
   carregando = true;
   conteudo.innerHTML = '<div class="vazio">Verificando conexão com a Meta...</div>';
   const [status, numerosResp, tenantsResp] = await Promise.all([
-    api('/admin/api/whatsapp/status'),
-    api('/admin/api/numeros-prontos'),
-    api('/admin/api/tenants'),
+    api('/api/whatsapp/status'),
+    api('/api/numeros-prontos'),
+    api('/api/tenants'),
   ]);
   carregando = false;
   if (!status) return;
@@ -251,7 +251,7 @@ async function salvarNovoNumero() {
     return;
   }
 
-  const resultado = await api('/admin/api/numeros-prontos', {
+  const resultado = await api('/api/numeros-prontos', {
     method: 'POST',
     body: JSON.stringify({ telefone, meta_phone_number_id: metaPhoneNumberId, meta_waba_id: metaWabaId }),
   });
@@ -276,7 +276,7 @@ async function vincularNumero(id) {
     return;
   }
 
-  const resultado = await api(`/admin/api/numeros-prontos/${id}/vincular`, {
+  const resultado = await api(`/api/numeros-prontos/${id}/vincular`, {
     method: 'POST',
     body: JSON.stringify({ tenant_id: tenantId }),
   });
@@ -301,7 +301,7 @@ async function testarNumero(id) {
     return;
   }
 
-  const resultado = await api(`/admin/api/numeros-prontos/${id}/testar`, {
+  const resultado = await api(`/api/numeros-prontos/${id}/testar`, {
     method: 'POST',
     body: JSON.stringify({ numero_destino: numeroDestino }),
   });
