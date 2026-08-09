@@ -361,8 +361,14 @@ async function registrarEventoTrialExpiradoUmaVez(tenantId) {
 const IA_INTENTS_VALIDOS = new Set(['agendar', 'reagendar', 'cancelar', 'consultar', 'unknown', 'fallback_humano']);
 const IA_HISTORICO_MENSAGENS = 10;
 const IA_DIAS_DISPONIBILIDADE = 7;
-const IA_SLOTS_POR_DIA_PROFISSIONAL = 4;
+const IA_SLOTS_POR_DIA_PROFISSIONAL = 3;
 const IA_DURACAO_PADRAO_MINUTOS = 30;
+// Depois de aceitar uma sugestão, pula essa quantidade de minutos antes de
+// procurar a próxima no mesmo dia — sem isso, os 30min de passo do loop
+// sempre encontram os primeiros horários livres em sequência a partir da
+// abertura (ex.: 09:00, 09:30, 10:00), o que na prática só sugere manhã.
+// Com o pulo, as sugestões saem espalhadas pelo dia (manhã/tarde).
+const IA_INTERVALO_ENTRE_SUGESTOES_MINUTOS = 120;
 
 // US68/CA02 — disponibilidade real dos próximos N dias por profissional,
 // calculada contra a agenda do banco (nunca hardcoded/alucinada pela IA).
@@ -414,6 +420,7 @@ async function calcularDisponibilidadeIA(tenant) {
         if (bloqueio) continue;
         slots.push({ profissionalId: prof.id, profissionalNome: prof.nome, dataHoraISO: candidatoISO });
         encontradosNoDia++;
+        minutos += IA_INTERVALO_ENTRE_SUGESTOES_MINUTOS;
       }
     }
     if (slots.length) resultado.push({ profissional: prof.nome, slots });
@@ -441,7 +448,11 @@ async function montarContextoIA(tenant) {
   // o valor entre colchetes.
   const listaDisponibilidade = disponibilidade.length
     ? disponibilidade.map((p) => {
-        const horarios = p.slots.slice(0, 8).map((s) => {
+        // Sem corte artificial aqui — o cálculo já limita a
+        // IA_SLOTS_POR_DIA_PROFISSIONAL × IA_DIAS_DISPONIBILIDADE (21 no
+        // padrão atual), então mostrar tudo cobre a janela de dias inteira em
+        // vez de truncar nos primeiros ~2 dias (bug encontrado em produção).
+        const horarios = p.slots.map((s) => {
           const d = new Date(s.dataHoraISO);
           const texto = d.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
           return `${texto} [${s.dataHoraISO}]`;
@@ -489,10 +500,13 @@ async function buscarHistoricoIA(tenantId, clienteId) {
   return rows.reverse().map((r) => ({ role: r.role, content: r.conteudo }));
 }
 
-async function salvarMensagemIA(tenantId, clienteId, role, conteudo, intent = null) {
+// US68 dashboard de consumo — tokensEntrada/tokensSaida só fazem sentido pra
+// role='assistant' (a única que chama a Anthropic API); ficam null nos
+// outros casos, que é o default da coluna.
+async function salvarMensagemIA(tenantId, clienteId, role, conteudo, intent = null, tokensEntrada = null, tokensSaida = null) {
   await pool.query(
-    'INSERT INTO conversas_ia (tenant_id, cliente_id, role, conteudo, intent) VALUES ($1, $2, $3, $4, $5)',
-    [tenantId, clienteId, role, conteudo, intent]
+    'INSERT INTO conversas_ia (tenant_id, cliente_id, role, conteudo, intent, tokens_entrada, tokens_saida) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+    [tenantId, clienteId, role, conteudo, intent, tokensEntrada, tokensSaida]
   );
 }
 
@@ -507,14 +521,17 @@ function parsearIntentIA(textoResposta) {
     // não fazer isso — extrai o primeiro objeto JSON encontrado por segurança.
     const match = textoResposta.match(/\{[\s\S]*\}/);
     bruto = JSON.parse(match ? match[0] : textoResposta);
-  } catch {
+  } catch (erroParse) {
+    fastify.log.warn({ erro: erroParse.message, textoResposta }, 'Parser de intenção IA (US68.4) — resposta da IA não é JSON válido');
     return { intent: 'unknown', params: {}, resposta: 'Desculpa, não entendi. Pode repetir de outro jeito?' };
   }
   const intent = IA_INTENTS_VALIDOS.has(bruto.intent) ? bruto.intent : 'unknown';
   const params = (bruto.params && typeof bruto.params === 'object') ? bruto.params : {};
-  const resposta = typeof bruto.resposta === 'string' && bruto.resposta.trim()
-    ? bruto.resposta.trim()
-    : 'Desculpa, não entendi. Pode repetir de outro jeito?';
+  const respostaFaltando = !(typeof bruto.resposta === 'string' && bruto.resposta.trim());
+  if (respostaFaltando) {
+    fastify.log.warn({ bruto }, 'Parser de intenção IA (US68.4) — JSON válido mas sem campo "resposta"');
+  }
+  const resposta = respostaFaltando ? 'Desculpa, não entendi. Pode repetir de outro jeito?' : bruto.resposta.trim();
   return { intent, params, resposta };
 }
 
@@ -585,15 +602,16 @@ async function executarAcaoIA({ intent, params, tenantId, clienteId }) {
 }
 
 // US68/CA06 — fallback humano: marca a conversa e notifica o salão via
-// WhatsApp (mesma instância, número do responsável já cadastrado em
-// tenants.telefone). Nunca lança — uma falha aqui não pode derrubar a
-// resposta já dada ao cliente.
-async function acionarFallbackHumanoIA(tenant, cliente) {
+// WhatsApp (número do responsável já cadastrado em tenants.telefone).
+// `enviarResposta` é o mesmo canal (Meta Cloud API ou Evolution API,
+// conforme o webhook que originou a mensagem) usado pra responder o
+// cliente — reaproveitado aqui pra notificar o salão. Nunca lança — uma
+// falha aqui não pode derrubar a resposta já dada ao cliente.
+async function acionarFallbackHumanoIA(tenant, cliente, enviarResposta) {
   await pool.query("UPDATE clientes SET status_conversa = 'aguardando_humano' WHERE id = $1", [cliente.id]);
   if (!tenant.telefone) return;
   try {
-    await evolutionService.enviarTexto(
-      tenant.instancia_whatsapp,
+    await enviarResposta(
       tenant.telefone,
       `⚠️ Atendimento assumido pela IA precisa da sua ajuda.\nCliente: ${cliente.nome || cliente.telefone}\nEntre em contato direto pelo WhatsApp do salão pra continuar o atendimento.`
     );
@@ -606,7 +624,10 @@ async function acionarFallbackHumanoIA(tenant, cliente) {
 // busca/cria o cliente, monta contexto+histórico, chama Claude, valida a
 // intenção, executa a ação (com fallback textual se der conflito) e persiste
 // a conversa. Sempre responde algo ao cliente — mesmo em erro.
-async function processarMensagemIA({ tenant, telefone, mensagem, pushName }) {
+// `enviarResposta(numeroDestino, texto)` abstrai o canal de envio (Meta Cloud
+// API ou Evolution API) — quem decide qual usar é o roteador, conforme o
+// formato do webhook recebido; a lógica da IA em si é a mesma pros dois.
+async function processarMensagemIA({ tenant, telefone, mensagem, pushName, enviarResposta }) {
   let { rows: clienteRows } = await pool.query(
     'SELECT id, nome, status_conversa FROM clientes WHERE tenant_id = $1 AND telefone = $2 LIMIT 1',
     [tenant.id, telefone]
@@ -627,12 +648,12 @@ async function processarMensagemIA({ tenant, telefone, mensagem, pushName }) {
 
   const system = await montarContextoIA(tenant);
   const historico = await buscarHistoricoIA(tenant.id, cliente.id);
-  const respostaBruta = await anthropicService.chamarClaude({ system, mensagens: [...historico, { role: 'user', content: mensagem }] });
+  const { texto: respostaBruta, tokensEntrada, tokensSaida } = await anthropicService.chamarClaude({ system, mensagens: [...historico, { role: 'user', content: mensagem }] });
   const { intent, params, resposta } = parsearIntentIA(respostaBruta);
 
   let textoFinal = resposta;
   if (intent === 'fallback_humano') {
-    await acionarFallbackHumanoIA(tenant, cliente);
+    await acionarFallbackHumanoIA(tenant, cliente, enviarResposta);
   } else if (intent === 'agendar' || intent === 'reagendar' || intent === 'cancelar') {
     try {
       await executarAcaoIA({ intent, params, tenantId: tenant.id, clienteId: cliente.id });
@@ -650,16 +671,23 @@ async function processarMensagemIA({ tenant, telefone, mensagem, pushName }) {
     }
   }
 
-  await salvarMensagemIA(tenant.id, cliente.id, 'assistant', textoFinal, intent);
+  // Salva o turno do assistente sempre no MESMO formato JSON que o system
+  // prompt exige da IA — nunca o texto final em linguagem natural. Motivo:
+  // esse histórico é replayed de volta pra Claude nas próximas mensagens
+  // (buscarHistoricoIA); se salvássemos texto puro aqui, a IA veria seus
+  // próprios turnos passados em linguagem natural e passaria a imitar esse
+  // padrão nas respostas seguintes, ignorando a instrução de responder só em
+  // JSON — foi exatamente esse loop que causou a IA "esquecer" o formato
+  // depois do primeiro turno em produção.
+  await salvarMensagemIA(tenant.id, cliente.id, 'assistant', JSON.stringify({ intent, params, resposta: textoFinal }), intent, tokensEntrada, tokensSaida);
 
-  if (tenant.instancia_whatsapp) {
-    try {
-      await evolutionService.enviarTexto(tenant.instancia_whatsapp, telefone, textoFinal);
-    } catch (erro) {
-      // Falha no envio (ex.: instância desconectada) não pode apagar o que
-      // já foi persistido (agendamento criado, conversa salva) — só loga.
-      fastify.log.error({ erro: erro.message, tenantId: tenant.id }, 'Falha ao enviar resposta da IA via Evolution API (US68)');
-    }
+  try {
+    await enviarResposta(telefone, textoFinal);
+  } catch (erro) {
+    // Falha no envio (ex.: token expirado, instância desconectada) não pode
+    // apagar o que já foi persistido (agendamento criado, conversa salva) —
+    // só loga.
+    fastify.log.error({ erro: erro.message, tenantId: tenant.id }, 'Falha ao enviar resposta da IA (US68)');
   }
 }
 
@@ -1036,39 +1064,82 @@ async function start() {
     });
   }
 
-  // US68.2 — roteador: recebe o webhook da Evolution API no lugar do n8n e
-  // decide, por tenant.tecnologia, se processa pelo IA Engine (US68) ou
-  // repassa sem alteração pro n8n (fluxo de bot atual, intocado). Sem auth —
-  // é um webhook externo, mesmo padrão de rota pública já usado em
-  // /api/planos. Tenant desconhecido/inativo ou qualquer erro no
-  // processamento cai no repasse pro n8n — nunca perde a mensagem
-  // silenciosamente nem quebra o fluxo de bot existente.
+  const TENANT_CAMPOS_WEBHOOK = `id, nome, telefone, instancia_whatsapp, meta_phone_number_id, tecnologia,
+                dias_funcionamento, horario_abertura, horario_fechamento,
+                horario_almoco_ativo, horario_almoco_inicio, horario_almoco_fim`;
+
+  // US68.2 — handshake de verificação do webhook da Meta (App Dashboard →
+  // WhatsApp → Configuração → Webhook, chamado uma vez ao salvar a URL e
+  // sempre que a Meta reconfirma a assinatura). Mesma lógica que já existia
+  // dentro do n8n (workflow v4) — token comparado com META_VERIFY_TOKEN,
+  // resposta é o challenge cru (texto puro, não JSON).
+  fastify.get('/webhook/whatsapp', async (request, reply) => {
+    const query = request.query || {};
+    const valido = query['hub.mode'] === 'subscribe'
+      && !!process.env.META_VERIFY_TOKEN
+      && query['hub.verify_token'] === process.env.META_VERIFY_TOKEN;
+    if (!valido) return reply.code(403).send('Forbidden');
+    return reply.code(200).type('text/plain').send(query['hub.challenge'] || '');
+  });
+
+  // US68.2 — roteador: recebe o webhook (Meta Cloud API ou, se algum dia
+  // voltar a existir, Evolution API) no lugar do n8n e decide, por
+  // tenant.tecnologia, se processa pelo IA Engine (US68) ou repassa sem
+  // alteração pro n8n (fluxo de bot atual, intocado). Sem auth — é um
+  // webhook externo, mesmo padrão de rota pública já usado em /api/planos.
+  // Tenant desconhecido/inativo, evento sem mensagem (ex.: status de
+  // entrega) ou qualquer erro no processamento cai no repasse pro n8n —
+  // nunca perde o evento silenciosamente nem quebra o fluxo de bot.
   fastify.post('/webhook/whatsapp', async (request, reply) => {
     const body = request.body || {};
-    const instanceName = body.instance;
+    const ehMeta = body.object === 'whatsapp_business_account';
+    const change = ehMeta ? (((body.entry || [])[0] || {}).changes || [])[0] : null;
+    const value = change ? change.value : null;
 
     let tenant = null;
-    if (instanceName) {
+    let telefone = null;
+    let mensagem = null;
+    let pushName = null;
+    let enviarResposta = null;
+
+    if (ehMeta && value) {
+      const phoneNumberId = value.metadata && value.metadata.phone_number_id;
+      const msg = (value.messages || [])[0];
+      if (phoneNumberId && msg && msg.type === 'text') {
+        const { rows } = await pool.query(
+          `SELECT ${TENANT_CAMPOS_WEBHOOK} FROM tenants WHERE meta_phone_number_id = $1 AND ativo = true LIMIT 1`,
+          [phoneNumberId]
+        );
+        tenant = rows[0] || null;
+        telefone = msg.from;
+        mensagem = (msg.text && msg.text.body) || '';
+        const contato = (value.contacts || [])[0];
+        pushName = (contato && contato.profile && contato.profile.name) || null;
+        enviarResposta = (numero, texto) => metaWhatsappService.enviarTexto(tenant.meta_phone_number_id, numero, texto);
+      }
+      // Sem messages[0] (ex.: webhook de status "delivered"/"read") ou sem
+      // phone_number_id: não há o que processar — cai no repasse abaixo, que
+      // é inofensivo (o n8n também ignora esses eventos na mesma condição).
+    } else if (body.instance) {
+      // Compat: Evolution API não está mais em uso, mas o repasse continua
+      // funcionando caso volte a existir — mesma lógica de antes.
       const { rows } = await pool.query(
-        `SELECT id, nome, telefone, instancia_whatsapp, tecnologia,
-                dias_funcionamento, horario_abertura, horario_fechamento,
-                horario_almoco_ativo, horario_almoco_inicio, horario_almoco_fim
-         FROM tenants WHERE instancia_whatsapp = $1 AND ativo = true LIMIT 1`,
-        [instanceName]
+        `SELECT ${TENANT_CAMPOS_WEBHOOK} FROM tenants WHERE instancia_whatsapp = $1 AND ativo = true LIMIT 1`,
+        [body.instance]
       );
       tenant = rows[0] || null;
+      const data = body.data || {};
+      if (data.key && !data.key.fromMe) {
+        telefone = (data.key.remoteJid || '').replace('@s.whatsapp.net', '').replace('@lid', '').replace('@g.us', '');
+        mensagem = (data.message && (data.message.conversation || (data.message.extendedTextMessage && data.message.extendedTextMessage.text))) || '';
+        pushName = data.pushName || null;
+        enviarResposta = (numero, texto) => evolutionService.enviarTexto(tenant.instancia_whatsapp, numero, texto);
+      }
     }
 
-    if (tenant && tenant.tecnologia === 'ia') {
+    if (tenant && tenant.tecnologia === 'ia' && telefone && mensagem && mensagem.trim()) {
       try {
-        const data = body.data || {};
-        if (!data.key || data.key.fromMe) return reply.code(200).send({ ok: true });
-        const remoteJid = data.key.remoteJid || '';
-        const telefone = remoteJid.replace('@s.whatsapp.net', '').replace('@lid', '').replace('@g.us', '');
-        const mensagem = (data.message && (data.message.conversation || (data.message.extendedTextMessage && data.message.extendedTextMessage.text))) || '';
-        if (telefone && mensagem.trim()) {
-          await processarMensagemIA({ tenant, telefone, mensagem: mensagem.trim(), pushName: data.pushName });
-        }
+        await processarMensagemIA({ tenant, telefone, mensagem: mensagem.trim(), pushName, enviarResposta });
         return reply.code(200).send({ ok: true });
       } catch (erro) {
         fastify.log.error({ erro: erro.message, tenantId: tenant.id }, 'Falha no IA Engine (US68) — mensagem não processada');
@@ -1076,9 +1147,10 @@ async function start() {
       }
     }
 
-    // tecnologia='bot', tenant não encontrado/inativo, ou N8N_WEBHOOK_URL
-    // ausente em dev: repassa o payload original sem alteração — é
-    // exatamente o que a Evolution API fazia antes deste roteador existir.
+    // tecnologia='bot', tenant não encontrado/inativo, evento sem mensagem,
+    // ou N8N_WEBHOOK_URL ausente em dev: repassa o payload original sem
+    // alteração — exatamente o que já acontecia antes deste roteador
+    // existir (Meta → n8n direto, mesma URL configurada no App Dashboard).
     const n8nUrl = process.env.N8N_WEBHOOK_URL;
     if (!n8nUrl) return reply.code(200).send({ ok: true });
     try {
@@ -4364,6 +4436,99 @@ async function start() {
     }
 
     return { meta, verificadoEm: new Date().toISOString() };
+  });
+
+  // Dashboard de consumo da IA (US68) — volume de mensagens/conversas por
+  // tenant/dia e custo real em R$, calculado a partir dos tokens capturados
+  // em cada turno do assistente (só linhas role='assistant' têm
+  // tokens_entrada/tokens_saida — são as únicas que chamam a Anthropic API).
+  // Mensagens salvas antes da migration 053 ficam com tokens null: entram no
+  // volume mas não somam custo.
+  const IA_PRECO_USD_ENTRADA_POR_MILHAO = 1.0; // Claude Haiku 4.5
+  const IA_PRECO_USD_SAIDA_POR_MILHAO = 5.0;
+  // Cotação fixa aproximada (não é uma cotação ao vivo) — ajustar aqui de
+  // tempos em tempos se o real variar muito contra o dólar.
+  const IA_USD_PARA_BRL = 5.3;
+
+  function calcularCustoReaisIA(tokensEntrada, tokensSaida) {
+    const usd = (tokensEntrada / 1e6) * IA_PRECO_USD_ENTRADA_POR_MILHAO
+      + (tokensSaida / 1e6) * IA_PRECO_USD_SAIDA_POR_MILHAO;
+    return Number((usd * IA_USD_PARA_BRL).toFixed(2));
+  }
+
+  fastify.get('/admin/api/ia-uso', { preHandler: [fastify.authenticateAdmin] }, async (request) => {
+    const dias = Math.min(Math.max(parseInt(request.query.dias, 10) || 30, 1), 90);
+
+    const { rows: porDia } = await pool.query(
+      `SELECT (criado_em AT TIME ZONE 'America/Sao_Paulo')::date AS dia,
+              count(*) FILTER (WHERE role = 'assistant') AS mensagens,
+              coalesce(sum(tokens_entrada), 0) AS tokens_entrada,
+              coalesce(sum(tokens_saida), 0) AS tokens_saida
+         FROM conversas_ia
+        WHERE criado_em >= now() - ($1 || ' days')::interval
+        GROUP BY 1
+        ORDER BY 1`,
+      [dias]
+    );
+
+    const { rows: porTenant } = await pool.query(
+      `SELECT t.id AS tenant_id, t.nome AS tenant_nome,
+              count(*) FILTER (WHERE c.role = 'assistant') AS mensagens,
+              count(DISTINCT c.cliente_id) AS conversas,
+              coalesce(sum(c.tokens_entrada), 0) AS tokens_entrada,
+              coalesce(sum(c.tokens_saida), 0) AS tokens_saida,
+              count(*) FILTER (WHERE c.role = 'assistant' AND c.intent = 'fallback_humano') AS fallback_humano
+         FROM conversas_ia c
+         JOIN tenants t ON t.id = c.tenant_id
+        WHERE c.criado_em >= now() - ($1 || ' days')::interval
+        GROUP BY t.id, t.nome
+        ORDER BY mensagens DESC`,
+      [dias]
+    );
+
+    const { rows: porIntent } = await pool.query(
+      `SELECT coalesce(intent, 'unknown') AS intent, count(*) AS quantidade
+         FROM conversas_ia
+        WHERE role = 'assistant' AND criado_em >= now() - ($1 || ' days')::interval
+        GROUP BY 1
+        ORDER BY 2 DESC`,
+      [dias]
+    );
+
+    const totalMensagens = porDia.reduce((soma, r) => soma + Number(r.mensagens), 0);
+    const totalTokensEntrada = porDia.reduce((soma, r) => soma + Number(r.tokens_entrada), 0);
+    const totalTokensSaida = porDia.reduce((soma, r) => soma + Number(r.tokens_saida), 0);
+    const totalFallback = porTenant.reduce((soma, r) => soma + Number(r.fallback_humano), 0);
+
+    return {
+      periodo: { dias },
+      resumo: {
+        totalMensagens,
+        tenantsAtivos: porTenant.length,
+        tokensEntrada: totalTokensEntrada,
+        tokensSaida: totalTokensSaida,
+        custoReaisTotal: calcularCustoReaisIA(totalTokensEntrada, totalTokensSaida),
+        taxaFallbackHumano: totalMensagens ? Number(((totalFallback / totalMensagens) * 100).toFixed(1)) : 0,
+      },
+      porDia: porDia.map((r) => ({
+        dia: r.dia.toISOString().slice(0, 10),
+        mensagens: Number(r.mensagens),
+        custoReais: calcularCustoReaisIA(Number(r.tokens_entrada), Number(r.tokens_saida)),
+      })),
+      porTenant: porTenant.map((r) => ({
+        tenantId: r.tenant_id,
+        tenantNome: r.tenant_nome,
+        mensagens: Number(r.mensagens),
+        conversas: Number(r.conversas),
+        tokensEntrada: Number(r.tokens_entrada),
+        tokensSaida: Number(r.tokens_saida),
+        custoReais: calcularCustoReaisIA(Number(r.tokens_entrada), Number(r.tokens_saida)),
+        taxaFallbackHumano: Number(r.mensagens) > 0
+          ? Number(((Number(r.fallback_humano) / Number(r.mensagens)) * 100).toFixed(1))
+          : 0,
+      })),
+      porIntent: porIntent.map((r) => ({ intent: r.intent, quantidade: Number(r.quantidade) })),
+    };
   });
 
   // ---------- Números prontos (US39.2 — plano "Novo número") ----------

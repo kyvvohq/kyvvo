@@ -35,7 +35,11 @@ async function chamarClaude({ system, mensagens, maxTokens = 1024 }) {
     throw new Error(mensagem);
   }
   const bloco = (dados.content || []).find((b) => b.type === 'text');
-  return bloco ? bloco.text : '';
+  return {
+    texto: bloco ? bloco.text : '',
+    tokensEntrada: (dados.usage && dados.usage.input_tokens) || null,
+    tokensSaida: (dados.usage && dados.usage.output_tokens) || null,
+  };
 }
 
 module.exports = { chamarClaude, MODELO };
