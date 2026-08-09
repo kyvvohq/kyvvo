@@ -77,6 +77,6 @@ test.describe('Cadastro — proteção contra envio duplicado (US80.4)', () => {
     await expect(page.locator('#email')).toHaveValue('ana@salao.com');
     await expect(page.locator('#whatsapp')).toHaveValue('(34) 99999-9999');
     await expect(page.locator('#btn-criar')).toBeEnabled();
-    await expect(page.locator('#btn-criar')).toHaveText('Começar grátis');
+    await expect(page.locator('#btn-criar')).toHaveText('Criar minha conta');
   });
 });

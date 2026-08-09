@@ -2021,6 +2021,17 @@ textarea:focus { outline: none; border-color: var(--accent); }
   color: #4ade80;
 }
 
+/* Indicador de força da senha (US80.2), calculado em tempo real. */
+.forca-senha {
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.forca-senha--fraca { color: #f87171; }
+.forca-senha--media { color: #facc15; }
+.forca-senha--forte { color: #4ade80; }
+
 /* Erro inline por campo (CA02). O input inválido ganha borda vermelha. */
 .field-error {
   color: #ff6b6b;
