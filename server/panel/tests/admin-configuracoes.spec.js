@@ -200,10 +200,10 @@ test.describe('Admin — Configurações do sistema (US38)', () => {
 // (somente leitura) e destaque/badge (editáveis).
 function planosGrade2x2() {
   return [
-    { chave: 'starter', slug: 'starter', nome: 'Starter', descricao: 'Bot de agendamento + número próprio', tecnologia: 'bot', tipo_numero: 'proprio', preco_mensal: 79.9, limite_disparos: 100, destaque: false, badge: null, ativo: true, atualizado_em: '2026-08-01T10:00:00Z' },
-    { chave: 'business', slug: 'business', nome: 'Business', descricao: 'Bot de agendamento + número Kyvvo pronto', tecnologia: 'bot', tipo_numero: 'kyvvo', preco_mensal: 119.9, limite_disparos: 100, destaque: false, badge: null, ativo: true, atualizado_em: '2026-08-01T10:00:00Z' },
-    { chave: 'professional', slug: 'professional', nome: 'Professional', descricao: 'IA conversacional + número próprio', tecnologia: 'ia', tipo_numero: 'proprio', preco_mensal: 149.9, limite_disparos: 500, destaque: false, badge: null, ativo: true, atualizado_em: '2026-08-01T10:00:00Z' },
-    { chave: 'enterprise', slug: 'enterprise', nome: 'Enterprise', descricao: 'IA conversacional + número Kyvvo pronto', tecnologia: 'ia', tipo_numero: 'kyvvo', preco_mensal: 179.9, limite_disparos: 500, destaque: true, badge: 'Mais popular', ativo: true, atualizado_em: '2026-08-01T10:00:00Z' },
+    { chave: 'starter', slug: 'starter', nome: 'Starter', descricao: 'Bot de agendamento + número próprio', tecnologia: 'bot', tipo_numero: 'proprio', preco_mensal: 79.9, limite_disparos: 100, destaque: false, badge: null, herda_de: null, features: [{ id: 'f1', label: 'Fluxo guiado', ordem: 1 }], limites: { conversas_mes: 100, profissionais: 3, unidades: 1 }, ativo: true, atualizado_em: '2026-08-01T10:00:00Z' },
+    { chave: 'business', slug: 'business', nome: 'Business', descricao: 'Bot de agendamento + número Kyvvo pronto', tecnologia: 'bot', tipo_numero: 'kyvvo', preco_mensal: 119.9, limite_disparos: 100, destaque: false, badge: null, herda_de: 'starter', features: [], limites: { conversas_mes: 100, profissionais: 3, unidades: 1 }, ativo: true, atualizado_em: '2026-08-01T10:00:00Z' },
+    { chave: 'professional', slug: 'professional', nome: 'Professional', descricao: 'IA conversacional + número próprio', tecnologia: 'ia', tipo_numero: 'proprio', preco_mensal: 149.9, limite_disparos: 500, destaque: false, badge: null, herda_de: 'starter', features: [{ id: 'f2', label: 'Bot entende linguagem natural', ordem: 1 }], limites: { conversas_mes: 500, profissionais: 5, unidades: 1 }, ativo: true, atualizado_em: '2026-08-01T10:00:00Z' },
+    { chave: 'enterprise', slug: 'enterprise', nome: 'Enterprise', descricao: 'IA conversacional + número Kyvvo pronto', tecnologia: 'ia', tipo_numero: 'kyvvo', preco_mensal: 179.9, limite_disparos: 500, destaque: true, badge: 'Mais popular', herda_de: 'professional', features: [], limites: { conversas_mes: null, profissionais: 5, unidades: 1 }, ativo: true, atualizado_em: '2026-08-01T10:00:00Z' },
   ];
 }
 
@@ -260,5 +260,80 @@ test.describe('Admin — Configurações — grade 2x2 de planos (US67/CA04)', (
 
     await expect(page.locator('.toast-sucesso')).toHaveText(/Destaque ativado/);
     expect(corpoEnviado).toMatchObject({ destaque: true });
+  });
+});
+
+// US74/CA05 — diferenciais (3 campos fixos) e limites de uso editáveis no
+// admin.
+test.describe('Admin — Configurações — diferenciais e limites dos planos (US74/CA05)', () => {
+  test('exibe as features e os limites de cada plano (somente leitura)', async ({ page }) => {
+    await entrarEmConfiguracoes(page, configuracoesMock({ planos: planosGrade2x2() }));
+
+    const linhaSmart = page.locator('tr[data-plano="professional"]');
+    await expect(linhaSmart).toContainText('Bot entende linguagem natural');
+    await expect(linhaSmart).toContainText('Conversas/mês: 500');
+
+    const linhaSmartPlus = page.locator('tr[data-plano="enterprise"]');
+    await expect(linhaSmartPlus).toContainText('Conversas/mês: Ilimitado');
+  });
+
+  test('adiciona uma feature e persiste', async ({ page }) => {
+    await entrarEmConfiguracoes(page, configuracoesMock({ planos: planosGrade2x2() }));
+
+    let corpoEnviado = null;
+    await page.route('**/admin/api/configuracoes/planos/business', (route) => {
+      corpoEnviado = route.request().postDataJSON();
+      return route.fulfill({ json: { ...planosGrade2x2()[1] } });
+    });
+
+    await page.click('tr[data-plano="business"] [data-acao="editar-plano"]');
+    await page.fill('[data-testid="input-feature-1-business"]', 'Número virtual gerenciado pelo Kyvvo');
+    await page.click('[data-testid="salvar-business"]');
+
+    await expect(page.locator('.toast-sucesso')).toHaveText(/Preço atualizado/);
+    expect(corpoEnviado.features).toEqual(['Número virtual gerenciado pelo Kyvvo']);
+  });
+
+  test('só 3 campos de feature existem — impossível adicionar uma 4ª', async ({ page }) => {
+    await entrarEmConfiguracoes(page, configuracoesMock({ planos: planosGrade2x2() }));
+
+    await page.click('tr[data-plano="professional"] [data-acao="editar-plano"]');
+    await expect(page.locator('[data-testid="input-feature-1-professional"]')).toBeVisible();
+    await expect(page.locator('[data-testid="input-feature-2-professional"]')).toBeVisible();
+    await expect(page.locator('[data-testid="input-feature-3-professional"]')).toBeVisible();
+    await expect(page.locator('[data-testid="input-feature-4-professional"]')).toHaveCount(0);
+  });
+
+  test('salva limite em branco como ilimitado (null)', async ({ page }) => {
+    await entrarEmConfiguracoes(page, configuracoesMock({ planos: planosGrade2x2() }));
+
+    let corpoEnviado = null;
+    await page.route('**/admin/api/configuracoes/planos/enterprise', (route) => {
+      corpoEnviado = route.request().postDataJSON();
+      return route.fulfill({ json: { ...planosGrade2x2()[3] } });
+    });
+
+    await page.click('tr[data-plano="enterprise"] [data-acao="editar-plano"]');
+    await page.fill('[data-testid="input-limite-conversas_mes-enterprise"]', '');
+    await page.click('[data-testid="salvar-enterprise"]');
+
+    await expect(page.locator('.toast-sucesso')).toHaveText(/Preço atualizado/);
+    expect(corpoEnviado.limites.conversas_mes).toBeNull();
+  });
+
+  test('edita o valor numérico de um limite', async ({ page }) => {
+    await entrarEmConfiguracoes(page, configuracoesMock({ planos: planosGrade2x2() }));
+
+    let corpoEnviado = null;
+    await page.route('**/admin/api/configuracoes/planos/professional', (route) => {
+      corpoEnviado = route.request().postDataJSON();
+      return route.fulfill({ json: { ...planosGrade2x2()[2] } });
+    });
+
+    await page.click('tr[data-plano="professional"] [data-acao="editar-plano"]');
+    await page.fill('[data-testid="input-limite-profissionais-professional"]', '8');
+    await page.click('[data-testid="salvar-professional"]');
+
+    expect(corpoEnviado.limites.profissionais).toBe(8);
   });
 });

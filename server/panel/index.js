@@ -683,15 +683,44 @@ async function start() {
   // (CA06, pra pré-selecionar o plano vindo de ?plano=). Só planos ativos —
   // os desativados pela migration 045 (chaves legadas) não aparecem aqui,
   // mas continuam resolvendo preço no checkout de quem já os tem.
+  // US74/CA02 — monta features (ordenadas) e limites por plano a partir de
+  // linhas soltas (plano_features/plano_limites) — mais simples que fazer o
+  // agrupamento em SQL (json_agg) e mantém a mesma forma de query usada no
+  // resto do arquivo.
+  async function anexarFeaturesELimites(planosRows) {
+    const chaves = planosRows.map((p) => p.chave);
+    if (!chaves.length) return planosRows.map(({ chave, ...resto }) => resto);
+
+    const [{ rows: featuresRows }, { rows: limitesRows }] = await Promise.all([
+      pool.query(
+        `SELECT plano_chave, label, ordem FROM plano_features WHERE plano_chave = ANY($1) ORDER BY ordem ASC`,
+        [chaves]
+      ),
+      pool.query(`SELECT plano_chave, chave, valor FROM plano_limites WHERE plano_chave = ANY($1)`, [chaves]),
+    ]);
+
+    return planosRows.map((p) => {
+      const { chave, herda_de, herda_de_nome, ...resto } = p;
+      return {
+        ...resto,
+        preco_mensal: Number(p.preco_mensal),
+        herda_de_nome: herda_de_nome || null,
+        features: featuresRows.filter((f) => f.plano_chave === chave).map((f) => ({ label: f.label, ordem: f.ordem })),
+        limites: Object.fromEntries(limitesRows.filter((l) => l.plano_chave === chave).map((l) => [l.chave, l.valor])),
+      };
+    });
+  }
+
   fastify.get('/api/planos', async () => {
     const { rows } = await pool.query(
-      `SELECT slug, nome, descricao, tecnologia, tipo_numero, preco_mensal,
-              limite_disparos, destaque, badge
-         FROM planos
-        WHERE ativo = true
-        ORDER BY preco_mensal ASC`
+      `SELECT p.chave, p.slug, p.nome, p.descricao, p.tecnologia, p.tipo_numero, p.preco_mensal,
+              p.limite_disparos, p.destaque, p.badge, p.herda_de, base.nome AS herda_de_nome
+         FROM planos p
+         LEFT JOIN planos base ON base.chave = p.herda_de
+        WHERE p.ativo = true
+        ORDER BY p.preco_mensal ASC`
     );
-    return rows.map((p) => ({ ...p, preco_mensal: Number(p.preco_mensal) }));
+    return anexarFeaturesELimites(rows);
   });
 
 
@@ -3448,12 +3477,24 @@ async function start() {
   fastify.get('/admin/api/configuracoes', { preHandler: [fastify.authenticateAdmin] }, async () => {
     const { rows: planosRows } = await pool.query(
       `SELECT chave, slug, nome, descricao, tecnologia, tipo_numero, preco_mensal,
-              limite_disparos, destaque, badge, ativo, atualizado_em
+              limite_disparos, destaque, badge, herda_de, ativo, atualizado_em
        FROM planos ORDER BY preco_mensal ASC`
     );
+    // US74/CA05 — features/limites por plano, pro admin editar (mesma forma
+    // de junção em JS usada em GET /api/planos).
+    const chaves = planosRows.map((p) => p.chave);
+    const [{ rows: featuresRows }, { rows: limitesRows }] = await Promise.all([
+      pool.query(`SELECT plano_chave, id, label, ordem FROM plano_features WHERE plano_chave = ANY($1) ORDER BY ordem ASC`, [chaves]),
+      pool.query(`SELECT plano_chave, chave, valor FROM plano_limites WHERE plano_chave = ANY($1)`, [chaves]),
+    ]);
     // pg devolve NUMERIC como string (evita perda de precisão) — converte pra
     // number aqui, já que o front trata preço como valor numérico.
-    const planos = planosRows.map((p) => ({ ...p, preco_mensal: Number(p.preco_mensal) }));
+    const planos = planosRows.map((p) => ({
+      ...p,
+      preco_mensal: Number(p.preco_mensal),
+      features: featuresRows.filter((f) => f.plano_chave === p.chave).map((f) => ({ id: f.id, label: f.label, ordem: f.ordem })),
+      limites: Object.fromEntries(limitesRows.filter((l) => l.plano_chave === p.chave).map((l) => [l.chave, l.valor])),
+    }));
     const { rows: sistemaRows } = await pool.query('SELECT chave, valor FROM configuracoes_sistema');
     const sistema = Object.fromEntries(sistemaRows.map((r) => [r.chave, r.valor]));
     const { rows: log } = await pool.query(
@@ -3471,6 +3512,8 @@ async function start() {
   // identificadores estruturais e não são aceitos aqui (somente leitura).
   // Preço mínimo de R$1 (CA03), e cada campo alterado grava uma linha própria
   // no log de auditoria (CA05/CA07) na mesma transação da atualização.
+  const PLANO_LIMITES_CHAVES_VALIDAS = ['conversas_mes', 'profissionais', 'unidades'];
+
   fastify.patch('/admin/api/configuracoes/planos/:chave', { preHandler: [fastify.authenticateAdmin] }, async (request, reply) => {
     const { chave } = request.params;
     const {
@@ -3479,11 +3522,27 @@ async function start() {
       limite_disparos: limiteDisparos,
       destaque,
       badge,
+      features,
+      limites,
       ativo,
     } = request.body || {};
 
     if (precoMensal !== undefined && !(Number(precoMensal) >= 1)) {
       return reply.code(400).send({ error: 'Preço mensal deve ser no mínimo R$ 1,00.' });
+    }
+    // US74/CA01/CA05 — até 3 diferenciais por plano; o resto da UI (3 campos
+    // fixos) já impede mandar mais, isso é a garantia server-side.
+    if (features !== undefined && (!Array.isArray(features) || features.length > 3)) {
+      return reply.code(400).send({ error: 'Máximo de 3 diferenciais por plano.' });
+    }
+    if (limites !== undefined) {
+      if (typeof limites !== 'object' || limites === null || Array.isArray(limites)) {
+        return reply.code(400).send({ error: 'Campo "limites" deve ser um objeto.' });
+      }
+      const chaveInvalida = Object.keys(limites).find((k) => !PLANO_LIMITES_CHAVES_VALIDAS.includes(k));
+      if (chaveInvalida) {
+        return reply.code(400).send({ error: `Chave de limite inválida: "${chaveInvalida}". Use: ${PLANO_LIMITES_CHAVES_VALIDAS.join(', ')}.` });
+      }
     }
 
     const client = await pool.connect();
@@ -3512,6 +3571,33 @@ async function start() {
         [chave, descricao, precoMensal, limiteDisparos, destaque, badge, ativo, request.admin.adminId]
       );
       const novo = atualizadoRows[0];
+
+      // US74/CA05 — substituição total das features/limites do plano (o
+      // admin sempre manda o conjunto completo, mesma lógica de "salvar
+      // tudo de uma vez" já usada pelos outros campos desta rota).
+      if (features !== undefined) {
+        await client.query('DELETE FROM plano_features WHERE plano_chave = $1', [chave]);
+        for (let i = 0; i < features.length; i++) {
+          const label = String(features[i] || '').trim();
+          if (!label) continue;
+          await client.query(
+            'INSERT INTO plano_features (plano_chave, label, ordem) VALUES ($1, $2, $3)',
+            [chave, label, i + 1]
+          );
+        }
+      }
+      if (limites !== undefined) {
+        for (const chaveLimite of PLANO_LIMITES_CHAVES_VALIDAS) {
+          if (!(chaveLimite in limites)) continue;
+          const valor = limites[chaveLimite];
+          await client.query(
+            `INSERT INTO plano_limites (plano_chave, chave, valor)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (plano_chave, chave) DO UPDATE SET valor = $3`,
+            [chave, chaveLimite, valor == null ? null : Number(valor)]
+          );
+        }
+      }
 
       const camposComparados = [
         ['descricao', anterior.descricao, novo.descricao],
