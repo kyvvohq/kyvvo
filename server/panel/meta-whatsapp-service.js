@@ -96,9 +96,25 @@ async function enviarMensagemTeste(phoneNumberId, numeroDestino) {
   });
 }
 
+// US68 — envia texto livre em resposta a uma mensagem recebida do cliente
+// (motor de IA). Texto livre só é permitido dentro da janela de 24h de uma
+// conversa iniciada pelo cliente (diferente de enviarMensagemTeste acima,
+// que é proativo e por isso precisa de template aprovado) — como isto é
+// sempre uma resposta a uma mensagem que acabou de chegar, está sempre
+// dentro da janela.
+async function enviarTexto(phoneNumberId, numeroDestino, texto) {
+  const token = process.env.META_WHATSAPP_TOKEN;
+  if (!token) throw new Error('META_WHATSAPP_TOKEN não configurado no servidor.');
+  return chamar('POST', `/${phoneNumberId}/messages`, {
+    token,
+    body: { messaging_product: 'whatsapp', to: numeroDestino, type: 'text', text: { body: texto } },
+  });
+}
+
 module.exports = {
   trocarCodePorToken,
   assinarWebhooks,
   registrarNumero,
   enviarMensagemTeste,
+  enviarTexto,
 };
