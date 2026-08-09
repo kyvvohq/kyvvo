@@ -79,6 +79,12 @@ const MODULOS_TRIAL = ['agenda_inteligente', 'financeiro', 'dashboards'];
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // Senha: mínimo 8 caracteres, ao menos 1 número e 1 letra maiúscula (CA02).
 const SENHA_REGEX = /^(?=.*[A-Z])(?=.*\d).{8,}$/;
+// US79 — versão vigente dos documentos legais aceitos no cadastro, gravada
+// junto com o consentimento (CA03). É a data de "Última atualização" exibida
+// em /termos.html e /privacidade.html — atualizar aqui junto com o texto
+// publicado sempre que o jurídico revisar algum dos dois documentos.
+const TERMOS_VERSAO = '2026-07-22';
+const PRIVACIDADE_VERSAO = '2026-07-22';
 // Nichos atendidos pelo Kyvvo (US34) — lista curta e fixa, mesmo enum do
 // CHECK da coluna tenants.segmento (migration 018). Reaproveitada no cadastro
 // self-service e no CRUD de tenants do admin; migrar pra tabela dinâmica
@@ -688,15 +694,68 @@ async function start() {
   // (CA06, pra pré-selecionar o plano vindo de ?plano=). Só planos ativos —
   // os desativados pela migration 045 (chaves legadas) não aparecem aqui,
   // mas continuam resolvendo preço no checkout de quem já os tem.
+  // US74/CA02 — monta features (ordenadas) e limites por plano a partir de
+  // linhas soltas (plano_features/plano_limites) — mais simples que fazer o
+  // agrupamento em SQL (json_agg) e mantém a mesma forma de query usada no
+  // resto do arquivo.
+  async function anexarFeaturesELimites(planosRows) {
+    const chaves = planosRows.map((p) => p.chave);
+    if (!chaves.length) return planosRows.map(({ chave, ...resto }) => resto);
+
+    const [{ rows: featuresRows }, { rows: limitesRows }] = await Promise.all([
+      pool.query(
+        `SELECT plano_chave, label, ordem FROM plano_features WHERE plano_chave = ANY($1) ORDER BY ordem ASC`,
+        [chaves]
+      ),
+      pool.query(`SELECT plano_chave, chave, valor FROM plano_limites WHERE plano_chave = ANY($1)`, [chaves]),
+    ]);
+
+    return planosRows.map((p) => {
+      const { chave, herda_de, herda_de_nome, ...resto } = p;
+      return {
+        ...resto,
+        preco_mensal: Number(p.preco_mensal),
+        herda_de_nome: herda_de_nome || null,
+        features: featuresRows.filter((f) => f.plano_chave === chave).map((f) => ({ label: f.label, ordem: f.ordem })),
+        limites: Object.fromEntries(limitesRows.filter((l) => l.plano_chave === chave).map((l) => [l.chave, l.valor])),
+      };
+    });
+  }
+
   fastify.get('/api/planos', async () => {
+    const { rows } = await pool.query(
+      `SELECT p.chave, p.slug, p.nome, p.descricao, p.tecnologia, p.tipo_numero, p.preco_mensal,
+              p.limite_disparos, p.destaque, p.badge, p.headline_diferencial, p.frase_beneficio,
+              p.herda_de, base.nome AS herda_de_nome
+         FROM planos p
+         LEFT JOIN planos base ON base.chave = p.herda_de
+        WHERE p.ativo = true
+        ORDER BY p.preco_mensal ASC`
+    );
+    return anexarFeaturesELimites(rows);
+  });
+
+  // US72/CA02 — resolve um slug pra um plano único, aceitando tanto o slug
+  // atual quanto a `chave` (identificador interno, imutável — era o slug
+  // antes da US72 renomear pra eixo de valor). Isso mantém links antigos
+  // (?plano=starter) funcionando sem precisar de uma tabela extra de
+  // aliases: `chave` nunca muda, então basta aceitar os dois. Não filtra
+  // por `ativo` — é uma consulta pontual (não a lista pra grade de preços),
+  // então resolve mesmo plano legado desativado (ex: pra não devolver 404 de
+  // um link publicado antes da desativação em 045_planos_2x2.sql).
+  fastify.get('/api/planos/:slug', async (request, reply) => {
+    const { slug } = request.params;
     const { rows } = await pool.query(
       `SELECT slug, nome, descricao, tecnologia, tipo_numero, preco_mensal,
               limite_disparos, destaque, badge
          FROM planos
-        WHERE ativo = true
-        ORDER BY preco_mensal ASC`
+        WHERE slug = $1 OR chave = $1`,
+      [slug]
     );
-    return rows.map((p) => ({ ...p, preco_mensal: Number(p.preco_mensal) }));
+    if (!rows[0]) {
+      return reply.code(404).send({ error: 'Plano não encontrado' });
+    }
+    return { ...rows[0], preco_mensal: Number(rows[0].preco_mensal) };
   });
 
 
@@ -708,6 +767,9 @@ async function start() {
       segmento_id: segmentoIdBruto,
       telefone: telefoneBruto,
       whatsapp: whatsappBruto,
+      aceite_termos: aceiteTermosBruto,
+      aceita_marketing: aceitaMarketingBruto,
+      plano_slug: planoSlugBruto,
     } = request.body || {};
 
     const nomeLimpo = (nomeResponsavel || '').trim();
@@ -724,9 +786,16 @@ async function start() {
         error: 'A senha deve ter no mínimo 8 caracteres, 1 número e 1 letra maiúscula.',
       });
     }
-    const segmentoId = parseInt(segmentoIdBruto, 10);
-    if (!Number.isInteger(segmentoId)) {
-      return reply.code(400).send({ error: 'Selecione seu segmento.' });
+    // US77/CA04 — segmento sai do formulário de cadastro (migra pro
+    // onboarding, US82) e passa a ser opcional aqui; sem ele, a conta nasce
+    // com onboarding_pendente=true. Continua aceito quando enviado, pra não
+    // quebrar nenhum outro chamador que ainda mande o campo.
+    let segmentoId = null;
+    if (segmentoIdBruto !== undefined && segmentoIdBruto !== null && segmentoIdBruto !== '') {
+      segmentoId = parseInt(segmentoIdBruto, 10);
+      if (!Number.isInteger(segmentoId)) {
+        return reply.code(400).send({ error: 'Selecione um segmento válido.' });
+      }
     }
     // Telefone usa a mesma validação/formato do WhatsApp (DDD + número), mas
     // sem checagem de unicidade — diferente do WhatsApp, pode repetir entre
@@ -739,6 +808,19 @@ async function start() {
     if (!whatsapp) {
       return reply.code(400).send({ error: 'Digite um número de WhatsApp válido com DDD.' });
     }
+    // US79/CA01/CA03 — aceite dos Termos de Uso e da Política de Privacidade
+    // é condição pra usar o serviço (não é opcional como o consentimento de
+    // marketing) e fica registrado numa trilha de auditoria própria e
+    // imutável (CA03). Validado no servidor como rede de segurança — o
+    // formulário já bloqueia o envio sem o aceite marcado.
+    const aceiteTermos = aceiteTermosBruto === true;
+    if (!aceiteTermos) {
+      return reply.code(422).send({
+        error: 'Você precisa aceitar os Termos de Uso e a Política de Privacidade para criar a conta.',
+        erros: { aceite_termos: 'Aceite obrigatório.' },
+      });
+    }
+    const aceitaMarketing = aceitaMarketingBruto === true;
 
     // Verificação de unicidade antes de criar qualquer registro (CA03).
     const { rows: emailRows } = await pool.query('SELECT 1 FROM usuarios WHERE email = $1', [emailLimpo]);
@@ -749,14 +831,41 @@ async function start() {
     if (whatsappRows.length > 0) {
       return reply.code(409).send({ error: 'Este número de WhatsApp já está associado a uma conta.' });
     }
-    const { rows: segmentoRows } = await pool.query(
-      'SELECT slug FROM segmentos WHERE id = $1 AND ativo = true',
-      [segmentoId]
-    );
-    if (!segmentoRows[0]) {
-      return reply.code(400).send({ error: 'Selecione um segmento válido.' });
+    let segmentoSlug = null;
+    if (segmentoId !== null) {
+      const { rows: segmentoRows } = await pool.query(
+        'SELECT slug FROM segmentos WHERE id = $1 AND ativo = true',
+        [segmentoId]
+      );
+      if (!segmentoRows[0]) {
+        return reply.code(400).send({ error: 'Selecione um segmento válido.' });
+      }
+      segmentoSlug = segmentoRows[0].slug;
     }
-    const segmentoSlug = segmentoRows[0].slug;
+    // US77/CA04 — sem segmento no cadastro, a conta fica pendente de
+    // onboarding (US82 recolhe segmento + nome do negócio depois do login).
+    const onboardingPendente = segmentoId === null;
+
+    // US78/CA04 — plano escolhido na landing (?plano=) ou trocado na própria
+    // tela de cadastro, pra não perder a referência de preço entre o card e
+    // a cobrança. Opcional: sem ele, o tenant nasce sem plano (`'trial'`,
+    // igual antes do US78) e escolhe depois no checkout (US32). Aceita tanto
+    // o slug atual quanto uma chave legada (mesma resolução do US72), já que
+    // o link pode vir de uma página cacheada com o slug antigo.
+    let planoChave = null;
+    let planoSlugResolvido = null;
+    const planoSlugLimpo = typeof planoSlugBruto === 'string' ? planoSlugBruto.trim() : '';
+    if (planoSlugLimpo) {
+      const { rows: planoRows } = await pool.query(
+        'SELECT chave, slug FROM planos WHERE slug = $1 OR chave = $1',
+        [planoSlugLimpo]
+      );
+      if (!planoRows[0]) {
+        return reply.code(422).send({ error: 'Plano selecionado inválido.' });
+      }
+      planoChave = planoRows[0].chave;
+      planoSlugResolvido = planoRows[0].slug;
+    }
 
     const client = await pool.connect();
     try {
@@ -769,10 +878,10 @@ async function start() {
       // tenant pode ajustá-lo depois em Minha Empresa (US33).
       const trialExpira = new Date(Date.now() + TRIAL_DIAS * 24 * 60 * 60 * 1000);
       const { rows: tenantRows } = await client.query(
-        `INSERT INTO tenants (nome, telefone, whatsapp, segmento, segmento_id, plano, status, trial_expires_at)
-         VALUES ($1, $2, $3, $4, $5, 'trial', 'trial', $6)
+        `INSERT INTO tenants (nome, telefone, whatsapp, segmento, segmento_id, plano, status, trial_expires_at, onboarding_pendente)
+         VALUES ($1, $2, $3, $4, $5, $6, 'trial', $7, $8)
          RETURNING id`,
-        [nomeLimpo, telefone, whatsapp, segmentoSlug, segmentoId, trialExpira.toISOString()]
+        [nomeLimpo, telefone, whatsapp, segmentoSlug, segmentoId, planoChave || 'trial', trialExpira.toISOString(), onboardingPendente]
       );
       const tenantId = tenantRows[0].id;
 
@@ -792,6 +901,15 @@ async function start() {
         [tenantId, emailLimpo, hash, nomeLimpo]
       );
       const usuarioId = usuarioRows[0].id;
+
+      // US79/CA03 — trilha de auditoria do consentimento: versão dos
+      // documentos aceitos, IP de origem e o consentimento (opcional) de
+      // marketing, na mesma transação da criação da conta.
+      await client.query(
+        `INSERT INTO consentimentos_cadastro (tenant_id, termos_versao, privacidade_versao, aceita_marketing, ip)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [tenantId, TERMOS_VERSAO, PRIVACIDADE_VERSAO, aceitaMarketing, request.ip]
+      );
 
       // Gera e persiste o token dentro da mesma transação da criação do
       // usuário (US21/CA01/CA05). O envio por e-mail/WhatsApp (chamada de
@@ -819,6 +937,9 @@ async function start() {
         email: emailLimpo,
         email_verified: false,
         email_mascarado: tokenService.mascararEmail(emailLimpo),
+        plano_slug: planoSlugResolvido,
+        segmento: segmentoSlug,
+        onboarding_pendente: onboardingPendente,
       };
     } catch (erro) {
       await client.query('ROLLBACK');
@@ -2535,10 +2656,58 @@ async function start() {
     return { modulos: rows };
   });
 
-  // ---------- Financeiro (US18/US64) ----------
+  // ---------- Financeiro (US18/US64/US71) ----------
   // Livro-caixa manual (entrada/saída, US18) + lançamentos automáticos de
   // agendamento (US64, sincronizados por sincronizarLancamentoFinanceiro) —
   // só acessível a quem tem o módulo "financeiro" ativo.
+
+  const FINANCEIRO_PERIODOS_VALIDOS = ['mes', 'semana', 'dia'];
+
+  // US71 — cláusula de intervalo compartilhada entre o resumo por período
+  // (CA01) e o detalhamento de lançamentos (US71.2). 'semana' usa
+  // date_trunc('week', ...), que no Postgres começa na segunda-feira — mesmo
+  // critério do inicioDaSemana() do frontend (app.js), pra não haver
+  // divergência entre o que a semana mostra no resumo e no detalhamento.
+  function clausulaPeriodoFinanceiro(periodo) {
+    if (periodo === 'semana') {
+      return `l.data >= date_trunc('week', $2::date) AND l.data < date_trunc('week', $2::date) + interval '7 days'`;
+    }
+    if (periodo === 'dia') return `l.data = $2::date`;
+    return `to_char(l.data, 'YYYY-MM') = $2`;
+  }
+
+  function referenciaPadraoFinanceiro(periodo) {
+    return periodo === 'mes' ? mesAtualBrasilia() : dataAtualBrasilia();
+  }
+
+  // US71/CA01 — resumo (realizado/previsto/total) unificado por período,
+  // alimenta os cards das 3 abas da página /financeiro. Sempre só receita
+  // (tipo='entrada') — mesmo recorte do resumo-dashboard (US70). Cancelado
+  // nunca conta (não aparece em nenhum FILTER abaixo).
+  fastify.get(
+    '/api/financeiro/resumo',
+    { preHandler: [fastify.authenticate, fastify.requireModulo('financeiro'), fastify.requireAdmin] },
+    async (request, reply) => {
+      const { tenantId } = request.user;
+      const { periodo } = request.query;
+      if (!FINANCEIRO_PERIODOS_VALIDOS.includes(periodo)) {
+        return reply.code(422).send({ error: `periodo deve ser um de: ${FINANCEIRO_PERIODOS_VALIDOS.join(', ')}` });
+      }
+      const referencia = request.query.referencia || referenciaPadraoFinanceiro(periodo);
+
+      const { rows } = await pool.query(
+        `SELECT
+           COALESCE(SUM(l.valor) FILTER (WHERE l.status = 'realizado'), 0) AS realizado,
+           COALESCE(SUM(l.valor) FILTER (WHERE l.status = 'previsto'), 0) AS previsto
+         FROM lancamentos_financeiros l
+         WHERE l.tenant_id = $1 AND l.tipo = 'entrada' AND ${clausulaPeriodoFinanceiro(periodo)}`,
+        [tenantId, referencia]
+      );
+      const realizado = Number(rows[0].realizado);
+      const previsto = Number(rows[0].previsto);
+      return { periodo, referencia, realizado, previsto, total: realizado + previsto };
+    }
+  );
 
   // US70/CA01 — resumo financeiro pra tela inicial (4 cards): só receita
   // (tipo='entrada', mesmo recorte de `previsto`/`realizado` já usado no
@@ -2576,9 +2745,20 @@ async function start() {
     '/api/financeiro/lancamentos',
     // US62 — dinheiro é visão de administrador; operador não acessa.
     { preHandler: [fastify.authenticate, fastify.requireModulo('financeiro'), fastify.requireAdmin] },
-    async (request) => {
+    async (request, reply) => {
       const { tenantId } = request.user;
-      const mesRef = request.query.mes || mesAtualBrasilia();
+      const periodoQuery = request.query.periodo;
+
+      // US71.2 — ?periodo=semana|dia&referencia=... é o modo novo (detalhamento
+      // das abas Semana/Dia); sem `periodo`, mantém o comportamento legado
+      // (?mes=..., US18/US64) intacto, inclusive o default pro mês corrente.
+      if (periodoQuery && !FINANCEIRO_PERIODOS_VALIDOS.includes(periodoQuery)) {
+        return reply.code(422).send({ error: `periodo deve ser um de: ${FINANCEIRO_PERIODOS_VALIDOS.join(', ')}` });
+      }
+      const periodo = periodoQuery || 'mes';
+      const referencia = periodo === 'mes'
+        ? (request.query.mes || request.query.referencia || mesAtualBrasilia())
+        : (request.query.referencia || referenciaPadraoFinanceiro(periodo));
 
       // LEFT JOIN com agendamentos/clientes/servicos só resolve campos pra
       // exibição (CA "Cenário 8" — identificar cliente/serviço/data do
@@ -2591,9 +2771,9 @@ async function start() {
          LEFT JOIN agendamentos a ON a.id = l.agendamento_id
          LEFT JOIN clientes c ON c.id = a.cliente_id
          LEFT JOIN servicos s ON s.id = a.servico_id
-         WHERE l.tenant_id = $1 AND to_char(l.data, 'YYYY-MM') = $2
+         WHERE l.tenant_id = $1 AND ${clausulaPeriodoFinanceiro(periodo)}
          ORDER BY l.data DESC, l.criado_em DESC`,
-        [tenantId, mesRef]
+        [tenantId, referencia]
       );
       const lancamentos = rows.map((r) => ({ ...r, origem: r.agendamento_id ? 'agendamento' : 'manual' }));
 
@@ -2609,7 +2789,9 @@ async function start() {
       const realizado = ativos.filter((r) => r.tipo === 'entrada' && r.status === 'realizado').reduce((soma, r) => soma + Number(r.valor), 0);
 
       return {
-        mes: mesRef,
+        mes: periodo === 'mes' ? referencia : undefined,
+        periodo,
+        referencia,
         lancamentos,
         resumo: { entradas, saidas, saldo: entradas - saidas, previsto, realizado },
       };
@@ -3539,12 +3721,24 @@ async function start() {
   fastify.get('/admin/api/configuracoes', { preHandler: [fastify.authenticateAdmin] }, async () => {
     const { rows: planosRows } = await pool.query(
       `SELECT chave, slug, nome, descricao, tecnologia, tipo_numero, preco_mensal,
-              limite_disparos, destaque, badge, ativo, atualizado_em
+              limite_disparos, destaque, badge, headline_diferencial, frase_beneficio, herda_de, ativo, atualizado_em
        FROM planos ORDER BY preco_mensal ASC`
     );
+    // US74/CA05 — features/limites por plano, pro admin editar (mesma forma
+    // de junção em JS usada em GET /api/planos).
+    const chaves = planosRows.map((p) => p.chave);
+    const [{ rows: featuresRows }, { rows: limitesRows }] = await Promise.all([
+      pool.query(`SELECT plano_chave, id, label, ordem FROM plano_features WHERE plano_chave = ANY($1) ORDER BY ordem ASC`, [chaves]),
+      pool.query(`SELECT plano_chave, chave, valor FROM plano_limites WHERE plano_chave = ANY($1)`, [chaves]),
+    ]);
     // pg devolve NUMERIC como string (evita perda de precisão) — converte pra
     // number aqui, já que o front trata preço como valor numérico.
-    const planos = planosRows.map((p) => ({ ...p, preco_mensal: Number(p.preco_mensal) }));
+    const planos = planosRows.map((p) => ({
+      ...p,
+      preco_mensal: Number(p.preco_mensal),
+      features: featuresRows.filter((f) => f.plano_chave === p.chave).map((f) => ({ id: f.id, label: f.label, ordem: f.ordem })),
+      limites: Object.fromEntries(limitesRows.filter((l) => l.plano_chave === p.chave).map((l) => [l.chave, l.valor])),
+    }));
     const { rows: sistemaRows } = await pool.query('SELECT chave, valor FROM configuracoes_sistema');
     const sistema = Object.fromEntries(sistemaRows.map((r) => [r.chave, r.valor]));
     const { rows: log } = await pool.query(
@@ -3562,19 +3756,56 @@ async function start() {
   // identificadores estruturais e não são aceitos aqui (somente leitura).
   // Preço mínimo de R$1 (CA03), e cada campo alterado grava uma linha própria
   // no log de auditoria (CA05/CA07) na mesma transação da atualização.
+  const PLANO_LIMITES_CHAVES_VALIDAS = ['conversas_mes', 'profissionais', 'unidades'];
+
   fastify.patch('/admin/api/configuracoes/planos/:chave', { preHandler: [fastify.authenticateAdmin] }, async (request, reply) => {
     const { chave } = request.params;
     const {
+      nome,
       descricao,
       preco_mensal: precoMensal,
       limite_disparos: limiteDisparos,
       destaque,
       badge,
+      headline_diferencial: headlineDiferencial,
+      frase_beneficio: fraseBeneficio,
+      features,
+      limites,
       ativo,
     } = request.body || {};
 
     if (precoMensal !== undefined && !(Number(precoMensal) >= 1)) {
       return reply.code(400).send({ error: 'Preço mensal deve ser no mínimo R$ 1,00.' });
+    }
+    // US72/CA04 — nome é editável (o eixo de valor da US72 já fica no dado,
+    // mas o PO pode querer ajustar o texto sem deploy); `slug` continua
+    // estrutural e não é aceito aqui, então editar o nome nunca altera o
+    // slug automaticamente.
+    if (nome !== undefined && !nome.trim()) {
+      return reply.code(400).send({ error: 'Nome do plano não pode ficar em branco.' });
+    }
+    // US73/CA01/CA04 — mesmo limite de 120 caracteres da migration, validado
+    // aqui também (o CHECK do banco é a garantia final, isso só evita um
+    // round-trip de erro genérico de constraint).
+    if (headlineDiferencial !== undefined && headlineDiferencial !== null && headlineDiferencial.length > 120) {
+      return reply.code(400).send({ error: 'Headline de diferencial deve ter no máximo 120 caracteres.' });
+    }
+    if (fraseBeneficio !== undefined && fraseBeneficio !== null && fraseBeneficio.length > 120) {
+      return reply.code(400).send({ error: 'Frase de benefício deve ter no máximo 120 caracteres.' });
+    }
+    // US74/CA01/CA05 — até 3 diferenciais por plano; o resto da UI (3 campos
+    // fixos) já impede mandar mais, isso é a garantia server-side.
+    if (features !== undefined && (!Array.isArray(features) || features.length > 3)) {
+      return reply.code(400).send({ error: 'Máximo de 3 diferenciais por plano.' });
+    }
+    if (limites !== undefined) {
+      if (typeof limites !== 'object' || limites === null || Array.isArray(limites)) {
+        return reply.code(400).send({ error: 'Campo "limites" deve ser um objeto.' });
+      }
+      const chaveInvalida = Object.keys(limites).find((k) => !PLANO_LIMITES_CHAVES_VALIDAS.includes(k));
+      if (chaveInvalida) {
+        return reply.code(400).send({ error: `Chave de limite inválida: "${chaveInvalida}". Use: ${PLANO_LIMITES_CHAVES_VALIDAS.join(', ')}.` });
+      }
     }
 
     const client = await pool.connect();
@@ -3589,27 +3820,60 @@ async function start() {
 
       const { rows: atualizadoRows } = await client.query(
         `UPDATE planos SET
-           descricao = COALESCE($2, descricao),
-           preco_mensal = COALESCE($3, preco_mensal),
-           limite_disparos = COALESCE($4, limite_disparos),
-           destaque = COALESCE($5, destaque),
-           badge = COALESCE($6, badge),
-           ativo = COALESCE($7, ativo),
+           nome = COALESCE($2, nome),
+           descricao = COALESCE($3, descricao),
+           preco_mensal = COALESCE($4, preco_mensal),
+           limite_disparos = COALESCE($5, limite_disparos),
+           destaque = COALESCE($6, destaque),
+           badge = COALESCE($7, badge),
+           headline_diferencial = COALESCE($8, headline_diferencial),
+           frase_beneficio = COALESCE($9, frase_beneficio),
+           ativo = COALESCE($10, ativo),
            atualizado_em = now(),
-           atualizado_por = $8
+           atualizado_por = $11
          WHERE chave = $1
          RETURNING chave, slug, nome, descricao, tecnologia, tipo_numero, preco_mensal,
-                   limite_disparos, destaque, badge, ativo, atualizado_em`,
-        [chave, descricao, precoMensal, limiteDisparos, destaque, badge, ativo, request.admin.adminId]
+                   limite_disparos, destaque, badge, headline_diferencial, frase_beneficio, ativo, atualizado_em`,
+        [chave, nome ? nome.trim() : null, descricao, precoMensal, limiteDisparos, destaque, badge, headlineDiferencial, fraseBeneficio, ativo, request.admin.adminId]
       );
       const novo = atualizadoRows[0];
 
+      // US74/CA05 — substituição total das features/limites do plano (o
+      // admin sempre manda o conjunto completo, mesma lógica de "salvar
+      // tudo de uma vez" já usada pelos outros campos desta rota).
+      if (features !== undefined) {
+        await client.query('DELETE FROM plano_features WHERE plano_chave = $1', [chave]);
+        for (let i = 0; i < features.length; i++) {
+          const label = String(features[i] || '').trim();
+          if (!label) continue;
+          await client.query(
+            'INSERT INTO plano_features (plano_chave, label, ordem) VALUES ($1, $2, $3)',
+            [chave, label, i + 1]
+          );
+        }
+      }
+      if (limites !== undefined) {
+        for (const chaveLimite of PLANO_LIMITES_CHAVES_VALIDAS) {
+          if (!(chaveLimite in limites)) continue;
+          const valor = limites[chaveLimite];
+          await client.query(
+            `INSERT INTO plano_limites (plano_chave, chave, valor)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (plano_chave, chave) DO UPDATE SET valor = $3`,
+            [chave, chaveLimite, valor == null ? null : Number(valor)]
+          );
+        }
+      }
+
       const camposComparados = [
+        ['nome', anterior.nome, novo.nome],
         ['descricao', anterior.descricao, novo.descricao],
         ['preco_mensal', anterior.preco_mensal, novo.preco_mensal],
         ['limite_disparos', anterior.limite_disparos, novo.limite_disparos],
         ['destaque', anterior.destaque, novo.destaque],
         ['badge', anterior.badge, novo.badge],
+        ['headline_diferencial', anterior.headline_diferencial, novo.headline_diferencial],
+        ['frase_beneficio', anterior.frase_beneficio, novo.frase_beneficio],
         ['ativo', anterior.ativo, novo.ativo],
       ];
       for (const [campo, valorAnterior, valorNovo] of camposComparados) {
