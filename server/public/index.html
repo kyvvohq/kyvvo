@@ -305,9 +305,20 @@
 .plano-card.destaque{border-color:rgba(124,92,252,.55);box-shadow:0 20px 40px -20px rgba(124,92,252,.35)}
 .plano-selo{align-self:flex-start;background:rgba(124,92,252,.16);color:var(--accent-light);font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;border-radius:100px;padding:5px 14px;margin-bottom:16px}
 .plano-nome{font-family:var(--font-d);font-size:1.1rem;font-weight:700;margin-bottom:8px}
+/* US73 — headline_diferencial: o benefício em poucas palavras, em destaque
+   acima do preço (nunca o meio técnico que o produz). */
+.plano-headline{font-size:.95rem;font-weight:600;color:var(--accent-light);margin-bottom:10px}
 .plano-preco{font-family:var(--font-d);font-size:2rem;font-weight:800;letter-spacing:-.02em;margin-bottom:4px}
 .plano-preco span{font-family:var(--font-b);font-size:.85rem;font-weight:400;color:var(--muted)}
 .plano-desc{font-size:.86rem;color:var(--muted);line-height:1.6;margin-bottom:24px}
+/* US74 — bloco "Tudo do X, mais:" com os diferenciais exclusivos, e a linha
+   de limites de uso (conversas/profissionais/unidades), entre a descrição
+   e o CTA. */
+.plano-features{border-top:1px solid var(--border);padding-top:16px;margin-bottom:16px}
+.plano-features-titulo{font-size:.8rem;font-weight:700;color:var(--text);margin-bottom:8px}
+.plano-features ul{list-style:none;display:flex;flex-direction:column;gap:6px}
+.plano-features li{font-size:.85rem;color:var(--muted);line-height:1.4}
+.plano-limites{font-size:.78rem;color:var(--muted);margin-bottom:20px}
 .plano-cta{margin-top:auto;display:block;text-align:center;padding:12px 20px;border-radius:100px;font-size:.85rem;font-weight:600;font-family:var(--font-b);text-decoration:none;transition:all .2s}
 .plano-card.destaque .plano-cta{color:#fff;background:linear-gradient(135deg,var(--accent),#5b3fd4);box-shadow:0 4px 14px rgba(124,92,252,.3)}
 .plano-card.destaque .plano-cta:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(124,92,252,.4)}
@@ -317,14 +328,16 @@
 .precos-nota{text-align:center;color:var(--muted);font-size:.85rem;margin-top:32px}
 .precos-nota + .precos-nota{margin-top:8px}
 /* CA05/US67 — abaixo de 768px a grade 2x2 colapsa numa lista única, na ordem
-   Starter → Professional → Business → Enterprise (não é a ordem natural do
-   array, que vem por preço ASC — por isso a reordenação explícita aqui). */
+   Essencial → Smart → Essencial Plus → Smart Plus (não é a ordem natural do
+   array, que vem por preço ASC — por isso a reordenação explícita aqui).
+   Slugs atualizados pela US72 (eram starter/professional/business/
+   enterprise). */
 @media(max-width:768px){
   .precos-grid-matriz{grid-template-columns:1fr;max-width:420px}
-  .plano-card[data-slug="starter"]{order:1}
-  .plano-card[data-slug="professional"]{order:2}
-  .plano-card[data-slug="business"]{order:3}
-  .plano-card[data-slug="enterprise"]{order:4}
+  .plano-card[data-slug="essencial"]{order:1}
+  .plano-card[data-slug="smart"]{order:2}
+  .plano-card[data-slug="essencial-plus"]{order:3}
+  .plano-card[data-slug="smart-plus"]{order:4}
 }
 
 /* FAQ */
@@ -1150,13 +1163,56 @@ function formatarPrecoPlano(valor) {
   return `R$ ${Number(valor).toFixed(2).replace('.', ',')}`;
 }
 
+// US74/CA04 — rótulos de limite de uso; singular exato pra valor 1 (sem
+// "Até"), "Até N" pro plural, texto dedicado pra ilimitado (null ou -1,
+// convenção compartilhada com o resto do catálogo de limites/disparos).
+const PLANO_LIMITE_ROTULOS = {
+  conversas_mes: { singular: 'conversa/mês', plural: 'conversas/mês', ilimitado: 'Conversas ilimitadas' },
+  profissionais: { singular: 'profissional', plural: 'profissionais', ilimitado: 'Profissionais ilimitados' },
+  unidades: { singular: 'unidade', plural: 'unidades', ilimitado: 'Unidades ilimitadas' },
+};
+
+function formatarLimite(chave, valor) {
+  const rotulo = PLANO_LIMITE_ROTULOS[chave];
+  if (!rotulo) return '';
+  if (valor == null || valor === -1) return rotulo.ilimitado;
+  if (Number(valor) === 1) return `1 ${rotulo.singular}`;
+  return `Até ${valor} ${rotulo.plural}`;
+}
+
+function renderFeaturesPlano(plano) {
+  if (!plano.features || !plano.features.length) return '';
+  const titulo = plano.herda_de_nome ? `<div class="plano-features-titulo">Tudo do ${plano.herda_de_nome}, mais:</div>` : '';
+  return `
+    <div class="plano-features" data-testid="bloco-features-${plano.slug}">
+      ${titulo}
+      <ul>${plano.features.map((f) => `<li>✓ ${f.label}</li>`).join('')}</ul>
+    </div>
+  `;
+}
+
+function renderLimitesPlano(plano) {
+  if (!plano.limites) return '';
+  const textos = ['conversas_mes', 'profissionais', 'unidades']
+    .filter((chave) => plano.limites[chave] !== undefined)
+    .map((chave) => formatarLimite(chave, plano.limites[chave]));
+  if (!textos.length) return '';
+  return `<div class="plano-limites" data-testid="limites-${plano.slug}">${textos.join(' · ')}</div>`;
+}
+
+// US73 — o card vende o resultado pra cliente do salão (headline_diferencial
+// + frase_beneficio), nunca o meio técnico (o antigo texto de `descricao`,
+// ex: "IA conversacional + número próprio", saiu do card).
 function renderPlanoCard(plano) {
   return `
-    <article class="plano-card${plano.destaque ? ' destaque' : ''}" data-slug="${plano.slug}">
+    <article class="plano-card${plano.destaque ? ' destaque' : ''}" data-slug="${plano.slug}" data-testid="plano-${plano.slug}">
       ${plano.badge ? `<div class="plano-selo">${plano.badge}</div>` : ''}
       <div class="plano-nome">${plano.nome}</div>
+      ${plano.headline_diferencial ? `<div class="plano-headline" data-testid="headline-${plano.slug}">${plano.headline_diferencial}</div>` : ''}
       <div class="plano-preco">${formatarPrecoPlano(plano.preco_mensal)}<span data-pt="/mês" data-en="/month">/mês</span></div>
-      <p class="plano-desc">${plano.descricao || ''}</p>
+      ${plano.frase_beneficio ? `<p class="plano-desc" data-testid="frase-beneficio-${plano.slug}">${plano.frase_beneficio}</p>` : ''}
+      ${renderFeaturesPlano(plano)}
+      ${renderLimitesPlano(plano)}
       <a class="plano-cta" data-testid="cta-${plano.slug}" data-panel-path="/cadastro.html?plano=${encodeURIComponent(plano.slug)}" href="#" data-pt="Começar grátis" data-en="Start free">Começar grátis</a>
     </article>
   `;
