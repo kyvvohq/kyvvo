@@ -1300,7 +1300,11 @@ const LANCAMENTO_STATUS_BADGE = { previsto: 'badge-previsto', realizado: 'badge-
 function renderLancamentoItem(l) {
   const sinal = l.tipo === 'entrada' ? '+' : '−';
   const classeTipo = l.tipo === 'entrada' ? 'financeiro-entrada' : 'financeiro-saida';
-  const dataLabel = new Date(l.data + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' });
+  // l.data vem do driver pg como Date (coluna tipo `date`), que serializa em
+  // JSON como ISO completo ("...T00:00:00.000Z"), não "YYYY-MM-DD" puro —
+  // .slice(0, 10) normaliza os dois formatos antes de montar a data local ao
+  // meio-dia (evita virada de dia por fuso, mesmo padrão de formatarDataCurtaISO).
+  const dataLabel = new Date(l.data.slice(0, 10) + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' });
   const origemAgendamento = l.origem === 'agendamento';
 
   // CA "Cenário 8" — lançamento de agendamento identifica cliente/serviço/
