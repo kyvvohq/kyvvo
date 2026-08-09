@@ -116,7 +116,14 @@ const COLUNAS_TABELA = [
   { key: 'cadastrado_em', label: 'Data de cadastro', ordenavel: true },
   { key: 'ativado_em', label: 'Data de ativação', ordenavel: true },
   { key: 'status', label: 'Status', ordenavel: true },
+  { key: 'tecnologia', label: 'Modo de atendimento' },
 ];
+
+// US69/CA01 — rótulo e classe de badge do modo de atendimento (bot/ia).
+const MODO_ATENDIMENTO = {
+  bot: { label: '🤖 Bot', classe: 'badge-modo-bot' },
+  ia: { label: '✨ IA', classe: 'badge-modo-ia' },
+};
 
 const STATUS_CLASSES = {
   'Trial ativo': 'badge-trial-ativo',
@@ -174,6 +181,7 @@ function renderStatusLabel(t) {
 
 function renderLinha(t) {
   const statusClasse = STATUS_CLASSES[t.status_conta] || 'badge-status-inativo';
+  const modo = MODO_ATENDIMENTO[t.tecnologia] || MODO_ATENDIMENTO.bot;
   return `
     <tr data-id="${escapeHtml(t.id)}">
       <td>${escapeHtml(t.nome)}</td>
@@ -183,6 +191,10 @@ function renderLinha(t) {
       <td>${formatarData(t.cadastrado_em)}</td>
       <td>${formatarData(t.ativado_em)}</td>
       <td><span class="badge badge-status ${statusClasse}">${escapeHtml(renderStatusLabel(t))}</span></td>
+      <td data-testid="modo-${escapeHtml(t.id)}">
+        <span class="badge ${modo.classe}">${modo.label}</span>
+        ${t.ativo ? `<button type="button" class="btn-acao-tabela" data-testid="btn-alterar-modo-${escapeHtml(t.id)}" data-tenant-acao="alterar-modo" data-id="${escapeHtml(t.id)}">Alterar</button>` : ''}
+      </td>
       <td class="td-acoes">
         <a class="btn-ver-detalhes" href="/admin/tenants/${encodeURIComponent(t.id)}">Ver detalhes</a>
         <button type="button" class="btn-acao-tabela" data-tenant-acao="editar" data-id="${escapeHtml(t.id)}">Editar</button>
@@ -299,6 +311,7 @@ conteudo.addEventListener('click', (e) => {
     if (!tenant) return;
     if (acaoBtn.dataset.tenantAcao === 'editar') abrirModalTenant(tenant);
     if (acaoBtn.dataset.tenantAcao === 'alternar') alternarAtivoTenant(tenant);
+    if (acaoBtn.dataset.tenantAcao === 'alterar-modo') abrirModalTrocaModo(tenant);
     return;
   }
 
@@ -319,6 +332,60 @@ async function alternarAtivoTenant(tenant) {
   } else {
     mostrarToast((resultado && resultado.error) || 'Erro ao atualizar tenant.', 'erro');
   }
+}
+
+// ---------- Modal de troca de modo de atendimento (US69/CA02) ----------
+// Só quem faz essa troca é o admin Kyvvo: o modo está vinculado ao plano
+// contratado, então liberar edição pro salão quebraria a lógica de
+// cobrança (US69/Contexto). O dono do salão só visualiza (CA06, portal).
+async function abrirModalTrocaModo(tenant) {
+  const destino = tenant.tecnologia === 'ia' ? 'bot' : 'ia';
+  const modoAtual = MODO_ATENDIMENTO[tenant.tecnologia] || MODO_ATENDIMENTO.bot;
+  const modoDestino = MODO_ATENDIMENTO[destino];
+
+  const avisoConversas = destino === 'bot'
+    ? '<div class="modal-erro" style="display:block">⚠️ Conversas em andamento serão encerradas.</div>'
+    : '';
+
+  abrirModal(
+    `<h3>Alterar modo de atendimento</h3>`,
+    `
+      <div class="modal-texto">
+        <strong>${escapeHtml(tenant.nome)}</strong><br>
+        Modo atual: <span class="badge ${modoAtual.classe}">${modoAtual.label}</span><br>
+        Novo modo: <span class="badge ${modoDestino.classe}">${modoDestino.label}</span>
+      </div>
+      <div class="modal-texto">A próxima mensagem recebida no WhatsApp deste salão já usará o novo modo.</div>
+      ${avisoConversas}
+      <div class="modal-erro" id="modo-erro"></div>
+      <div class="modal-acoes">
+        <button type="button" class="btn-secundario" id="btn-cancelar-modo">Cancelar</button>
+        <button type="button" class="btn-primario" id="btn-confirmar-modo">Confirmar troca</button>
+      </div>
+    `
+  );
+
+  document.getElementById('btn-cancelar-modo').addEventListener('click', fecharModal);
+  document.getElementById('btn-confirmar-modo').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-confirmar-modo');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    const resultado = await api(`/admin/api/tenants/${tenant.id}/modo`, {
+      method: 'PATCH',
+      body: JSON.stringify({ tecnologia: destino }),
+    });
+
+    if (resultado && !resultado.error) {
+      fecharModal();
+      mostrarToast(`Modo de atendimento alterado para ${modoDestino.label}.`, 'sucesso');
+      renderTenants();
+    } else {
+      document.getElementById('modo-erro').textContent = (resultado && resultado.error) || 'Erro ao alterar modo de atendimento.';
+      btn.disabled = false;
+      btn.textContent = 'Confirmar troca';
+    }
+  });
 }
 
 // ---------- Modal de criar/editar tenant ----------
