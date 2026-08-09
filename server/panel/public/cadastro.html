@@ -137,49 +137,61 @@
       mostrarErroCampo('segmento', 'Não foi possível carregar os segmentos. Tente novamente.');
     });
 
-  // US67/CA06 — plano vindo da landing via ?plano=<slug> (CTA de cada card):
-  // mostra nome/preço pré-selecionados e deixa trocar de plano sem voltar
-  // pra landing. Guardado em sessionStorage pra sobreviver até a tela de
-  // pagamento (US32) sem precisar propagar o parâmetro por link em link.
+  // US67/CA06 + US78 — plano vindo da landing via ?plano=<slug> (CTA de cada
+  // card): mostra nome/preço pré-selecionados e deixa trocar de plano sem
+  // voltar pra landing. Guardado em sessionStorage pra sobreviver até a tela
+  // de pagamento (US32) sem precisar propagar o parâmetro por link em link.
+  // US78 — a prévia aparece sempre (não só quando chega via ?plano=): sem
+  // parâmetro, ou com um slug que não existe mais no catálogo, cai no plano
+  // em destaque (CA02) e, na ausência de um destaque, no mais barato (o
+  // catálogo já vem ordenado por preço). Trocar de plano não recarrega a
+  // página (CA03) e mantém a URL em sincronia com o slug exibido, pra não
+  // perder a referência de preço entre o card e a cobrança (CA04).
   const planoBox = document.getElementById('cadastro-plano');
   const planoNomeEl = document.getElementById('cadastro-plano-nome');
   const planoPrecoEl = document.getElementById('cadastro-plano-preco');
   const planoSelect = document.getElementById('cadastro-plano-select');
+  let planoAtualSlug = null;
 
   function formatarPrecoPlano(valor) {
     return `R$ ${Number(valor).toFixed(2).replace('.', ',')}/mês`;
   }
 
   function exibirPlanoSelecionado(planos, slug) {
-    const plano = planos.find((p) => p.slug === slug) || planos[0];
+    const plano = planos.find((p) => p.slug === slug) || planos.find((p) => p.destaque) || planos[0];
     if (!plano) return;
     planoNomeEl.textContent = plano.nome;
     planoPrecoEl.textContent = formatarPrecoPlano(plano.preco_mensal);
     planoSelect.value = plano.slug;
     planoBox.hidden = false;
+    planoAtualSlug = plano.slug;
     sessionStorage.setItem('kyvvo_plano_selecionado', plano.slug);
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('plano') !== plano.slug) {
+      params.set('plano', plano.slug);
+      window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
+    }
   }
 
   const slugDaUrl = new URLSearchParams(window.location.search).get('plano');
-  if (slugDaUrl) {
-    fetch('/api/planos')
-      .then((res) => {
-        if (!res.ok) throw new Error('status ' + res.status);
-        return res.json();
-      })
-      .then((planos) => {
-        if (!planos.length) return;
-        planoSelect.innerHTML = planos
-          .map((p) => `<option value="${p.slug}">${p.nome} — ${formatarPrecoPlano(p.preco_mensal)}</option>`)
-          .join('');
-        exibirPlanoSelecionado(planos, slugDaUrl);
-        planoSelect.addEventListener('change', () => exibirPlanoSelecionado(planos, planoSelect.value));
-      })
-      .catch(() => {
-        // Sem o catálogo não dá pra mostrar nome/preço com segurança (CA06)
-        // — segue o cadastro normalmente, só sem a prévia do plano.
-      });
-  }
+  fetch('/api/planos')
+    .then((res) => {
+      if (!res.ok) throw new Error('status ' + res.status);
+      return res.json();
+    })
+    .then((planos) => {
+      if (!planos.length) return;
+      planoSelect.innerHTML = planos
+        .map((p) => `<option value="${p.slug}">${p.nome} — ${formatarPrecoPlano(p.preco_mensal)}</option>`)
+        .join('');
+      exibirPlanoSelecionado(planos, slugDaUrl);
+      planoSelect.addEventListener('change', () => exibirPlanoSelecionado(planos, planoSelect.value));
+    })
+    .catch(() => {
+      // Sem o catálogo não dá pra mostrar nome/preço com segurança (CA06)
+      // — segue o cadastro normalmente, só sem a prévia do plano.
+    });
 
   const validadores = {
     nome_responsavel: (v) => (v.trim().length >= 2 ? '' : 'Informe o nome do responsável.'),
@@ -246,6 +258,7 @@
           telefone: campos.telefone.value,
           whatsapp: campos.whatsapp.value,
           senha: campos.senha.value,
+          plano_slug: planoAtualSlug,
         }),
       });
       const data = await res.json().catch(() => ({}));

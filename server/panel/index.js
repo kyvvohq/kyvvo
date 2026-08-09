@@ -703,6 +703,7 @@ async function start() {
       segmento_id: segmentoIdBruto,
       telefone: telefoneBruto,
       whatsapp: whatsappBruto,
+      plano_slug: planoSlugBruto,
     } = request.body || {};
 
     const nomeLimpo = (nomeResponsavel || '').trim();
@@ -753,6 +754,25 @@ async function start() {
     }
     const segmentoSlug = segmentoRows[0].slug;
 
+    // US78/CA04 — plano escolhido na landing (?plano=) ou trocado na própria
+    // tela de cadastro, pra não perder a referência de preço entre o card e
+    // a cobrança. Opcional: sem ele, o tenant nasce sem plano (`'trial'`,
+    // igual antes do US78) e escolhe depois no checkout (US32). Aceita tanto
+    // o slug atual quanto uma chave legada (mesma resolução do US72), já que
+    // o link pode vir de uma página cacheada com o slug antigo.
+    let planoChave = null;
+    const planoSlugLimpo = typeof planoSlugBruto === 'string' ? planoSlugBruto.trim() : '';
+    if (planoSlugLimpo) {
+      const { rows: planoRows } = await pool.query(
+        'SELECT chave FROM planos WHERE slug = $1 OR chave = $1',
+        [planoSlugLimpo]
+      );
+      if (!planoRows[0]) {
+        return reply.code(422).send({ error: 'Plano selecionado inválido.' });
+      }
+      planoChave = planoRows[0].chave;
+    }
+
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
@@ -765,9 +785,9 @@ async function start() {
       const trialExpira = new Date(Date.now() + TRIAL_DIAS * 24 * 60 * 60 * 1000);
       const { rows: tenantRows } = await client.query(
         `INSERT INTO tenants (nome, telefone, whatsapp, segmento, segmento_id, plano, status, trial_expires_at)
-         VALUES ($1, $2, $3, $4, $5, 'trial', 'trial', $6)
+         VALUES ($1, $2, $3, $4, $5, $6, 'trial', $7)
          RETURNING id`,
-        [nomeLimpo, telefone, whatsapp, segmentoSlug, segmentoId, trialExpira.toISOString()]
+        [nomeLimpo, telefone, whatsapp, segmentoSlug, segmentoId, planoChave || 'trial', trialExpira.toISOString()]
       );
       const tenantId = tenantRows[0].id;
 
