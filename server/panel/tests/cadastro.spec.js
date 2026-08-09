@@ -59,6 +59,7 @@ test.describe('Cadastro (/cadastro.html) — formulário reduzido (US77)', () =>
     await page.fill('#whatsapp', '34999999999');
     await page.fill('#email', 'ana@salao.com');
     await page.fill('#senha', 'Senha123');
+    await page.check('#aceite_termos');
     await page.click('#btn-criar');
 
     await expect(page).toHaveURL(/\/verificar\.html$/);
@@ -164,6 +165,7 @@ test.describe('Cadastro (/cadastro.html) — formulário reduzido (US77)', () =>
     await page.fill('#senha', 'Senha123');
     await page.check('#usa_telefone_alternativo');
     await page.fill('#telefone', '(34) 93333-4444');
+    await page.check('#aceite_termos');
     await page.click('#btn-criar');
 
     await expect(page).toHaveURL(/\/verificar\.html$/);
