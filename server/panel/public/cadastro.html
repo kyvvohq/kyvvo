@@ -306,8 +306,15 @@
     toggleSenhaBtn.setAttribute('aria-label', oculta ? 'Ocultar senha' : 'Mostrar senha');
   });
 
+  // US80.4 — trava contra envio duplicado: independe de btn.disabled (que já
+  // bloqueia clique/Enter no botão em si) pra também cobrir um segundo
+  // 'submit' disparado programaticamente enquanto a primeira requisição
+  // ainda está em voo.
+  let enviando = false;
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (enviando) return;
     erroGeral.textContent = '';
 
     let valido = true;
@@ -338,6 +345,7 @@
       return;
     }
 
+    enviando = true;
     btn.disabled = true;
     btn.classList.add('loading');
     btn.textContent = 'Criando conta...';
@@ -384,6 +392,7 @@
     } catch (err) {
       erroGeral.textContent = 'Erro ao processar. Tente novamente.';
     } finally {
+      enviando = false;
       btn.disabled = false;
       btn.classList.remove('loading');
       btn.textContent = 'Começar grátis';
