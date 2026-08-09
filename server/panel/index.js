@@ -634,13 +634,22 @@ async function processarMensagemIA({ tenant, telefone, mensagem, pushName }) {
         NenhumAgendamentoParaCancelar: 'Não encontrei nenhum agendamento seu pra cancelar. Confere pra mim o que você gostaria?',
       };
       textoFinal = mensagensErro[erro.message] || 'Tive um problema pra confirmar isso agora. Pode tentar de novo em instantes?';
+      if (!mensagensErro[erro.message]) {
+        fastify.log.warn({ erro: erro.message, intent, params, tenantId: tenant.id }, 'Executor de ação IA (US68.5) falhou com erro não mapeado');
+      }
     }
   }
 
   await salvarMensagemIA(tenant.id, cliente.id, 'assistant', textoFinal, intent);
 
   if (tenant.instancia_whatsapp) {
-    await evolutionService.enviarTexto(tenant.instancia_whatsapp, telefone, textoFinal);
+    try {
+      await evolutionService.enviarTexto(tenant.instancia_whatsapp, telefone, textoFinal);
+    } catch (erro) {
+      // Falha no envio (ex.: instância desconectada) não pode apagar o que
+      // já foi persistido (agendamento criado, conversa salva) — só loga.
+      fastify.log.error({ erro: erro.message, tenantId: tenant.id }, 'Falha ao enviar resposta da IA via Evolution API (US68)');
+    }
   }
 }
 
