@@ -694,6 +694,29 @@ async function start() {
     return rows.map((p) => ({ ...p, preco_mensal: Number(p.preco_mensal) }));
   });
 
+  // US72/CA02 — resolve um slug pra um plano único, aceitando tanto o slug
+  // atual quanto a `chave` (identificador interno, imutável — era o slug
+  // antes da US72 renomear pra eixo de valor). Isso mantém links antigos
+  // (?plano=starter) funcionando sem precisar de uma tabela extra de
+  // aliases: `chave` nunca muda, então basta aceitar os dois. Não filtra
+  // por `ativo` — é uma consulta pontual (não a lista pra grade de preços),
+  // então resolve mesmo plano legado desativado (ex: pra não devolver 404 de
+  // um link publicado antes da desativação em 045_planos_2x2.sql).
+  fastify.get('/api/planos/:slug', async (request, reply) => {
+    const { slug } = request.params;
+    const { rows } = await pool.query(
+      `SELECT slug, nome, descricao, tecnologia, tipo_numero, preco_mensal,
+              limite_disparos, destaque, badge
+         FROM planos
+        WHERE slug = $1 OR chave = $1`,
+      [slug]
+    );
+    if (!rows[0]) {
+      return reply.code(404).send({ error: 'Plano não encontrado' });
+    }
+    return { ...rows[0], preco_mensal: Number(rows[0].preco_mensal) };
+  });
+
 
   fastify.post('/api/auth/register', async (request, reply) => {
     const {
@@ -3474,6 +3497,7 @@ async function start() {
   fastify.patch('/admin/api/configuracoes/planos/:chave', { preHandler: [fastify.authenticateAdmin] }, async (request, reply) => {
     const { chave } = request.params;
     const {
+      nome,
       descricao,
       preco_mensal: precoMensal,
       limite_disparos: limiteDisparos,
@@ -3484,6 +3508,13 @@ async function start() {
 
     if (precoMensal !== undefined && !(Number(precoMensal) >= 1)) {
       return reply.code(400).send({ error: 'Preço mensal deve ser no mínimo R$ 1,00.' });
+    }
+    // US72/CA04 — nome é editável (o eixo de valor da US72 já fica no dado,
+    // mas o PO pode querer ajustar o texto sem deploy); `slug` continua
+    // estrutural e não é aceito aqui, então editar o nome nunca altera o
+    // slug automaticamente.
+    if (nome !== undefined && !nome.trim()) {
+      return reply.code(400).send({ error: 'Nome do plano não pode ficar em branco.' });
     }
 
     const client = await pool.connect();
@@ -3498,22 +3529,24 @@ async function start() {
 
       const { rows: atualizadoRows } = await client.query(
         `UPDATE planos SET
-           descricao = COALESCE($2, descricao),
-           preco_mensal = COALESCE($3, preco_mensal),
-           limite_disparos = COALESCE($4, limite_disparos),
-           destaque = COALESCE($5, destaque),
-           badge = COALESCE($6, badge),
-           ativo = COALESCE($7, ativo),
+           nome = COALESCE($2, nome),
+           descricao = COALESCE($3, descricao),
+           preco_mensal = COALESCE($4, preco_mensal),
+           limite_disparos = COALESCE($5, limite_disparos),
+           destaque = COALESCE($6, destaque),
+           badge = COALESCE($7, badge),
+           ativo = COALESCE($8, ativo),
            atualizado_em = now(),
-           atualizado_por = $8
+           atualizado_por = $9
          WHERE chave = $1
          RETURNING chave, slug, nome, descricao, tecnologia, tipo_numero, preco_mensal,
                    limite_disparos, destaque, badge, ativo, atualizado_em`,
-        [chave, descricao, precoMensal, limiteDisparos, destaque, badge, ativo, request.admin.adminId]
+        [chave, nome ? nome.trim() : null, descricao, precoMensal, limiteDisparos, destaque, badge, ativo, request.admin.adminId]
       );
       const novo = atualizadoRows[0];
 
       const camposComparados = [
+        ['nome', anterior.nome, novo.nome],
         ['descricao', anterior.descricao, novo.descricao],
         ['preco_mensal', anterior.preco_mensal, novo.preco_mensal],
         ['limite_disparos', anterior.limite_disparos, novo.limite_disparos],

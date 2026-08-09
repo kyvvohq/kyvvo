@@ -150,7 +150,7 @@ function renderLinhaPlano(plano) {
   if (editando) {
     return `
       <tr data-plano="${plano.chave}">
-        <td>${escapeHtml(plano.nome)}</td>
+        <td><input type="text" class="input-plano-nome" data-testid="input-nome-${plano.chave}" value="${escapeHtml(plano.nome)}"></td>
         <td><input type="text" class="input-plano-descricao" value="${escapeHtml(plano.descricao || '')}"></td>
         ${colunasSomenteLeitura}
         <td><input type="number" step="0.01" min="1" class="input-plano-preco" value="${plano.preco_mensal}"></td>
@@ -161,7 +161,7 @@ function renderLinhaPlano(plano) {
         <td class="celula-acoes-plano">
           <div class="modal-erro" data-erro-plano="${plano.chave}"></div>
           <button class="btn-secundario btn-tabela" data-acao="cancelar-plano" data-chave="${plano.chave}">Cancelar</button>
-          <button class="btn-primario btn-tabela" data-acao="salvar-plano" data-chave="${plano.chave}">Salvar</button>
+          <button class="btn-primario btn-tabela" data-testid="salvar-${plano.chave}" data-acao="salvar-plano" data-chave="${plano.chave}">Salvar</button>
         </td>
       </tr>
     `;
@@ -246,6 +246,7 @@ function wireEventos() {
 
 async function salvarPlano(chave) {
   const linha = conteudo.querySelector(`tr[data-plano="${chave}"]`);
+  const nome = linha.querySelector('.input-plano-nome').value.trim();
   const descricao = linha.querySelector('.input-plano-descricao').value.trim();
   const precoMensal = linha.querySelector('.input-plano-preco').value;
   const limiteBruto = linha.querySelector('.input-plano-limite').value.trim();
@@ -253,6 +254,12 @@ async function salvarPlano(chave) {
   const erroEl = linha.querySelector(`[data-erro-plano="${chave}"]`);
   erroEl.textContent = '';
 
+  // US72/CA04 — nome editável, mas o slug (identificador público usado em
+  // links) nunca é enviado aqui — continua estrutural, só muda por migration.
+  if (!nome) {
+    erroEl.textContent = 'Nome do plano não pode ficar em branco.';
+    return;
+  }
   if (!(Number(precoMensal) >= 1)) {
     erroEl.textContent = 'Preço mensal deve ser no mínimo R$ 1,00.';
     return;
@@ -261,6 +268,7 @@ async function salvarPlano(chave) {
   const resultado = await api(`/admin/api/configuracoes/planos/${chave}`, {
     method: 'PATCH',
     body: JSON.stringify({
+      nome,
       descricao,
       preco_mensal: Number(precoMensal),
       limite_disparos: limiteBruto === '' ? null : Number(limiteBruto),
