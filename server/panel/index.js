@@ -2038,6 +2038,22 @@ async function start() {
     return { clientes: rows };
   });
 
+  // Busca cliente existente pelo telefone (chave única tenant_id+telefone,
+  // garantida no banco desde 001_init.sql) — usada pelo modal "Novo
+  // agendamento" pra carregar o nome automaticamente ao digitar um telefone
+  // já cadastrado, em vez de depender do ON CONFLICT DO UPDATE de POST
+  // /api/agendamentos pra reconciliar um nome digitado errado por engano.
+  fastify.get('/api/clientes/buscar-por-telefone', { preHandler: [fastify.authenticate] }, async (request) => {
+    const { tenantId } = request.user;
+    const telefone = String(request.query.telefone || '').replace(/\D/g, '');
+    if (telefone.length < 10) return { cliente: null };
+    const { rows } = await pool.query(
+      'SELECT id, nome, telefone FROM clientes WHERE tenant_id = $1 AND telefone = $2 LIMIT 1',
+      [tenantId, telefone]
+    );
+    return { cliente: rows[0] || null };
+  });
+
   // Lista de profissionais do tenant, usada para popular o dropdown do
   // formulário de novo agendamento (ST09.2 / US09). Inclui os ids dos
   // serviços que cada um atende, usado na tela de gestão (US17/ST17.4).
