@@ -53,9 +53,14 @@
 
       <label for="senha">Senha</label>
       <div class="senha-wrapper">
-        <input type="password" id="senha" autocomplete="new-password">
+        <input type="password" id="senha" autocomplete="new-password" aria-describedby="senha-requisitos">
         <button type="button" id="btn-toggle-senha" class="toggle-senha" aria-label="Mostrar senha" tabindex="-1">👁</button>
       </div>
+      <ul class="senha-requisitos" id="senha-requisitos">
+        <li id="req-tamanho" role="checkbox" aria-checked="false">Mínimo de 8 caracteres</li>
+        <li id="req-maiuscula" role="checkbox" aria-checked="false">1 letra maiúscula</li>
+        <li id="req-numero" role="checkbox" aria-checked="false">1 número</li>
+      </ul>
       <div class="field-error" id="erro-senha"></div>
 
       <button type="submit" id="btn-criar">Começar grátis</button>
@@ -94,6 +99,28 @@
   // Mesmas regras validadas no backend (index.js) — mantidas em sincronia.
   const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const SENHA_REGEX = /^(?=.*[A-Z])(?=.*\d).{8,}$/;
+
+  // US80/CA — checklist de requisitos da senha, visível antes mesmo de
+  // digitar e atualizada em tempo real: cada item marca "atendido" (✓)
+  // assim que a senha digitada até então cumpre a regra. O envio já ficava
+  // bloqueado enquanto a senha não bate com SENHA_REGEX (validadores.senha,
+  // abaixo) — o checklist só torna visível qual requisito falta.
+  const REQUISITOS_SENHA = {
+    tamanho: (v) => v.length >= 8,
+    maiuscula: (v) => /[A-Z]/.test(v),
+    numero: (v) => /\d/.test(v),
+  };
+
+  function atualizarChecklistSenha(valor) {
+    Object.keys(REQUISITOS_SENHA).forEach((chave) => {
+      const atendido = REQUISITOS_SENHA[chave](valor);
+      const item = document.getElementById('req-' + chave);
+      item.classList.toggle('atendido', atendido);
+      item.setAttribute('aria-checked', String(atendido));
+    });
+  }
+
+  senhaInput.addEventListener('input', () => atualizarChecklistSenha(senhaInput.value));
 
   function validarTelefone(valor) {
     let d = (valor || '').replace(/\D/g, '');
