@@ -150,7 +150,7 @@ function renderLinhaPlano(plano) {
   if (editando) {
     return `
       <tr data-plano="${plano.chave}">
-        <td>${escapeHtml(plano.nome)}</td>
+        <td><input type="text" class="input-plano-nome" data-testid="input-nome-${plano.chave}" value="${escapeHtml(plano.nome)}"></td>
         <td><input type="text" class="input-plano-descricao" value="${escapeHtml(plano.descricao || '')}"></td>
         <td>
           <input type="text" class="input-plano-headline" data-testid="input-headline-${plano.chave}" value="${escapeHtml(plano.headline_diferencial || '')}">
@@ -289,6 +289,7 @@ function validarLimitesCopyPlano(chave) {
 
 async function salvarPlano(chave) {
   const linha = conteudo.querySelector(`tr[data-plano="${chave}"]`);
+  const nome = linha.querySelector('.input-plano-nome').value.trim();
   const descricao = linha.querySelector('.input-plano-descricao').value.trim();
   const headlineDiferencial = linha.querySelector('.input-plano-headline').value.trim();
   const fraseBeneficio = linha.querySelector('.input-plano-frase').value.trim();
@@ -298,6 +299,12 @@ async function salvarPlano(chave) {
   const erroEl = linha.querySelector(`[data-erro-plano="${chave}"]`);
   erroEl.textContent = '';
 
+  // US72/CA04 — nome editável, mas o slug (identificador público usado em
+  // links) nunca é enviado aqui — continua estrutural, só muda por migration.
+  if (!nome) {
+    erroEl.textContent = 'Nome do plano não pode ficar em branco.';
+    return;
+  }
   if (headlineDiferencial.length > 120 || fraseBeneficio.length > 120) {
     erroEl.textContent = 'Headline e frase de benefício têm o máximo de 120 caracteres.';
     return;
@@ -310,6 +317,7 @@ async function salvarPlano(chave) {
   const resultado = await api(`/admin/api/configuracoes/planos/${chave}`, {
     method: 'PATCH',
     body: JSON.stringify({
+      nome,
       descricao,
       headline_diferencial: headlineDiferencial,
       frase_beneficio: fraseBeneficio,

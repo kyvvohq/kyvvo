@@ -1088,6 +1088,23 @@ conteudo.addEventListener('click', (e) => {
     return;
   }
 
+  // US71 — abas Mês/Semana/Dia do Financeiro.
+  const tabFinanceiro = e.target.closest('[data-financeiro-aba]');
+  if (tabFinanceiro) {
+    abaFinanceiroAtiva = tabFinanceiro.dataset.financeiroAba;
+    detalhamentoSemanaAberto = false;
+    renderFinanceiro();
+    return;
+  }
+
+  // US70/CA03+US71/CA05 — cards do resumo financeiro na tela inicial abrem
+  // o Financeiro já na aba/referência do card clicado (hoje → aba Dia, mês → aba Mês).
+  const cardFinanceiroBtn = e.target.closest('[data-card-financeiro-nav]');
+  if (cardFinanceiroBtn) {
+    abrirFinanceiroComFiltro(cardFinanceiroBtn.dataset.financeiroPeriodo, cardFinanceiroBtn.dataset.financeiroReferencia);
+    return;
+  }
+
   // "+" ao passar o mouse numa linha de horário (Dia/Semana) ou numa
   // célula de dia (Semana/Mês) — abre Novo agendamento pré-preenchido.
   const addHorarioBtn = e.target.closest('[data-add-horario]');
@@ -1187,12 +1204,92 @@ function infoSegmento(segmento) {
   return SEGMENTOS[segmento] || SEGMENTOS.outro;
 }
 
-// ---------- Financeiro (US18) ----------
+// ---------- Financeiro (US18/US71) ----------
 // Livro-caixa manual simples — primeira funcionalidade real do módulo
 // "financeiro" (só aparece no menu se o tenant tiver o módulo ativo, via
 // carregarModulosNoMenu). Sem edição/exclusão de lançamento nesta versão —
 // escopo combinado foi só registrar e listar.
 let mesFinanceiroRef = new Date();
+// US71 — abas Mês/Semana/Dia da página /financeiro. `semanaFinanceiroRef`/
+// `diaFinanceiroRef` guardam só uma data qualquer dentro do período (o
+// início real da semana é sempre recalculado via inicioDaSemana()).
+let abaFinanceiroAtiva = 'mes';
+let semanaFinanceiroRef = new Date();
+let diaFinanceiroRef = new Date();
+let detalhamentoSemanaAberto = false;
+
+const MESES_ABREV_FINANCEIRO = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+// "04–10 Ago 2026" — label de intervalo pra aba Semana; `inicio` já é a
+// segunda-feira da semana (ver inicioDaSemana()).
+function labelIntervaloSemanaFinanceiro(inicio) {
+  const fim = new Date(inicio);
+  fim.setDate(fim.getDate() + 6);
+  const diaIni = String(inicio.getDate()).padStart(2, '0');
+  const diaFim = String(fim.getDate()).padStart(2, '0');
+  return `${diaIni}–${diaFim} ${MESES_ABREV_FINANCEIRO[fim.getMonth()]} ${fim.getFullYear()}`;
+}
+
+// US71/CA02 — agrupa os lançamentos de receita (entrada, não-cancelado) do
+// mês em até 5 faixas de 7 dias (S1..S5) pro gráfico de barras. S5 (dias
+// 29-31) só aparece se tiver algum valor — a maioria dos meses não usa essa
+// faixa.
+function agruparPorSemanaDoMes(lancamentos) {
+  const semanas = Array.from({ length: 5 }, () => ({ previsto: 0, realizado: 0 }));
+  lancamentos.forEach((l) => {
+    if (l.tipo !== 'entrada' || l.status === 'cancelado') return;
+    const dia = Number(l.data.slice(8, 10));
+    const idx = Math.min(Math.floor((dia - 1) / 7), 4);
+    if (l.status === 'previsto') semanas[idx].previsto += Number(l.valor);
+    if (l.status === 'realizado') semanas[idx].realizado += Number(l.valor);
+  });
+  return semanas
+    .map((s, i) => ({ label: `S${i + 1}`, ...s }))
+    .filter((s, i) => i < 4 || s.previsto > 0 || s.realizado > 0);
+}
+
+function renderGraficoSemanasFinanceiro(semanas) {
+  const max = Math.max(1, ...semanas.flatMap((s) => [s.previsto, s.realizado]));
+  return `
+    <div class="financeiro-grafico" data-testid="grafico-semanas">
+      ${semanas.map((s) => `
+        <div class="financeiro-grafico-coluna">
+          <div class="financeiro-grafico-barras">
+            <div class="financeiro-grafico-barra financeiro-grafico-barra-realizado" style="height:${Math.round((s.realizado / max) * 100)}%" title="Realizado ${s.label}: ${formatarPreco(s.realizado)}"></div>
+            <div class="financeiro-grafico-barra financeiro-grafico-barra-previsto" style="height:${Math.round((s.previsto / max) * 100)}%" title="Previsto ${s.label}: ${formatarPreco(s.previsto)}"></div>
+          </div>
+          <div class="financeiro-grafico-label">${s.label}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+// US71/CA05 — abre o Financeiro já na aba/período desejado. Pensada pra ser
+// chamada pelos cards do resumo financeiro na tela inicial (US70): quando as
+// duas USs estiverem juntas na main, o clique de cada card troca
+// `selecionarMenu('modulo:financeiro')` por esta função.
+function abrirFinanceiroComFiltro(periodo, referencia) {
+  abaFinanceiroAtiva = periodo === 'dia' ? 'dia' : 'mes';
+  if (abaFinanceiroAtiva === 'dia' && referencia) {
+    diaFinanceiroRef = new Date(`${referencia}T12:00:00`);
+  } else if (abaFinanceiroAtiva === 'mes' && referencia) {
+    mesFinanceiroRef = new Date(`${referencia}-01T12:00:00`);
+  }
+  detalhamentoSemanaAberto = false;
+  selecionarMenu('modulo:financeiro');
+}
+
+function tabsFinanceiroHtml() {
+  const abas = [['mes', 'Mês'], ['semana', 'Semana'], ['dia', 'Dia']];
+  return `
+    <div class="subtabs-financeiro" role="tablist" data-testid="tabs-financeiro">
+      ${abas.map(([chave, rotulo]) => `
+        <div class="tab ${abaFinanceiroAtiva === chave ? 'active' : ''}" role="tab" aria-selected="${abaFinanceiroAtiva === chave}" data-financeiro-aba="${chave}">${rotulo}</div>
+      `).join('')}
+    </div>
+  `;
+}
 
 // US64 — status do lançamento (previsto/realizado/cancelado) só existe pra
 // lançamentos vinculados a agendamento; manuais (US18) nascem 'realizado' e
@@ -1218,7 +1315,7 @@ function renderLancamentoItem(l) {
     : '';
 
   return `
-    <div class="agendamento-item">
+    <div class="agendamento-item" data-testid="lancamento-item">
       <div class="agendamento-linha-principal">
         <div>
           <div class="agendamento-hora">${titulo}${statusBadge}</div>
@@ -1230,19 +1327,32 @@ function renderLancamentoItem(l) {
   `;
 }
 
+// US71 — /financeiro virou 3 abas (Mês/Semana/Dia); cada uma tem seu próprio
+// endpoint/estado, mas compartilham a barra de abas (tabsFinanceiroHtml) e o
+// item de lançamento (renderLancamentoItem).
 async function renderFinanceiro() {
   conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
+  if (abaFinanceiroAtiva === 'semana') return renderFinanceiroSemana();
+  if (abaFinanceiroAtiva === 'dia') return renderFinanceiroDia();
+  return renderFinanceiroMes();
+}
+
+async function renderFinanceiroMes() {
   const mesISO = formatarDataISO(mesFinanceiroRef).slice(0, 7);
   const data = await api(`/api/financeiro/lancamentos?mes=${mesISO}`);
   if (!data) return;
 
   const mesLabel = mesFinanceiroRef.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'America/Sao_Paulo' });
+  // US71/CA02 — gráfico só faz sentido quando já há a distinção previsto/
+  // realizado (US64); payload antigo (sem esses campos) não teria o que
+  // agrupar de diferente das barras.
+  const semanas = data.resumo.previsto != null ? agruparPorSemanaDoMes(data.lancamentos) : [];
 
-  let html = `
+  let html = tabsFinanceiroHtml() + `
     <div class="nav-periodo">
-      <button data-nav="-1">← Mês anterior</button>
+      <button data-nav="-1" data-testid="nav-mes-anterior">← Mês anterior</button>
       <strong>${mesLabel}</strong>
-      <button data-nav="1">Próximo mês →</button>
+      <button data-nav="1" data-testid="nav-mes-proximo">Próximo mês →</button>
     </div>
     <div class="financeiro-resumo">
       <div class="financeiro-resumo-card">
@@ -1258,16 +1368,21 @@ async function renderFinanceiro() {
         <div class="${data.resumo.saldo >= 0 ? 'financeiro-entrada' : 'financeiro-saida'}">${formatarPreco(data.resumo.saldo)}</div>
       </div>
       ${data.resumo.previsto != null ? `
-        <div class="financeiro-resumo-card">
+        <div class="financeiro-resumo-card" data-testid="card-previsto">
           <div class="financeiro-resumo-label">Receita prevista</div>
-          <div class="financeiro-entrada">${formatarPreco(data.resumo.previsto)}</div>
+          <div class="financeiro-previsto">${formatarPreco(data.resumo.previsto)}</div>
         </div>
-        <div class="financeiro-resumo-card">
+        <div class="financeiro-resumo-card" data-testid="card-realizado">
           <div class="financeiro-resumo-label">Receita realizada</div>
           <div class="financeiro-entrada">${formatarPreco(data.resumo.realizado)}</div>
         </div>
+        <div class="financeiro-resumo-card" data-testid="card-total">
+          <div class="financeiro-resumo-label">Total do mês</div>
+          <div class="financeiro-entrada">${formatarPreco(data.resumo.previsto + data.resumo.realizado)}</div>
+        </div>
       ` : ''}
     </div>
+    ${semanas.length ? renderGraficoSemanasFinanceiro(semanas) : ''}
     <button class="btn-novo-agendamento" id="btn-novo-lancamento" style="margin-bottom:16px">+ Novo lançamento</button>
   `;
 
@@ -1285,6 +1400,118 @@ async function renderFinanceiro() {
     renderFinanceiro();
   });
   document.getElementById('btn-novo-lancamento').addEventListener('click', abrirModalLancamento);
+}
+
+// US71/CA03 — resumo da semana + detalhamento expansível (fechado por
+// padrão; só busca a lista de lançamentos quando aberto, pra não pagar o
+// custo da segunda chamada de API sem o usuário ter pedido).
+async function renderFinanceiroSemana() {
+  const inicio = inicioDaSemana(semanaFinanceiroRef);
+  const referencia = formatarDataISO(inicio);
+  const [resumo, detalhamento] = await Promise.all([
+    api(`/api/financeiro/resumo?periodo=semana&referencia=${referencia}`),
+    detalhamentoSemanaAberto ? api(`/api/financeiro/lancamentos?periodo=semana&referencia=${referencia}`) : Promise.resolve(null),
+  ]);
+  if (!resumo) return;
+
+  let html = tabsFinanceiroHtml() + `
+    <div class="nav-periodo">
+      <button data-nav="-1" data-testid="nav-semana-anterior">← Semana anterior</button>
+      <strong>${labelIntervaloSemanaFinanceiro(inicio)}</strong>
+      <button data-nav="1" data-testid="nav-semana-proxima">Próxima semana →</button>
+    </div>
+    <div class="financeiro-resumo">
+      <div class="financeiro-resumo-card" data-testid="card-realizado">
+        <div class="financeiro-resumo-label">Realizado</div>
+        <div class="financeiro-entrada">${formatarPreco(resumo.realizado)}</div>
+      </div>
+      <div class="financeiro-resumo-card" data-testid="card-previsto">
+        <div class="financeiro-resumo-label">Previsto</div>
+        <div class="financeiro-previsto">${formatarPreco(resumo.previsto)}</div>
+      </div>
+      <div class="financeiro-resumo-card" data-testid="card-total">
+        <div class="financeiro-resumo-label">Total</div>
+        <div class="financeiro-entrada">${formatarPreco(resumo.total)}</div>
+      </div>
+    </div>
+    <button type="button" class="btn-secundario btn-detalhamento-financeiro" id="btn-toggle-detalhamento-semana">${detalhamentoSemanaAberto ? 'Ocultar detalhamento' : 'Ver detalhamento'}</button>
+  `;
+
+  if (detalhamentoSemanaAberto) {
+    html += `<div data-testid="lista-lancamentos">`;
+    html += (detalhamento && detalhamento.lancamentos.length)
+      ? detalhamento.lancamentos.map(renderLancamentoItem).join('')
+      : '<div class="vazio">Nenhum lançamento registrado para este período.</div>';
+    html += `</div>`;
+  }
+
+  conteudo.innerHTML = html;
+  conteudo.querySelector('[data-nav="-1"]').addEventListener('click', () => {
+    semanaFinanceiroRef.setDate(semanaFinanceiroRef.getDate() - 7);
+    renderFinanceiro();
+  });
+  conteudo.querySelector('[data-nav="1"]').addEventListener('click', () => {
+    semanaFinanceiroRef.setDate(semanaFinanceiroRef.getDate() + 7);
+    renderFinanceiro();
+  });
+  document.getElementById('btn-toggle-detalhamento-semana').addEventListener('click', () => {
+    detalhamentoSemanaAberto = !detalhamentoSemanaAberto;
+    renderFinanceiro();
+  });
+}
+
+// US71/CA04 — resumo do dia + lista sempre visível (sem toggle, diferente da
+// semana: no dia o volume de lançamentos já é pequeno o bastante pra não
+// precisar de um passo extra de expandir).
+async function renderFinanceiroDia() {
+  const referencia = formatarDataISO(diaFinanceiroRef);
+  const [resumo, detalhamento] = await Promise.all([
+    api(`/api/financeiro/resumo?periodo=dia&referencia=${referencia}`),
+    api(`/api/financeiro/lancamentos?periodo=dia&referencia=${referencia}`),
+  ]);
+  if (!resumo || !detalhamento) return;
+
+  const dataLabel = diaFinanceiroRef.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Sao_Paulo' });
+
+  let html = tabsFinanceiroHtml() + `
+    <div class="nav-periodo">
+      <button data-nav="-1" data-testid="nav-dia-anterior">← Dia anterior</button>
+      <div class="nav-periodo-data">
+        <strong>${dataLabel}</strong>
+        <div class="nav-periodo-dia-semana">${nomeDiaSemana(diaFinanceiroRef)}</div>
+      </div>
+      <button data-nav="1" data-testid="nav-dia-proximo">Próximo dia →</button>
+    </div>
+    <div class="financeiro-resumo">
+      <div class="financeiro-resumo-card" data-testid="card-realizado">
+        <div class="financeiro-resumo-label">Realizado</div>
+        <div class="financeiro-entrada">${formatarPreco(resumo.realizado)}</div>
+      </div>
+      <div class="financeiro-resumo-card" data-testid="card-previsto">
+        <div class="financeiro-resumo-label">Previsto</div>
+        <div class="financeiro-previsto">${formatarPreco(resumo.previsto)}</div>
+      </div>
+      <div class="financeiro-resumo-card" data-testid="card-total">
+        <div class="financeiro-resumo-label">Total</div>
+        <div class="financeiro-entrada">${formatarPreco(resumo.total)}</div>
+      </div>
+    </div>
+    <div data-testid="lista-lancamentos">
+  `;
+  html += detalhamento.lancamentos.length
+    ? detalhamento.lancamentos.map(renderLancamentoItem).join('')
+    : '<div class="vazio">Nenhum lançamento registrado para este dia.</div>';
+  html += `</div>`;
+
+  conteudo.innerHTML = html;
+  conteudo.querySelector('[data-nav="-1"]').addEventListener('click', () => {
+    diaFinanceiroRef.setDate(diaFinanceiroRef.getDate() - 1);
+    renderFinanceiro();
+  });
+  conteudo.querySelector('[data-nav="1"]').addEventListener('click', () => {
+    diaFinanceiroRef.setDate(diaFinanceiroRef.getDate() + 1);
+    renderFinanceiro();
+  });
 }
 
 function abrirModalLancamento() {
@@ -2419,10 +2646,11 @@ function construirPendenciasInicio(status) {
 async function renderInicio() {
   conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
   const iso = formatarDataISO(new Date());
-  const [data, status, modulosResultado] = await Promise.all([
+  const [data, status, modulosResultado, resumoFinanceiro] = await Promise.all([
     api(`/api/agendamentos?view=dia&data=${iso}`),
     api('/api/tenant/status').catch(() => null),
     api('/api/tenant/modulos').catch(() => null),
+    api('/api/financeiro/resumo-dashboard').catch(() => null),
   ]);
   if (!data) return;
 
@@ -2432,6 +2660,11 @@ async function renderInicio() {
 
   const pendencias = construirPendenciasInicio(status);
   const temFinanceiro = ((modulosResultado && modulosResultado.modulos) || []).some((m) => m.key === 'financeiro');
+  // US70/CA01-CA02 — resumo só aparece pra quem tem o módulo ativo E pode
+  // ver dinheiro (mesma restrição do endpoint: requireAdmin, US62); operador
+  // nunca chama a rota certo, mas também não faz sentido mostrar os cards
+  // vazios pra ele.
+  const podeVerFinanceiro = temFinanceiro && status && status.role !== 'operador' && !!resumoFinanceiro;
 
   // CA "estado vazio orienta próxima ação" — se não há agendamento nenhum e
   // existe uma pendência de configuração conhecida, a mensagem aponta a
@@ -2452,6 +2685,33 @@ async function renderInicio() {
       ${temFinanceiro ? '<button class="btn-secundario" data-acao-atalho-inicio="modulo:financeiro">Financeiro</button>' : ''}
     </div>
   `;
+
+  // US70/CA02-CA03 — faixa de 4 cards com o resumo financeiro do dia/mês;
+  // cada card navega pro Financeiro (a US71 ainda vai trazer o recorte por
+  // dia/semana lá dentro — por ora os 4 cards abrem a mesma visão mensal,
+  // que já inclui os lançamentos de hoje).
+  if (podeVerFinanceiro) {
+    html += `
+      <div class="inicio-financeiro-resumo" data-testid="cards-financeiro-resumo">
+        <div class="financeiro-resumo-card" data-testid="card-realizado-hoje" data-card-financeiro-nav="1" data-financeiro-periodo="dia" data-financeiro-referencia="${iso}">
+          <div class="financeiro-resumo-label">Realizado hoje</div>
+          <div class="financeiro-entrada">${formatarPreco(resumoFinanceiro.realizado_hoje)}</div>
+        </div>
+        <div class="financeiro-resumo-card" data-testid="card-previsto-hoje" data-card-financeiro-nav="1" data-financeiro-periodo="dia" data-financeiro-referencia="${iso}">
+          <div class="financeiro-resumo-label">Previsto hoje</div>
+          <div class="financeiro-previsto">${formatarPreco(resumoFinanceiro.previsto_hoje)}</div>
+        </div>
+        <div class="financeiro-resumo-card" data-testid="card-realizado-mes" data-card-financeiro-nav="1" data-financeiro-periodo="mes" data-financeiro-referencia="${iso.slice(0, 7)}">
+          <div class="financeiro-resumo-label">Realizado no mês</div>
+          <div class="financeiro-entrada">${formatarPreco(resumoFinanceiro.realizado_mes)}</div>
+        </div>
+        <div class="financeiro-resumo-card" data-testid="card-previsto-mes" data-card-financeiro-nav="1" data-financeiro-periodo="mes" data-financeiro-referencia="${iso.slice(0, 7)}">
+          <div class="financeiro-resumo-label">Previsto no mês</div>
+          <div class="financeiro-previsto">${formatarPreco(resumoFinanceiro.previsto_mes)}</div>
+        </div>
+      </div>
+    `;
+  }
 
   if (pendencias.length) {
     html += `
@@ -3428,6 +3688,22 @@ async function renderConfiguracao() {
   const almocoInicio = (configuracao.horario_almoco_inicio || '12:00').slice(0, 5);
   const almocoFim = (configuracao.horario_almoco_fim || '13:00').slice(0, 5);
 
+  // US69/CA06 — modo de atendimento é somente leitura aqui: quem altera é o
+  // admin Kyvvo (vinculado ao plano contratado), não o dono do salão.
+  const modoIa = configuracao.tecnologia === 'ia';
+  const modoAtendimentoHtml = `
+    <div class="perfil-form" style="margin-bottom:24px">
+      <label>Modo de atendimento</label>
+      <div class="modal-texto">
+        <span class="badge ${modoIa ? 'badge-modo-ia' : 'badge-modo-bot'}">
+          ${modoIa ? '✨ IA — Linguagem natural' : '🤖 Bot — Menus numerados'}
+        </span>
+      </div>
+      <div class="modal-texto">${escapeHtml(configuracao.plano_atual || '')}</div>
+      ${modoIa ? '' : '<div class="modal-texto"><a href="mailto:suporte@kyvvo.com.br">Fale conosco para fazer upgrade</a></div>'}
+    </div>
+  `;
+
   const toggleDias = NOMES_DIAS.map((nome, idx) => `
     <label class="dia-toggle-cel">
       <span class="dia-toggle-nome">${nome.slice(0, 3)}</span>
@@ -3439,6 +3715,7 @@ async function renderConfiguracao() {
   `).join('');
 
   conteudo.innerHTML = `
+    ${modoAtendimentoHtml}
     <form class="perfil-form" id="form-config">
       <label>Dias em que ${infoSegmento(configuracao.segmento).dias} funciona (aparecem na agenda)</label>
       <div class="dias-grid">${toggleDias}</div>
