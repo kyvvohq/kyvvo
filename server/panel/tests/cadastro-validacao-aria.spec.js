@@ -16,7 +16,10 @@ test.describe('Cadastro — validação inline com aria (US80.3)', () => {
     await mockSegmentos(page);
     await page.goto('/cadastro.html');
 
-    for (const campo of ['nome_responsavel', 'email', 'segmento', 'telefone', 'whatsapp', 'senha']) {
+    // US77 removeu Segmento do cadastro; Telefone só existe (oculto) atrás
+    // do checkbox "Uso outro número para ligações", mas o atributo aria já
+    // é aplicado no elemento independente de visibilidade.
+    for (const campo of ['nome_responsavel', 'email', 'telefone', 'whatsapp', 'senha']) {
       await expect(page.locator('#' + campo)).toHaveAttribute('aria-invalid', 'false');
       await expect(page.locator('#' + campo)).toHaveAttribute('aria-describedby', 'erro-' + campo);
     }
