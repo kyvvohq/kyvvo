@@ -19,10 +19,14 @@ test.describe('Cadastro — validação inline com aria (US80.3)', () => {
     // US77 removeu Segmento do cadastro; Telefone só existe (oculto) atrás
     // do checkbox "Uso outro número para ligações", mas o atributo aria já
     // é aplicado no elemento independente de visibilidade.
-    for (const campo of ['nome_responsavel', 'email', 'telefone', 'whatsapp', 'senha']) {
+    for (const campo of ['nome_responsavel', 'email', 'telefone', 'whatsapp']) {
       await expect(page.locator('#' + campo)).toHaveAttribute('aria-invalid', 'false');
       await expect(page.locator('#' + campo)).toHaveAttribute('aria-describedby', 'erro-' + campo);
     }
+    // US80.1 — senha também referencia o checklist de requisitos, além da
+    // mensagem de erro (aria-describedby aceita múltiplos IDs).
+    await expect(page.locator('#senha')).toHaveAttribute('aria-invalid', 'false');
+    await expect(page.locator('#senha')).toHaveAttribute('aria-describedby', 'senha-requisitos erro-senha');
   });
 
   test('erro no blur marca aria-invalid=true no campo correspondente', async ({ page }) => {
