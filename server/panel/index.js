@@ -779,6 +779,15 @@ async function start() {
     return reply.type('text/html').sendFile('admin/tenant-detalhe.html');
   });
 
+  // US82.2 — a rota "/onboarding" (sem .html) é onde o login vai
+  // redirecionar enquanto onboarding_pendente for verdadeiro (US82.1).
+  // Autenticação é client-side (token no localStorage, mesmo padrão de
+  // painel.html) + as APIs que a página consome; nenhuma novidade de
+  // proteção de rota aqui além do que já existe nas outras telas do painel.
+  fastify.get('/onboarding', async (request, reply) => {
+    return reply.type('text/html').sendFile('onboarding.html');
+  });
+
   // Rotas que uma conta ainda não verificada (US20/CA10) precisa continuar
   // acessando pra completar a verificação, pedir reenvio ou sair — checado
   // direto em `authenticate` (em vez de um preHandler à parte que cada rota
