@@ -85,6 +85,11 @@ const SENHA_REGEX = /^(?=.*[A-Z])(?=.*\d).{8,}$/;
 // (segmentos) fica pra uma US futura, não é necessário pro MVP.
 const SEGMENTOS_VALIDOS = ['salao_beleza', 'petshop', 'psicologia', 'fisioterapia', 'pilates', 'outro'];
 
+// US69 — modo de atendimento do tenant no WhatsApp: bot (menus, n8n) ou ia
+// (conversacional, US68). Mesmo enum do CHECK de tenants.tecnologia
+// (migration 046).
+const TECNOLOGIA_VALIDA = ['bot', 'ia'];
+
 // Normaliza um WhatsApp brasileiro para os dígitos nacionais (DDD + número,
 // sem o DDI 55), que é o formato guardado como unique key. Retorna null se
 // não for um número brasileiro plausível.
@@ -714,13 +719,37 @@ async function start() {
   fastify.get('/api/planos', async () => {
     const { rows } = await pool.query(
       `SELECT p.chave, p.slug, p.nome, p.descricao, p.tecnologia, p.tipo_numero, p.preco_mensal,
-              p.limite_disparos, p.destaque, p.badge, p.herda_de, base.nome AS herda_de_nome
+              p.limite_disparos, p.destaque, p.badge, p.headline_diferencial, p.frase_beneficio,
+              p.herda_de, base.nome AS herda_de_nome
          FROM planos p
          LEFT JOIN planos base ON base.chave = p.herda_de
         WHERE p.ativo = true
         ORDER BY p.preco_mensal ASC`
     );
     return anexarFeaturesELimites(rows);
+  });
+
+  // US72/CA02 — resolve um slug pra um plano único, aceitando tanto o slug
+  // atual quanto a `chave` (identificador interno, imutável — era o slug
+  // antes da US72 renomear pra eixo de valor). Isso mantém links antigos
+  // (?plano=starter) funcionando sem precisar de uma tabela extra de
+  // aliases: `chave` nunca muda, então basta aceitar os dois. Não filtra
+  // por `ativo` — é uma consulta pontual (não a lista pra grade de preços),
+  // então resolve mesmo plano legado desativado (ex: pra não devolver 404 de
+  // um link publicado antes da desativação em 045_planos_2x2.sql).
+  fastify.get('/api/planos/:slug', async (request, reply) => {
+    const { slug } = request.params;
+    const { rows } = await pool.query(
+      `SELECT slug, nome, descricao, tecnologia, tipo_numero, preco_mensal,
+              limite_disparos, destaque, badge
+         FROM planos
+        WHERE slug = $1 OR chave = $1`,
+      [slug]
+    );
+    if (!rows[0]) {
+      return reply.code(404).send({ error: 'Plano não encontrado' });
+    }
+    return { ...rows[0], preco_mensal: Number(rows[0].preco_mensal) };
   });
 
 
@@ -2394,11 +2423,15 @@ async function start() {
     const { tenantId } = request.user;
     const { rows } = await pool.query(
       `SELECT dias_funcionamento, formato_hora, horario_abertura, horario_fechamento, segmento,
-              horario_almoco_ativo, horario_almoco_inicio, horario_almoco_fim
+              horario_almoco_ativo, horario_almoco_inicio, horario_almoco_fim, tecnologia, plano
        FROM tenants WHERE id = $1`,
       [tenantId]
     );
-    return rows[0];
+    const config = rows[0];
+    if (!config) return config;
+    // US69/CA06 — modo de atendimento é somente leitura no portal do salão;
+    // o admin Kyvvo é quem altera (PATCH /admin/api/tenants/:id/modo).
+    return { ...config, plano_atual: nomeDoPlano(config.plano) };
   });
 
   const HORARIO_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -2555,17 +2588,109 @@ async function start() {
     return { modulos: rows };
   });
 
-  // ---------- Financeiro (US18/US64) ----------
+  // ---------- Financeiro (US18/US64/US71) ----------
   // Livro-caixa manual (entrada/saída, US18) + lançamentos automáticos de
   // agendamento (US64, sincronizados por sincronizarLancamentoFinanceiro) —
   // só acessível a quem tem o módulo "financeiro" ativo.
+
+  const FINANCEIRO_PERIODOS_VALIDOS = ['mes', 'semana', 'dia'];
+
+  // US71 — cláusula de intervalo compartilhada entre o resumo por período
+  // (CA01) e o detalhamento de lançamentos (US71.2). 'semana' usa
+  // date_trunc('week', ...), que no Postgres começa na segunda-feira — mesmo
+  // critério do inicioDaSemana() do frontend (app.js), pra não haver
+  // divergência entre o que a semana mostra no resumo e no detalhamento.
+  function clausulaPeriodoFinanceiro(periodo) {
+    if (periodo === 'semana') {
+      return `l.data >= date_trunc('week', $2::date) AND l.data < date_trunc('week', $2::date) + interval '7 days'`;
+    }
+    if (periodo === 'dia') return `l.data = $2::date`;
+    return `to_char(l.data, 'YYYY-MM') = $2`;
+  }
+
+  function referenciaPadraoFinanceiro(periodo) {
+    return periodo === 'mes' ? mesAtualBrasilia() : dataAtualBrasilia();
+  }
+
+  // US71/CA01 — resumo (realizado/previsto/total) unificado por período,
+  // alimenta os cards das 3 abas da página /financeiro. Sempre só receita
+  // (tipo='entrada') — mesmo recorte do resumo-dashboard (US70). Cancelado
+  // nunca conta (não aparece em nenhum FILTER abaixo).
+  fastify.get(
+    '/api/financeiro/resumo',
+    { preHandler: [fastify.authenticate, fastify.requireModulo('financeiro'), fastify.requireAdmin] },
+    async (request, reply) => {
+      const { tenantId } = request.user;
+      const { periodo } = request.query;
+      if (!FINANCEIRO_PERIODOS_VALIDOS.includes(periodo)) {
+        return reply.code(422).send({ error: `periodo deve ser um de: ${FINANCEIRO_PERIODOS_VALIDOS.join(', ')}` });
+      }
+      const referencia = request.query.referencia || referenciaPadraoFinanceiro(periodo);
+
+      const { rows } = await pool.query(
+        `SELECT
+           COALESCE(SUM(l.valor) FILTER (WHERE l.status = 'realizado'), 0) AS realizado,
+           COALESCE(SUM(l.valor) FILTER (WHERE l.status = 'previsto'), 0) AS previsto
+         FROM lancamentos_financeiros l
+         WHERE l.tenant_id = $1 AND l.tipo = 'entrada' AND ${clausulaPeriodoFinanceiro(periodo)}`,
+        [tenantId, referencia]
+      );
+      const realizado = Number(rows[0].realizado);
+      const previsto = Number(rows[0].previsto);
+      return { periodo, referencia, realizado, previsto, total: realizado + previsto };
+    }
+  );
+
+  // US70/CA01 — resumo financeiro pra tela inicial (4 cards): só receita
+  // (tipo='entrada', mesmo recorte de `previsto`/`realizado` já usado no
+  // resumo mensal do financeiro em si) hoje e no mês corrente, em horário de
+  // Brasília. `cancelado` nunca entra (não está em nenhum FILTER abaixo).
+  fastify.get(
+    '/api/financeiro/resumo-dashboard',
+    { preHandler: [fastify.authenticate, fastify.requireModulo('financeiro'), fastify.requireAdmin] },
+    async (request) => {
+      const { tenantId } = request.user;
+      const hoje = dataAtualBrasilia();
+      const mesRef = mesAtualBrasilia();
+
+      const { rows } = await pool.query(
+        `SELECT
+           COALESCE(SUM(valor) FILTER (WHERE status = 'realizado' AND data = $2), 0) AS realizado_hoje,
+           COALESCE(SUM(valor) FILTER (WHERE status = 'previsto'  AND data = $2), 0) AS previsto_hoje,
+           COALESCE(SUM(valor) FILTER (WHERE status = 'realizado' AND to_char(data, 'YYYY-MM') = $3), 0) AS realizado_mes,
+           COALESCE(SUM(valor) FILTER (WHERE status = 'previsto'  AND to_char(data, 'YYYY-MM') = $3), 0) AS previsto_mes
+         FROM lancamentos_financeiros
+         WHERE tenant_id = $1 AND tipo = 'entrada'`,
+        [tenantId, hoje, mesRef]
+      );
+      const r = rows[0];
+      return {
+        realizado_hoje: Number(r.realizado_hoje),
+        previsto_hoje: Number(r.previsto_hoje),
+        realizado_mes: Number(r.realizado_mes),
+        previsto_mes: Number(r.previsto_mes),
+      };
+    }
+  );
+
   fastify.get(
     '/api/financeiro/lancamentos',
     // US62 — dinheiro é visão de administrador; operador não acessa.
     { preHandler: [fastify.authenticate, fastify.requireModulo('financeiro'), fastify.requireAdmin] },
-    async (request) => {
+    async (request, reply) => {
       const { tenantId } = request.user;
-      const mesRef = request.query.mes || mesAtualBrasilia();
+      const periodoQuery = request.query.periodo;
+
+      // US71.2 — ?periodo=semana|dia&referencia=... é o modo novo (detalhamento
+      // das abas Semana/Dia); sem `periodo`, mantém o comportamento legado
+      // (?mes=..., US18/US64) intacto, inclusive o default pro mês corrente.
+      if (periodoQuery && !FINANCEIRO_PERIODOS_VALIDOS.includes(periodoQuery)) {
+        return reply.code(422).send({ error: `periodo deve ser um de: ${FINANCEIRO_PERIODOS_VALIDOS.join(', ')}` });
+      }
+      const periodo = periodoQuery || 'mes';
+      const referencia = periodo === 'mes'
+        ? (request.query.mes || request.query.referencia || mesAtualBrasilia())
+        : (request.query.referencia || referenciaPadraoFinanceiro(periodo));
 
       // LEFT JOIN com agendamentos/clientes/servicos só resolve campos pra
       // exibição (CA "Cenário 8" — identificar cliente/serviço/data do
@@ -2578,9 +2703,9 @@ async function start() {
          LEFT JOIN agendamentos a ON a.id = l.agendamento_id
          LEFT JOIN clientes c ON c.id = a.cliente_id
          LEFT JOIN servicos s ON s.id = a.servico_id
-         WHERE l.tenant_id = $1 AND to_char(l.data, 'YYYY-MM') = $2
+         WHERE l.tenant_id = $1 AND ${clausulaPeriodoFinanceiro(periodo)}
          ORDER BY l.data DESC, l.criado_em DESC`,
-        [tenantId, mesRef]
+        [tenantId, referencia]
       );
       const lancamentos = rows.map((r) => ({ ...r, origem: r.agendamento_id ? 'agendamento' : 'manual' }));
 
@@ -2596,7 +2721,9 @@ async function start() {
       const realizado = ativos.filter((r) => r.tipo === 'entrada' && r.status === 'realizado').reduce((soma, r) => soma + Number(r.valor), 0);
 
       return {
-        mes: mesRef,
+        mes: periodo === 'mes' ? referencia : undefined,
+        periodo,
+        referencia,
         lancamentos,
         resumo: { entradas, saidas, saldo: entradas - saidas, previsto, realizado },
       };
@@ -3175,7 +3302,7 @@ async function start() {
     // esses parâmetros.
     if (page === undefined && limit === undefined) {
       const { rows } = await pool.query(
-        `SELECT t.id, t.nome, t.segmento, t.ativo, t.criado_em, t.cadastrado_em, t.ativado_em,
+        `SELECT t.id, t.nome, t.segmento, t.ativo, t.criado_em, t.cadastrado_em, t.ativado_em, t.tecnologia,
                 (SELECT COUNT(*)::int FROM usuarios u WHERE u.tenant_id = t.id) AS total_usuarios
          FROM tenants t
          ORDER BY t.criado_em DESC`
@@ -3206,7 +3333,7 @@ async function start() {
 
     const { rows } = await pool.query(
       `SELECT t.id, t.nome, t.segmento, t.ativo, t.criado_em, t.cadastrado_em, t.ativado_em,
-              t.whatsapp, t.status, t.trial_expires_at,
+              t.whatsapp, t.status, t.trial_expires_at, t.tecnologia,
               resp.nome AS responsavel, resp.email AS email,
               (SELECT COUNT(*)::int FROM usuarios u WHERE u.tenant_id = t.id) AS total_usuarios
        FROM tenants t
@@ -3370,6 +3497,55 @@ async function start() {
     return { historico: rows };
   });
 
+  // US69/CA03 — troca o modo de atendimento (bot/ia) de um tenant específico.
+  // Só o admin Kyvvo faz essa troca (o dono do salão só visualiza, CA06) — o
+  // modo está vinculado ao plano contratado (US67), e liberar a edição pro
+  // salão quebraria a lógica de cobrança. Cada troca é auditada em
+  // log_modo_atendimento_tenant (migration 046), mesmo padrão de
+  // log_modulos_tenant (US65/CA05).
+  fastify.patch('/admin/api/tenants/:id/modo', { preHandler: [fastify.authenticateAdmin] }, async (request, reply) => {
+    const { id } = request.params;
+    const { tecnologia } = request.body || {};
+
+    if (!TECNOLOGIA_VALIDA.includes(tecnologia)) {
+      return reply.code(422).send({ error: `tecnologia deve ser um de: ${TECNOLOGIA_VALIDA.join(', ')}` });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const { rows: antesRows } = await client.query('SELECT tecnologia FROM tenants WHERE id = $1 FOR UPDATE', [id]);
+      const anterior = antesRows[0];
+      if (!anterior) {
+        await client.query('ROLLBACK');
+        return reply.code(404).send({ error: 'Tenant não encontrado' });
+      }
+
+      const { rows: atualizadoRows } = await client.query(
+        'UPDATE tenants SET tecnologia = $2 WHERE id = $1 RETURNING *',
+        [id, tecnologia]
+      );
+      const novo = atualizadoRows[0];
+
+      if (anterior.tecnologia !== tecnologia) {
+        await client.query(
+          `INSERT INTO log_modo_atendimento_tenant (tenant_id, valor_anterior, valor_novo, alterado_por)
+           VALUES ($1, $2, $3, $4)`,
+          [id, anterior.tecnologia, tecnologia, request.admin.adminId]
+        );
+      }
+
+      await client.query('COMMIT');
+      return novo;
+    } catch (erro) {
+      await client.query('ROLLBACK');
+      throw erro;
+    } finally {
+      client.release();
+    }
+  });
+
   fastify.post('/admin/api/tenants', { preHandler: [fastify.authenticateAdmin] }, async (request, reply) => {
     const { nome, telefone, endereco, segmento, horario_abertura: horarioAbertura, horario_fechamento: horarioFechamento, usuario } =
       request.body || {};
@@ -3477,7 +3653,7 @@ async function start() {
   fastify.get('/admin/api/configuracoes', { preHandler: [fastify.authenticateAdmin] }, async () => {
     const { rows: planosRows } = await pool.query(
       `SELECT chave, slug, nome, descricao, tecnologia, tipo_numero, preco_mensal,
-              limite_disparos, destaque, badge, herda_de, ativo, atualizado_em
+              limite_disparos, destaque, badge, headline_diferencial, frase_beneficio, herda_de, ativo, atualizado_em
        FROM planos ORDER BY preco_mensal ASC`
     );
     // US74/CA05 — features/limites por plano, pro admin editar (mesma forma
@@ -3517,11 +3693,14 @@ async function start() {
   fastify.patch('/admin/api/configuracoes/planos/:chave', { preHandler: [fastify.authenticateAdmin] }, async (request, reply) => {
     const { chave } = request.params;
     const {
+      nome,
       descricao,
       preco_mensal: precoMensal,
       limite_disparos: limiteDisparos,
       destaque,
       badge,
+      headline_diferencial: headlineDiferencial,
+      frase_beneficio: fraseBeneficio,
       features,
       limites,
       ativo,
@@ -3529,6 +3708,22 @@ async function start() {
 
     if (precoMensal !== undefined && !(Number(precoMensal) >= 1)) {
       return reply.code(400).send({ error: 'Preço mensal deve ser no mínimo R$ 1,00.' });
+    }
+    // US72/CA04 — nome é editável (o eixo de valor da US72 já fica no dado,
+    // mas o PO pode querer ajustar o texto sem deploy); `slug` continua
+    // estrutural e não é aceito aqui, então editar o nome nunca altera o
+    // slug automaticamente.
+    if (nome !== undefined && !nome.trim()) {
+      return reply.code(400).send({ error: 'Nome do plano não pode ficar em branco.' });
+    }
+    // US73/CA01/CA04 — mesmo limite de 120 caracteres da migration, validado
+    // aqui também (o CHECK do banco é a garantia final, isso só evita um
+    // round-trip de erro genérico de constraint).
+    if (headlineDiferencial !== undefined && headlineDiferencial !== null && headlineDiferencial.length > 120) {
+      return reply.code(400).send({ error: 'Headline de diferencial deve ter no máximo 120 caracteres.' });
+    }
+    if (fraseBeneficio !== undefined && fraseBeneficio !== null && fraseBeneficio.length > 120) {
+      return reply.code(400).send({ error: 'Frase de benefício deve ter no máximo 120 caracteres.' });
     }
     // US74/CA01/CA05 — até 3 diferenciais por plano; o resto da UI (3 campos
     // fixos) já impede mandar mais, isso é a garantia server-side.
@@ -3557,18 +3752,21 @@ async function start() {
 
       const { rows: atualizadoRows } = await client.query(
         `UPDATE planos SET
-           descricao = COALESCE($2, descricao),
-           preco_mensal = COALESCE($3, preco_mensal),
-           limite_disparos = COALESCE($4, limite_disparos),
-           destaque = COALESCE($5, destaque),
-           badge = COALESCE($6, badge),
-           ativo = COALESCE($7, ativo),
+           nome = COALESCE($2, nome),
+           descricao = COALESCE($3, descricao),
+           preco_mensal = COALESCE($4, preco_mensal),
+           limite_disparos = COALESCE($5, limite_disparos),
+           destaque = COALESCE($6, destaque),
+           badge = COALESCE($7, badge),
+           headline_diferencial = COALESCE($8, headline_diferencial),
+           frase_beneficio = COALESCE($9, frase_beneficio),
+           ativo = COALESCE($10, ativo),
            atualizado_em = now(),
-           atualizado_por = $8
+           atualizado_por = $11
          WHERE chave = $1
          RETURNING chave, slug, nome, descricao, tecnologia, tipo_numero, preco_mensal,
-                   limite_disparos, destaque, badge, ativo, atualizado_em`,
-        [chave, descricao, precoMensal, limiteDisparos, destaque, badge, ativo, request.admin.adminId]
+                   limite_disparos, destaque, badge, headline_diferencial, frase_beneficio, ativo, atualizado_em`,
+        [chave, nome ? nome.trim() : null, descricao, precoMensal, limiteDisparos, destaque, badge, headlineDiferencial, fraseBeneficio, ativo, request.admin.adminId]
       );
       const novo = atualizadoRows[0];
 
@@ -3600,11 +3798,14 @@ async function start() {
       }
 
       const camposComparados = [
+        ['nome', anterior.nome, novo.nome],
         ['descricao', anterior.descricao, novo.descricao],
         ['preco_mensal', anterior.preco_mensal, novo.preco_mensal],
         ['limite_disparos', anterior.limite_disparos, novo.limite_disparos],
         ['destaque', anterior.destaque, novo.destaque],
         ['badge', anterior.badge, novo.badge],
+        ['headline_diferencial', anterior.headline_diferencial, novo.headline_diferencial],
+        ['frase_beneficio', anterior.frase_beneficio, novo.frase_beneficio],
         ['ativo', anterior.ativo, novo.ativo],
       ];
       for (const [campo, valorAnterior, valorNovo] of camposComparados) {

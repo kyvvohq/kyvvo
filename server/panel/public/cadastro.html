@@ -162,17 +162,31 @@
 
   const slugDaUrl = new URLSearchParams(window.location.search).get('plano');
   if (slugDaUrl) {
-    fetch('/api/planos')
-      .then((res) => {
+    Promise.all([
+      fetch('/api/planos').then((res) => {
         if (!res.ok) throw new Error('status ' + res.status);
         return res.json();
-      })
-      .then((planos) => {
+      }),
+      // US72/CA02 — resolve slug legado (ex: "starter") pro slug atual
+      // (ex: "essencial"): a lista de /api/planos só tem slugs ativos
+      // atuais, então um slug antigo nunca dá match nela direto. 404 (slug
+      // desconhecido) vira null e cai no fallback já existente abaixo.
+      fetch(`/api/planos/${encodeURIComponent(slugDaUrl)}`).then((res) => (res.ok ? res.json() : null)),
+    ])
+      .then(([planos, planoResolvido]) => {
         if (!planos.length) return;
         planoSelect.innerHTML = planos
           .map((p) => `<option value="${p.slug}">${p.nome} — ${formatarPrecoPlano(p.preco_mensal)}</option>`)
           .join('');
-        exibirPlanoSelecionado(planos, slugDaUrl);
+        const slugAlvo = planoResolvido ? planoResolvido.slug : slugDaUrl;
+        // CA02 — normaliza a URL pro slug novo quando o link usava o antigo,
+        // sem recarregar a página nem empilhar entrada no histórico.
+        if (planoResolvido && planoResolvido.slug !== slugDaUrl) {
+          const url = new URL(window.location.href);
+          url.searchParams.set('plano', planoResolvido.slug);
+          window.history.replaceState(null, '', url);
+        }
+        exibirPlanoSelecionado(planos, slugAlvo);
         planoSelect.addEventListener('change', () => exibirPlanoSelecionado(planos, planoSelect.value));
       })
       .catch(() => {
