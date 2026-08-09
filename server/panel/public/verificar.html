@@ -69,17 +69,20 @@
   async function preencherInstrucao() {
     let email = localStorage.getItem('kyvvo_email');
     let verificado = false;
+    let onboardingPendente = false;
     try {
       const res = await fetch('/api/tenant/status', { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) {
         const data = await res.json();
         if (data.email) email = data.email;
         verificado = data.email_verified;
+        onboardingPendente = !!data.onboarding_pendente;
       }
     } catch (e) {}
-    // Já verificado: não precisa ficar nesta tela.
+    // Já verificado: não precisa ficar nesta tela. onboarding_pendente
+    // (US82.1) manda pro wizard de dados do negócio em vez do painel.
     if (verificado) {
-      window.location.href = '/painel.html';
+      window.location.href = onboardingPendente ? '/onboarding' : '/painel.html';
       return;
     }
     instrucao.textContent = `Enviamos um código de 6 dígitos para ${mascararEmail(email)} e para seu WhatsApp.`;
@@ -132,12 +135,14 @@
       const data = await res.json().catch(() => ({}));
 
       if (res.ok) {
-        // CA08 — toast é exibido pelo painel após o redirect.
+        // CA08 — toast é exibido pelo painel após o redirect (só se cair lá
+        // — com onboarding_pendente, US82.1 leva pro wizard, sem toast).
         localStorage.setItem('kyvvo_email_verified', 'true');
+        localStorage.setItem('kyvvo_onboarding_pendente', String(!!data.onboarding_pendente));
         // Aha Moment do MVP (US47): e-mail validado = trial de 14 dias ativo
         // e usuário liberado pro painel de verdade.
         if (window.kyvvoCapture) window.kyvvoCapture('conta_ativada');
-        window.location.href = '/painel.html?verificado=1';
+        window.location.href = data.onboarding_pendente ? '/onboarding' : '/painel.html?verificado=1';
         return;
       }
       erroEl.textContent = data.error || 'Código incorreto. Tente novamente.';

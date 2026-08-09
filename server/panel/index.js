@@ -927,7 +927,7 @@ async function start() {
 
     const { rows } = await pool.query(
       `SELECT u.id, u.tenant_id, u.email, u.senha_hash, u.nome, u.token_version, u.email_verified,
-              u.role, u.ativo AS usuario_ativo, t.ativo AS tenant_ativo
+              u.role, u.ativo AS usuario_ativo, t.ativo AS tenant_ativo, t.onboarding_pendente
        FROM usuarios u JOIN tenants t ON t.id = u.tenant_id
        WHERE u.email = $1`,
       [email.toLowerCase().trim()]
@@ -962,7 +962,17 @@ async function start() {
     // email_verified informa ao front se deve redirecionar pra tela de
     // validação (CA10) em vez de entrar direto no portal. role (US62)
     // informa se mostra itens de menu restritos ao administrador.
-    return { token, nome: usuario.nome, email: usuario.email, email_verified: usuario.email_verified, role: usuario.role };
+    // onboarding_pendente (US82.1) informa se deve redirecionar pra
+    // /onboarding em vez do painel — checado depois de email_verified, já
+    // que validar o e-mail continua tendo prioridade sobre o wizard.
+    return {
+      token,
+      nome: usuario.nome,
+      email: usuario.email,
+      email_verified: usuario.email_verified,
+      role: usuario.role,
+      onboarding_pendente: !!usuario.onboarding_pendente,
+    };
   });
 
   // Invalida o token atual (e qualquer outro emitido antes dele) incrementando
@@ -1497,9 +1507,18 @@ async function start() {
     // ativado_em (US30) marca o momento exato da ativação — usado depois pra
     // calcular o trial (ativado_em + 14 dias). COALESCE garante que revalidar
     // um token (ou reprocessar) nunca sobrescreva a data já registrada.
-    await pool.query('UPDATE tenants SET ativado_em = COALESCE(ativado_em, now()) WHERE id = $1', [tenantId]);
+    const { rows: tenantRows } = await pool.query(
+      'UPDATE tenants SET ativado_em = COALESCE(ativado_em, now()) WHERE id = $1 RETURNING onboarding_pendente',
+      [tenantId]
+    );
 
-    return { ok: true, message: 'E-mail verificado! Seu trial de 14 dias está ativo.' };
+    // US82.1 — informa ao front (verificar.html) se deve seguir pra
+    // /onboarding em vez do painel logo após validar o e-mail.
+    return {
+      ok: true,
+      message: 'E-mail verificado! Seu trial de 14 dias está ativo.',
+      onboarding_pendente: !!tenantRows[0]?.onboarding_pendente,
+    };
   });
 
   // Reenvio de token (CA11): novo token, invalida o anterior, cooldown de 60s
@@ -1558,7 +1577,7 @@ async function start() {
     const { userId, tenantId } = request.user;
     const { rows } = await pool.query(
       `SELECT u.email, u.email_verified, u.role, t.status, t.plano, t.trial_expires_at, t.ativado_em,
-              t.onboarding_horario_revisado, t.onboarding_dispensado
+              t.onboarding_horario_revisado, t.onboarding_dispensado, t.onboarding_pendente
        FROM usuarios u JOIN tenants t ON t.id = u.tenant_id
        WHERE u.id = $1`,
       [userId]
@@ -1612,6 +1631,11 @@ async function start() {
         horario_nao_confirmado: !info.onboarding_horario_revisado,
       },
       onboarding_dispensado: !!info.onboarding_dispensado,
+      // US82.1 — diferente do checklist "Primeiros passos" acima (US56),
+      // onboarding_pendente é o wizard de dados do negócio pós-cadastro
+      // (US82): enquanto verdadeiro, o login redireciona pra /onboarding em
+      // vez do painel.
+      onboarding_pendente: !!info.onboarding_pendente,
     };
   });
 

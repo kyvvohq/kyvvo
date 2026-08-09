@@ -106,6 +106,18 @@
     }
   }
 
+  // US82.1 — enquanto onboarding_pendente for verdadeiro, o login leva pro
+  // wizard de dados do negócio (US82.2) em vez do painel.
+  function irParaOnboarding() {
+    if (inIframe) {
+      try {
+        window.parent.postMessage({ source: 'kyvvo-login', status: 'success', onboarding: true }, '*');
+      } catch (e) {}
+    } else {
+      window.location.href = '/onboarding';
+    }
+  }
+
   // Login sem e-mail validado (US20/CA10): manda pra tela de validação do
   // token em vez de entrar no portal.
   function irParaVerificar() {
@@ -120,9 +132,13 @@
 
   if (localStorage.getItem('kyvvo_token')) {
     // CA10: mesma checagem do handler de submit — não deixar cair direto no
-    // painel se o cadastro ainda não foi validado.
+    // painel se o cadastro ainda não foi validado. onboarding_pendente
+    // (US82.1) só é checado depois da validação de e-mail, mesma prioridade
+    // usada no submit abaixo.
     if (localStorage.getItem('kyvvo_email_verified') === 'false') {
       irParaVerificar();
+    } else if (localStorage.getItem('kyvvo_onboarding_pendente') === 'true') {
+      irParaOnboarding();
     } else {
       irParaPainel();
     }
@@ -174,8 +190,11 @@
         localStorage.setItem('kyvvo_nome', data.nome || '');
         if (data.email) localStorage.setItem('kyvvo_email', data.email);
         localStorage.setItem('kyvvo_email_verified', String(data.email_verified !== false));
+        localStorage.setItem('kyvvo_onboarding_pendente', String(!!data.onboarding_pendente));
         if (data.email_verified === false) {
           irParaVerificar();
+        } else if (data.onboarding_pendente) {
+          irParaOnboarding();
         } else {
           irParaPainel();
         }

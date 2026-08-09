@@ -46,12 +46,17 @@ window.addEventListener('keydown', (e) => {
 window.addEventListener('message', (e) => {
   if (e.origin !== PANEL_ORIGIN) return;
   if (e.data && e.data.source === 'kyvvo-login' && e.data.status === 'success') {
-    // Login sem e-mail validado (US20/CA10) vai pra tela de validação do token.
+    // Login sem e-mail validado (US20/CA10) vai pra tela de validação do
+    // token; com onboarding_pendente (US82.1), pro wizard de dados do
+    // negócio (US82.2) — checado só depois da validação de e-mail, mesma
+    // prioridade usada em login.html.
     const destino = e.data.admin
       ? '/admin/painel.html'
       : e.data.verificar
         ? '/verificar.html'
-        : '/painel.html';
+        : e.data.onboarding
+          ? '/onboarding'
+          : '/painel.html';
     window.top.location.href = PANEL_ORIGIN + destino;
   }
 });
