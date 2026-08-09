@@ -33,23 +33,14 @@
       <input type="text" id="nome_responsavel" autocomplete="name" placeholder="Nome completo do responsável">
       <div class="field-error" id="erro-nome_responsavel"></div>
 
+      <label for="whatsapp">WhatsApp</label>
+      <input type="tel" id="whatsapp" autocomplete="tel" inputmode="numeric" placeholder="(34) 99999-9999">
+      <div class="field-apoio">É por aqui que suas clientes vão agendar.</div>
+      <div class="field-error" id="erro-whatsapp"></div>
+
       <label for="email">E-mail</label>
       <input type="email" id="email" autocomplete="email">
       <div class="field-error" id="erro-email"></div>
-
-      <label for="segmento">Segmento</label>
-      <select id="segmento" autocomplete="off">
-        <option value="" disabled selected>Selecione seu segmento...</option>
-      </select>
-      <div class="field-error" id="erro-segmento"></div>
-
-      <label for="telefone">Telefone</label>
-      <input type="tel" id="telefone" autocomplete="tel" placeholder="(34) 99999-9999">
-      <div class="field-error" id="erro-telefone"></div>
-
-      <label for="whatsapp">WhatsApp</label>
-      <input type="tel" id="whatsapp" autocomplete="tel" placeholder="(34) 99999-9999">
-      <div class="field-error" id="erro-whatsapp"></div>
 
       <label for="senha">Senha</label>
       <div class="senha-wrapper">
@@ -57,6 +48,16 @@
         <button type="button" id="btn-toggle-senha" class="toggle-senha" aria-label="Mostrar senha" tabindex="-1">👁</button>
       </div>
       <div class="field-error" id="erro-senha"></div>
+
+      <label class="dia-checkbox" style="margin-top: 16px">
+        <input type="checkbox" id="usa_telefone_alternativo">
+        Uso outro número para ligações
+      </label>
+      <div id="bloco-telefone-alternativo" hidden>
+        <label for="telefone">Telefone para ligações</label>
+        <input type="tel" id="telefone" autocomplete="tel" inputmode="numeric" placeholder="(34) 99999-9999">
+        <div class="field-error" id="erro-telefone"></div>
+      </div>
 
       <button type="submit" id="btn-criar">Começar grátis</button>
       <div class="erro" id="erro-geral" role="alert"></div>
@@ -82,14 +83,18 @@
   const senhaInput = document.getElementById('senha');
   const toggleSenhaBtn = document.getElementById('btn-toggle-senha');
 
+  // US77/CA01 — formulário reduzido a 4 campos essenciais + telefone
+  // opcional; Segmento saiu daqui e passa a ser coletado no onboarding
+  // (US82).
   const campos = {
     nome_responsavel: document.getElementById('nome_responsavel'),
-    email: document.getElementById('email'),
-    segmento: document.getElementById('segmento'),
-    telefone: document.getElementById('telefone'),
     whatsapp: document.getElementById('whatsapp'),
+    email: document.getElementById('email'),
     senha: senhaInput,
   };
+  const telefoneInput = document.getElementById('telefone');
+  const usaTelefoneAltCheckbox = document.getElementById('usa_telefone_alternativo');
+  const blocoTelefoneAlt = document.getElementById('bloco-telefone-alternativo');
 
   // Mesmas regras validadas no backend (index.js) — mantidas em sincronia.
   const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -106,6 +111,8 @@
   // Máscara de telefone brasileiro (fixo ou celular) ao vivo — mesma lógica
   // usada em "Meu Perfil" (app.js `formatarTelefoneMascara`); duplicada aqui
   // porque cadastro.html não carrega app.js (tela pública, sem sessão).
+  // US77/CA03 — aplicada tanto no WhatsApp (campo principal agora) quanto no
+  // telefone alternativo opcional.
   function formatarTelefoneMascara(valor) {
     const digitos = (valor || '').replace(/\D/g, '').slice(0, 11);
     if (digitos.length <= 2) return digitos ? `(${digitos}` : '';
@@ -117,25 +124,25 @@
     return `(${ddd}) ${resto.slice(0, 5)}-${resto.slice(5)}`;
   }
 
-  campos.telefone.addEventListener('input', () => {
-    campos.telefone.value = formatarTelefoneMascara(campos.telefone.value);
+  campos.whatsapp.addEventListener('input', () => {
+    campos.whatsapp.value = formatarTelefoneMascara(campos.whatsapp.value);
+  });
+  telefoneInput.addEventListener('input', () => {
+    telefoneInput.value = formatarTelefoneMascara(telefoneInput.value);
   });
 
-  // CA02 — dropdown de segmento populado dinamicamente (tabela `segmentos`).
-  fetch('/api/segmentos')
-    .then((res) => {
-      if (!res.ok) throw new Error('status ' + res.status);
-      return res.json();
-    })
-    .then((data) => {
-      const lista = (data && data.segmentos) || [];
-      campos.segmento.innerHTML =
-        '<option value="" disabled selected>Selecione seu segmento...</option>' +
-        lista.map((s) => `<option value="${s.id}">${s.nome}</option>`).join('');
-    })
-    .catch(() => {
-      mostrarErroCampo('segmento', 'Não foi possível carregar os segmentos. Tente novamente.');
-    });
+  // US77/CA02 — telefone alternativo só existe pra quem marca o checkbox;
+  // desmarcar descarta o valor (nunca vaza um telefone "fantasma" no
+  // payload) e o campo revelado ganha foco na hora.
+  usaTelefoneAltCheckbox.addEventListener('change', () => {
+    blocoTelefoneAlt.hidden = !usaTelefoneAltCheckbox.checked;
+    if (usaTelefoneAltCheckbox.checked) {
+      telefoneInput.focus();
+    } else {
+      telefoneInput.value = '';
+      mostrarErroCampo('telefone', '');
+    }
+  });
 
   // US67/CA06 — plano vindo da landing via ?plano=<slug> (CTA de cada card):
   // mostra nome/preço pré-selecionados e deixa trocar de plano sem voltar
@@ -198,14 +205,15 @@
   const validadores = {
     nome_responsavel: (v) => (v.trim().length >= 2 ? '' : 'Informe o nome do responsável.'),
     email: (v) => (EMAIL_REGEX.test(v.trim()) ? '' : 'Digite um e-mail válido.'),
-    segmento: (v) => (v ? '' : 'Selecione seu segmento.'),
-    telefone: (v) => (validarTelefone(v) ? '' : 'Digite um telefone válido com DDD.'),
     whatsapp: (v) => (validarTelefone(v) ? '' : 'Digite um número de WhatsApp válido com DDD.'),
     senha: (v) => (SENHA_REGEX.test(v) ? '' : 'A senha deve ter no mínimo 8 caracteres, 1 número e 1 letra maiúscula.'),
   };
+  // Telefone alternativo só é obrigatório (e só existe no DOM visível)
+  // quando o checkbox está marcado (US77/CA02).
+  const validarTelefoneAlt = (v) => (validarTelefone(v) ? '' : 'Digite um telefone válido com DDD.');
 
   function mostrarErroCampo(nome, mensagem) {
-    const input = campos[nome];
+    const input = nome === 'telefone' ? telefoneInput : campos[nome];
     const alvo = document.getElementById('erro-' + nome);
     alvo.textContent = mensagem;
     input.classList.toggle('invalid', !!mensagem);
@@ -220,6 +228,12 @@
         mostrarErroCampo(nome, validadores[nome](campos[nome].value));
       }
     });
+  });
+  telefoneInput.addEventListener('blur', () => {
+    if (usaTelefoneAltCheckbox.checked) mostrarErroCampo('telefone', validarTelefoneAlt(telefoneInput.value));
+  });
+  telefoneInput.addEventListener('input', () => {
+    if (telefoneInput.classList.contains('invalid')) mostrarErroCampo('telefone', validarTelefoneAlt(telefoneInput.value));
   });
 
   toggleSenhaBtn.addEventListener('click', () => {
@@ -240,6 +254,11 @@
       if (!ok && !primeiroInvalido) primeiroInvalido = campos[nome];
       valido = valido && ok;
     });
+    if (usaTelefoneAltCheckbox.checked) {
+      const okTelefone = mostrarErroCampo('telefone', validarTelefoneAlt(telefoneInput.value));
+      if (!okTelefone && !primeiroInvalido) primeiroInvalido = telefoneInput;
+      valido = valido && okTelefone;
+    }
     if (!valido) {
       if (primeiroInvalido) primeiroInvalido.focus();
       return;
@@ -249,6 +268,11 @@
     btn.classList.add('loading');
     btn.textContent = 'Criando conta...';
 
+    // US77/CA02 — sem telefone alternativo, `telefone` viaja igual ao
+    // `whatsapp` (mesmo dado na maioria dos casos); com o checkbox marcado,
+    // usa o valor do campo revelado.
+    const telefone = usaTelefoneAltCheckbox.checked ? telefoneInput.value : campos.whatsapp.value;
+
     try {
       const res = await fetch('/api/auth/register', {
         method: 'POST',
@@ -256,8 +280,7 @@
         body: JSON.stringify({
           nome_responsavel: campos.nome_responsavel.value,
           email: campos.email.value,
-          segmento_id: Number(campos.segmento.value),
-          telefone: campos.telefone.value,
+          telefone,
           whatsapp: campos.whatsapp.value,
           senha: campos.senha.value,
         }),
