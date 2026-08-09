@@ -85,6 +85,11 @@ const SENHA_REGEX = /^(?=.*[A-Z])(?=.*\d).{8,}$/;
 // (segmentos) fica pra uma US futura, não é necessário pro MVP.
 const SEGMENTOS_VALIDOS = ['salao_beleza', 'petshop', 'psicologia', 'fisioterapia', 'pilates', 'outro'];
 
+// US69 — modo de atendimento do tenant no WhatsApp: bot (menus, n8n) ou ia
+// (conversacional, US68). Mesmo enum do CHECK de tenants.tecnologia
+// (migration 046).
+const TECNOLOGIA_VALIDA = ['bot', 'ia'];
+
 // Normaliza um WhatsApp brasileiro para os dígitos nacionais (DDD + número,
 // sem o DDI 55), que é o formato guardado como unique key. Retorna null se
 // não for um número brasileiro plausível.
@@ -2365,11 +2370,15 @@ async function start() {
     const { tenantId } = request.user;
     const { rows } = await pool.query(
       `SELECT dias_funcionamento, formato_hora, horario_abertura, horario_fechamento, segmento,
-              horario_almoco_ativo, horario_almoco_inicio, horario_almoco_fim
+              horario_almoco_ativo, horario_almoco_inicio, horario_almoco_fim, tecnologia, plano
        FROM tenants WHERE id = $1`,
       [tenantId]
     );
-    return rows[0];
+    const config = rows[0];
+    if (!config) return config;
+    // US69/CA06 — modo de atendimento é somente leitura no portal do salão;
+    // o admin Kyvvo é quem altera (PATCH /admin/api/tenants/:id/modo).
+    return { ...config, plano_atual: nomeDoPlano(config.plano) };
   });
 
   const HORARIO_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -2576,6 +2585,38 @@ async function start() {
       const realizado = Number(rows[0].realizado);
       const previsto = Number(rows[0].previsto);
       return { periodo, referencia, realizado, previsto, total: realizado + previsto };
+    }
+  );
+
+  // US70/CA01 — resumo financeiro pra tela inicial (4 cards): só receita
+  // (tipo='entrada', mesmo recorte de `previsto`/`realizado` já usado no
+  // resumo mensal do financeiro em si) hoje e no mês corrente, em horário de
+  // Brasília. `cancelado` nunca entra (não está em nenhum FILTER abaixo).
+  fastify.get(
+    '/api/financeiro/resumo-dashboard',
+    { preHandler: [fastify.authenticate, fastify.requireModulo('financeiro'), fastify.requireAdmin] },
+    async (request) => {
+      const { tenantId } = request.user;
+      const hoje = dataAtualBrasilia();
+      const mesRef = mesAtualBrasilia();
+
+      const { rows } = await pool.query(
+        `SELECT
+           COALESCE(SUM(valor) FILTER (WHERE status = 'realizado' AND data = $2), 0) AS realizado_hoje,
+           COALESCE(SUM(valor) FILTER (WHERE status = 'previsto'  AND data = $2), 0) AS previsto_hoje,
+           COALESCE(SUM(valor) FILTER (WHERE status = 'realizado' AND to_char(data, 'YYYY-MM') = $3), 0) AS realizado_mes,
+           COALESCE(SUM(valor) FILTER (WHERE status = 'previsto'  AND to_char(data, 'YYYY-MM') = $3), 0) AS previsto_mes
+         FROM lancamentos_financeiros
+         WHERE tenant_id = $1 AND tipo = 'entrada'`,
+        [tenantId, hoje, mesRef]
+      );
+      const r = rows[0];
+      return {
+        realizado_hoje: Number(r.realizado_hoje),
+        previsto_hoje: Number(r.previsto_hoje),
+        realizado_mes: Number(r.realizado_mes),
+        previsto_mes: Number(r.previsto_mes),
+      };
     }
   );
 
@@ -3208,7 +3249,7 @@ async function start() {
     // esses parâmetros.
     if (page === undefined && limit === undefined) {
       const { rows } = await pool.query(
-        `SELECT t.id, t.nome, t.segmento, t.ativo, t.criado_em, t.cadastrado_em, t.ativado_em,
+        `SELECT t.id, t.nome, t.segmento, t.ativo, t.criado_em, t.cadastrado_em, t.ativado_em, t.tecnologia,
                 (SELECT COUNT(*)::int FROM usuarios u WHERE u.tenant_id = t.id) AS total_usuarios
          FROM tenants t
          ORDER BY t.criado_em DESC`
@@ -3239,7 +3280,7 @@ async function start() {
 
     const { rows } = await pool.query(
       `SELECT t.id, t.nome, t.segmento, t.ativo, t.criado_em, t.cadastrado_em, t.ativado_em,
-              t.whatsapp, t.status, t.trial_expires_at,
+              t.whatsapp, t.status, t.trial_expires_at, t.tecnologia,
               resp.nome AS responsavel, resp.email AS email,
               (SELECT COUNT(*)::int FROM usuarios u WHERE u.tenant_id = t.id) AS total_usuarios
        FROM tenants t
@@ -3401,6 +3442,55 @@ async function start() {
       [id]
     );
     return { historico: rows };
+  });
+
+  // US69/CA03 — troca o modo de atendimento (bot/ia) de um tenant específico.
+  // Só o admin Kyvvo faz essa troca (o dono do salão só visualiza, CA06) — o
+  // modo está vinculado ao plano contratado (US67), e liberar a edição pro
+  // salão quebraria a lógica de cobrança. Cada troca é auditada em
+  // log_modo_atendimento_tenant (migration 046), mesmo padrão de
+  // log_modulos_tenant (US65/CA05).
+  fastify.patch('/admin/api/tenants/:id/modo', { preHandler: [fastify.authenticateAdmin] }, async (request, reply) => {
+    const { id } = request.params;
+    const { tecnologia } = request.body || {};
+
+    if (!TECNOLOGIA_VALIDA.includes(tecnologia)) {
+      return reply.code(422).send({ error: `tecnologia deve ser um de: ${TECNOLOGIA_VALIDA.join(', ')}` });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const { rows: antesRows } = await client.query('SELECT tecnologia FROM tenants WHERE id = $1 FOR UPDATE', [id]);
+      const anterior = antesRows[0];
+      if (!anterior) {
+        await client.query('ROLLBACK');
+        return reply.code(404).send({ error: 'Tenant não encontrado' });
+      }
+
+      const { rows: atualizadoRows } = await client.query(
+        'UPDATE tenants SET tecnologia = $2 WHERE id = $1 RETURNING *',
+        [id, tecnologia]
+      );
+      const novo = atualizadoRows[0];
+
+      if (anterior.tecnologia !== tecnologia) {
+        await client.query(
+          `INSERT INTO log_modo_atendimento_tenant (tenant_id, valor_anterior, valor_novo, alterado_por)
+           VALUES ($1, $2, $3, $4)`,
+          [id, anterior.tecnologia, tecnologia, request.admin.adminId]
+        );
+      }
+
+      await client.query('COMMIT');
+      return novo;
+    } catch (erro) {
+      await client.query('ROLLBACK');
+      throw erro;
+    } finally {
+      client.release();
+    }
   });
 
   fastify.post('/admin/api/tenants', { preHandler: [fastify.authenticateAdmin] }, async (request, reply) => {
