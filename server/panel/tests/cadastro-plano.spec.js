@@ -60,7 +60,7 @@ test.describe('Cadastro — plano pré-selecionado via ?plano= (US67/CA06)', () 
 
     await expect(page.locator('#cadastro-plano-nome')).toHaveText('Essencial');
     await expect(page.locator('#cadastro-plano-preco')).toHaveText('R$ 79,90/mês');
-    await expect(page).toHaveURL(/plano=smart-plus/); // não recarrega/navega pra trocar
+    await expect(page).toHaveURL(/plano=essencial/); // URL acompanha a troca, sem recarregar/navegar
   });
 });
 
