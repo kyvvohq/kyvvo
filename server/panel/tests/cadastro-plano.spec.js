@@ -154,6 +154,7 @@ test.describe('Cadastro — plano escolhido viaja no cadastro (US78/CA04)', () =
     await page.fill('#whatsapp', '(34) 99999-9999');
     await page.fill('#email', 'ana@salao.com');
     await page.fill('#senha', 'Senha123');
+    await page.check('#aceite_termos');
     await page.click('#btn-criar');
 
     await expect(page).toHaveURL(/\/verificar\.html$/);
@@ -183,6 +184,7 @@ test.describe('Cadastro — plano escolhido viaja no cadastro (US78/CA04)', () =
     await page.fill('#whatsapp', '(34) 99999-9999');
     await page.fill('#email', 'ana@salao.com');
     await page.fill('#senha', 'Senha123');
+    await page.check('#aceite_termos');
     await page.click('#btn-criar');
 
     await expect(page).toHaveURL(/\/verificar\.html$/);
