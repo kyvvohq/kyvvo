@@ -1330,6 +1330,11 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 /* Pagamentos (US32) */
 .badge-status-inadimplente { background: rgba(255, 107, 107, 0.15); color: #ff6b6b; }
 
+/* Modo de atendimento do tenant — bot (menus, cinza) x ia (conversacional,
+   roxo, US69). Usado tanto na listagem admin quanto no portal do salão. */
+.badge-modo-bot { background: rgba(161, 165, 196, 0.15); color: #a1a5c4; }
+.badge-modo-ia { background: rgba(124, 92, 252, 0.15); color: var(--accent); }
+
 /* Status de cada cobrança no histórico da aba de Pagamentos */
 .badge-pagamento-pending { background: rgba(250, 204, 21, 0.15); color: #facc15; }
 .badge-pagamento-confirmado { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
