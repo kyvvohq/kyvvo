@@ -79,6 +79,12 @@ const MODULOS_TRIAL = ['agenda_inteligente', 'financeiro', 'dashboards'];
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // Senha: mínimo 8 caracteres, ao menos 1 número e 1 letra maiúscula (CA02).
 const SENHA_REGEX = /^(?=.*[A-Z])(?=.*\d).{8,}$/;
+// US79 — versão vigente dos documentos legais aceitos no cadastro, gravada
+// junto com o consentimento (CA03). É a data de "Última atualização" exibida
+// em /termos.html e /privacidade.html — atualizar aqui junto com o texto
+// publicado sempre que o jurídico revisar algum dos dois documentos.
+const TERMOS_VERSAO = '2026-07-22';
+const PRIVACIDADE_VERSAO = '2026-07-22';
 // Nichos atendidos pelo Kyvvo (US34) — lista curta e fixa, mesmo enum do
 // CHECK da coluna tenants.segmento (migration 018). Reaproveitada no cadastro
 // self-service e no CRUD de tenants do admin; migrar pra tabela dinâmica
@@ -703,6 +709,8 @@ async function start() {
       segmento_id: segmentoIdBruto,
       telefone: telefoneBruto,
       whatsapp: whatsappBruto,
+      aceite_termos: aceiteTermosBruto,
+      aceita_marketing: aceitaMarketingBruto,
     } = request.body || {};
 
     const nomeLimpo = (nomeResponsavel || '').trim();
@@ -734,6 +742,19 @@ async function start() {
     if (!whatsapp) {
       return reply.code(400).send({ error: 'Digite um número de WhatsApp válido com DDD.' });
     }
+    // US79/CA01/CA03 — aceite dos Termos de Uso e da Política de Privacidade
+    // é condição pra usar o serviço (não é opcional como o consentimento de
+    // marketing) e fica registrado numa trilha de auditoria própria e
+    // imutável (CA03). Validado no servidor como rede de segurança — o
+    // formulário já bloqueia o envio sem o aceite marcado.
+    const aceiteTermos = aceiteTermosBruto === true;
+    if (!aceiteTermos) {
+      return reply.code(422).send({
+        error: 'Você precisa aceitar os Termos de Uso e a Política de Privacidade para criar a conta.',
+        erros: { aceite_termos: 'Aceite obrigatório.' },
+      });
+    }
+    const aceitaMarketing = aceitaMarketingBruto === true;
 
     // Verificação de unicidade antes de criar qualquer registro (CA03).
     const { rows: emailRows } = await pool.query('SELECT 1 FROM usuarios WHERE email = $1', [emailLimpo]);
@@ -787,6 +808,15 @@ async function start() {
         [tenantId, emailLimpo, hash, nomeLimpo]
       );
       const usuarioId = usuarioRows[0].id;
+
+      // US79/CA03 — trilha de auditoria do consentimento: versão dos
+      // documentos aceitos, IP de origem e o consentimento (opcional) de
+      // marketing, na mesma transação da criação da conta.
+      await client.query(
+        `INSERT INTO consentimentos_cadastro (tenant_id, termos_versao, privacidade_versao, aceita_marketing, ip)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [tenantId, TERMOS_VERSAO, PRIVACIDADE_VERSAO, aceitaMarketing, request.ip]
+      );
 
       // Gera e persiste o token dentro da mesma transação da criação do
       // usuário (US21/CA01/CA05). O envio por e-mail/WhatsApp (chamada de

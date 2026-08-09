@@ -58,11 +58,21 @@
       </div>
       <div class="field-error" id="erro-senha"></div>
 
+      <label class="checkbox-label" for="aceite_termos">
+        <input type="checkbox" id="aceite_termos">
+        Li e aceito os <a href="/termos.html" target="_blank" rel="noopener">Termos de Uso</a> e a <a href="/privacidade.html" target="_blank" rel="noopener">Política de Privacidade</a> do Kyvvo.
+      </label>
+      <div class="field-error" id="erro-aceite_termos"></div>
+
+      <label class="checkbox-label" for="aceita_marketing">
+        <input type="checkbox" id="aceita_marketing">
+        Quero receber novidades e promoções do Kyvvo por e-mail ou WhatsApp.
+      </label>
+
       <button type="submit" id="btn-criar">Começar grátis</button>
       <div class="erro" id="erro-geral" role="alert"></div>
     </form>
 
-    <p class="cadastro-legal">Ao criar sua conta, você concorda com os <a href="https://kyvvo.com.br/termos.html" target="_blank" rel="noopener">Termos de Uso</a> e a <a href="https://kyvvo.com.br/privacidade.html" target="_blank" rel="noopener">Política de Privacidade</a> do Kyvvo.</p>
     <p class="cadastro-rodape">Já tem conta? <a href="/login.html">Entrar</a></p>
   </div>
 </div>
@@ -81,6 +91,9 @@
   const erroGeral = document.getElementById('erro-geral');
   const senhaInput = document.getElementById('senha');
   const toggleSenhaBtn = document.getElementById('btn-toggle-senha');
+  const checkboxAceiteTermos = document.getElementById('aceite_termos');
+  const checkboxAceitaMarketing = document.getElementById('aceita_marketing');
+  const erroAceiteTermos = document.getElementById('erro-aceite_termos');
 
   const campos = {
     nome_responsavel: document.getElementById('nome_responsavel'),
@@ -208,6 +221,10 @@
     });
   });
 
+  checkboxAceiteTermos.addEventListener('change', () => {
+    if (checkboxAceiteTermos.checked) erroAceiteTermos.textContent = '';
+  });
+
   toggleSenhaBtn.addEventListener('click', () => {
     const oculta = senhaInput.type === 'password';
     senhaInput.type = oculta ? 'text' : 'password';
@@ -226,6 +243,18 @@
       if (!ok && !primeiroInvalido) primeiroInvalido = campos[nome];
       valido = valido && ok;
     });
+
+    // US79/CA01 — aceite dos Termos de Uso e da Política de Privacidade é
+    // obrigatório pra criar a conta (diferente do consentimento de
+    // marketing, opcional e desmarcado por padrão — CA02).
+    if (checkboxAceiteTermos.checked) {
+      erroAceiteTermos.textContent = '';
+    } else {
+      erroAceiteTermos.textContent = 'Você precisa aceitar os Termos de Uso e a Política de Privacidade para continuar.';
+      if (!primeiroInvalido) primeiroInvalido = checkboxAceiteTermos;
+      valido = false;
+    }
+
     if (!valido) {
       if (primeiroInvalido) primeiroInvalido.focus();
       return;
@@ -246,6 +275,8 @@
           telefone: campos.telefone.value,
           whatsapp: campos.whatsapp.value,
           senha: campos.senha.value,
+          aceite_termos: checkboxAceiteTermos.checked,
+          aceita_marketing: checkboxAceitaMarketing.checked,
         }),
       });
       const data = await res.json().catch(() => ({}));

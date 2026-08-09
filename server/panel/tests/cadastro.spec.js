@@ -108,6 +108,7 @@ test.describe('Cadastro (/cadastro.html)', () => {
     await page.fill('#telefone', '(34) 98888-7777');
     await page.fill('#whatsapp', '(34) 99999-9999');
     await page.fill('#senha', 'Senha123');
+    await page.check('#aceite_termos');
     await page.click('#btn-criar');
 
     await expect(page).toHaveURL(/\/verificar\.html$/);
@@ -118,6 +119,8 @@ test.describe('Cadastro (/cadastro.html)', () => {
       email: 'ana@salao.com',
       segmento_id: 1,
       whatsapp: '(34) 99999-9999',
+      aceite_termos: true,
+      aceita_marketing: false,
     });
   });
 
@@ -137,6 +140,7 @@ test.describe('Cadastro (/cadastro.html)', () => {
     await page.fill('#telefone', '(34) 98888-7777');
     await page.fill('#whatsapp', '(34) 99999-9999');
     await page.fill('#senha', 'Senha123');
+    await page.check('#aceite_termos');
     await page.click('#btn-criar');
 
     await expect(page).toHaveURL(/\/cadastro\.html$/);

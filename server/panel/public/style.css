@@ -1928,6 +1928,31 @@ input.invalid, select.invalid {
 
 .cadastro-legal a:hover { text-decoration: underline; }
 
+/* Aceite de termos/privacidade e consentimento de marketing (US79). */
+.checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12.5px;
+  color: #a1a5c4;
+  line-height: 1.5;
+  margin-top: 14px;
+  cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: auto;
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+
+.checkbox-label a {
+  color: var(--accent-light);
+  text-decoration: none;
+}
+
+.checkbox-label a:hover { text-decoration: underline; }
+
 .cadastro-rodape {
   font-size: 13px;
   color: #a1a5c4;
