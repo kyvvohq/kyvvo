@@ -761,16 +761,18 @@ async function start() {
     // o slug atual quanto uma chave legada (mesma resolução do US72), já que
     // o link pode vir de uma página cacheada com o slug antigo.
     let planoChave = null;
+    let planoSlugResolvido = null;
     const planoSlugLimpo = typeof planoSlugBruto === 'string' ? planoSlugBruto.trim() : '';
     if (planoSlugLimpo) {
       const { rows: planoRows } = await pool.query(
-        'SELECT chave FROM planos WHERE slug = $1 OR chave = $1',
+        'SELECT chave, slug FROM planos WHERE slug = $1 OR chave = $1',
         [planoSlugLimpo]
       );
       if (!planoRows[0]) {
         return reply.code(422).send({ error: 'Plano selecionado inválido.' });
       }
       planoChave = planoRows[0].chave;
+      planoSlugResolvido = planoRows[0].slug;
     }
 
     const client = await pool.connect();
@@ -834,6 +836,7 @@ async function start() {
         email: emailLimpo,
         email_verified: false,
         email_mascarado: tokenService.mascararEmail(emailLimpo),
+        plano_slug: planoSlugResolvido,
       };
     } catch (erro) {
       await client.query('ROLLBACK');
