@@ -30,30 +30,30 @@
 
     <form id="form-cadastro" novalidate>
       <label for="nome_responsavel">Nome Responsável</label>
-      <input type="text" id="nome_responsavel" autocomplete="name" placeholder="Nome completo do responsável">
+      <input type="text" id="nome_responsavel" autocomplete="name" placeholder="Nome completo do responsável" aria-describedby="erro-nome_responsavel" aria-invalid="false">
       <div class="field-error" id="erro-nome_responsavel"></div>
 
       <label for="email">E-mail</label>
-      <input type="email" id="email" autocomplete="email">
+      <input type="email" id="email" autocomplete="email" aria-describedby="erro-email" aria-invalid="false">
       <div class="field-error" id="erro-email"></div>
 
       <label for="segmento">Segmento</label>
-      <select id="segmento" autocomplete="off">
+      <select id="segmento" autocomplete="off" aria-describedby="erro-segmento" aria-invalid="false">
         <option value="" disabled selected>Selecione seu segmento...</option>
       </select>
       <div class="field-error" id="erro-segmento"></div>
 
       <label for="telefone">Telefone</label>
-      <input type="tel" id="telefone" autocomplete="tel" placeholder="(34) 99999-9999">
+      <input type="tel" id="telefone" autocomplete="tel" placeholder="(34) 99999-9999" aria-describedby="erro-telefone" aria-invalid="false">
       <div class="field-error" id="erro-telefone"></div>
 
       <label for="whatsapp">WhatsApp</label>
-      <input type="tel" id="whatsapp" autocomplete="tel" placeholder="(34) 99999-9999">
+      <input type="tel" id="whatsapp" autocomplete="tel" placeholder="(34) 99999-9999" aria-describedby="erro-whatsapp" aria-invalid="false">
       <div class="field-error" id="erro-whatsapp"></div>
 
       <label for="senha">Senha</label>
       <div class="senha-wrapper">
-        <input type="password" id="senha" autocomplete="new-password">
+        <input type="password" id="senha" autocomplete="new-password" aria-describedby="erro-senha" aria-invalid="false">
         <button type="button" id="btn-toggle-senha" class="toggle-senha" aria-label="Mostrar senha" tabindex="-1">👁</button>
       </div>
       <div class="field-error" id="erro-senha"></div>
@@ -190,11 +190,15 @@
     senha: (v) => (SENHA_REGEX.test(v) ? '' : 'A senha deve ter no mínimo 8 caracteres, 1 número e 1 letra maiúscula.'),
   };
 
+  // US80.3 — aria-invalid acompanha o estado de cada campo (já associado à
+  // mensagem de erro via aria-describedby, no HTML) pra leitores de tela
+  // saberem que o campo tem um problema e onde encontrar a explicação.
   function mostrarErroCampo(nome, mensagem) {
     const input = campos[nome];
     const alvo = document.getElementById('erro-' + nome);
     alvo.textContent = mensagem;
     input.classList.toggle('invalid', !!mensagem);
+    input.setAttribute('aria-invalid', String(!!mensagem));
     return !mensagem;
   }
 
