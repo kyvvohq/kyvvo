@@ -198,12 +198,14 @@ test.describe('Admin — Configurações do sistema (US38)', () => {
 // US67 — grade 2x2 (tecnologia bot/ia x tipo_numero proprio/kyvvo): o
 // catálogo de planos ganha 4 planos com slug/tecnologia/tipo_numero
 // (somente leitura) e destaque/badge (editáveis).
+// US72 — nome/slug renomeados pelo eixo de valor; `chave` (identificador
+// interno, usado em data-plano/rota do PATCH) nunca muda.
 function planosGrade2x2() {
   return [
-    { chave: 'starter', slug: 'starter', nome: 'Starter', descricao: 'Bot de agendamento + número próprio', tecnologia: 'bot', tipo_numero: 'proprio', preco_mensal: 79.9, limite_disparos: 100, destaque: false, badge: null, ativo: true, atualizado_em: '2026-08-01T10:00:00Z' },
-    { chave: 'business', slug: 'business', nome: 'Business', descricao: 'Bot de agendamento + número Kyvvo pronto', tecnologia: 'bot', tipo_numero: 'kyvvo', preco_mensal: 119.9, limite_disparos: 100, destaque: false, badge: null, ativo: true, atualizado_em: '2026-08-01T10:00:00Z' },
-    { chave: 'professional', slug: 'professional', nome: 'Professional', descricao: 'IA conversacional + número próprio', tecnologia: 'ia', tipo_numero: 'proprio', preco_mensal: 149.9, limite_disparos: 500, destaque: false, badge: null, ativo: true, atualizado_em: '2026-08-01T10:00:00Z' },
-    { chave: 'enterprise', slug: 'enterprise', nome: 'Enterprise', descricao: 'IA conversacional + número Kyvvo pronto', tecnologia: 'ia', tipo_numero: 'kyvvo', preco_mensal: 179.9, limite_disparos: 500, destaque: true, badge: 'Mais popular', ativo: true, atualizado_em: '2026-08-01T10:00:00Z' },
+    { chave: 'starter', slug: 'essencial', nome: 'Essencial', descricao: 'Bot de agendamento + número próprio', tecnologia: 'bot', tipo_numero: 'proprio', preco_mensal: 79.9, limite_disparos: 100, destaque: false, badge: null, ativo: true, atualizado_em: '2026-08-01T10:00:00Z' },
+    { chave: 'business', slug: 'essencial-plus', nome: 'Essencial Plus', descricao: 'Bot de agendamento + número Kyvvo pronto', tecnologia: 'bot', tipo_numero: 'kyvvo', preco_mensal: 119.9, limite_disparos: 100, destaque: false, badge: null, ativo: true, atualizado_em: '2026-08-01T10:00:00Z' },
+    { chave: 'professional', slug: 'smart', nome: 'Smart', descricao: 'IA conversacional + número próprio', tecnologia: 'ia', tipo_numero: 'proprio', preco_mensal: 149.9, limite_disparos: 500, destaque: false, badge: null, ativo: true, atualizado_em: '2026-08-01T10:00:00Z' },
+    { chave: 'enterprise', slug: 'smart-plus', nome: 'Smart Plus', descricao: 'IA conversacional + número Kyvvo pronto', tecnologia: 'ia', tipo_numero: 'kyvvo', preco_mensal: 179.9, limite_disparos: 500, destaque: true, badge: 'Mais popular', ativo: true, atualizado_em: '2026-08-01T10:00:00Z' },
   ];
 }
 
@@ -211,12 +213,13 @@ test.describe('Admin — Configurações — grade 2x2 de planos (US67/CA04)', (
   test('exibe os 4 planos com slug, tecnologia e tipo de número', async ({ page }) => {
     await entrarEmConfiguracoes(page, configuracoesMock({ planos: planosGrade2x2() }));
 
-    for (const slug of ['starter', 'business', 'professional', 'enterprise']) {
-      await expect(page.locator(`tr[data-plano="${slug}"]`)).toBeVisible();
+    for (const chave of ['starter', 'business', 'professional', 'enterprise']) {
+      await expect(page.locator(`tr[data-plano="${chave}"]`)).toBeVisible();
     }
 
     const linhaEnterprise = page.locator('tr[data-plano="enterprise"]');
-    await expect(linhaEnterprise.locator('[data-testid="slug-enterprise"]')).toHaveText('enterprise');
+    await expect(linhaEnterprise).toContainText('Smart Plus');
+    await expect(linhaEnterprise.locator('[data-testid="slug-enterprise"]')).toHaveText('smart-plus');
     await expect(linhaEnterprise).toContainText('IA');
     await expect(linhaEnterprise).toContainText('Número Kyvvo');
     await expect(linhaEnterprise).toContainText('Mais popular');
@@ -260,5 +263,41 @@ test.describe('Admin — Configurações — grade 2x2 de planos (US67/CA04)', (
 
     await expect(page.locator('.toast-sucesso')).toHaveText(/Destaque ativado/);
     expect(corpoEnviado).toMatchObject({ destaque: true });
+  });
+});
+
+// US72/CA04 — nome do plano passa a ser editável no painel admin, sem
+// alterar o slug (que continua estrutural/somente leitura).
+test.describe('Admin — Configurações — editar nome do plano (US72/CA04)', () => {
+  test('edita o nome de um plano sem enviar slug no payload', async ({ page }) => {
+    await entrarEmConfiguracoes(page, configuracoesMock({ planos: planosGrade2x2() }));
+
+    let corpoEnviado = null;
+    await page.route('**/admin/api/configuracoes/planos/professional', (route) => {
+      corpoEnviado = route.request().postDataJSON();
+      return route.fulfill({ json: { ...planosGrade2x2()[2], nome: 'Smart IA' } });
+    });
+
+    await page.click('tr[data-plano="professional"] [data-acao="editar-plano"]');
+    await page.fill('[data-testid="input-nome-professional"]', 'Smart IA');
+    await page.click('[data-testid="salvar-professional"]');
+
+    await expect(page.locator('.toast-sucesso')).toHaveText(/Preço atualizado/);
+    expect(corpoEnviado.nome).toBe('Smart IA');
+    expect(corpoEnviado.slug).toBeUndefined();
+  });
+
+  test('nome em branco não salva e mostra erro', async ({ page }) => {
+    await entrarEmConfiguracoes(page, configuracoesMock({ planos: planosGrade2x2() }));
+
+    let chamou = false;
+    await page.route('**/admin/api/configuracoes/planos/professional', () => { chamou = true; });
+
+    await page.click('tr[data-plano="professional"] [data-acao="editar-plano"]');
+    await page.fill('[data-testid="input-nome-professional"]', '   ');
+    await page.click('[data-testid="salvar-professional"]');
+
+    await expect(page.locator('tr[data-plano="professional"] [data-erro-plano="professional"]')).toHaveText(/em branco/);
+    expect(chamou).toBe(false);
   });
 });
