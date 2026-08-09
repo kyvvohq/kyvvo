@@ -52,6 +52,8 @@ const { Pool } = require('pg');
 const tokenService = require('./token-service');
 const asaasService = require('./asaas-service');
 const metaWhatsappService = require('./meta-whatsapp-service');
+const evolutionService = require('./evolution-service');
+const anthropicService = require('./anthropic-service');
 
 // ---------- Cadastro self-service (US20) ----------
 // `let` (não `const`) porque a US38 permite um admin da Kyvvo sobrescrever
@@ -347,6 +349,318 @@ async function registrarEventoTrialExpiradoUmaVez(tenantId) {
     [tenantId]
   );
   if (rows.length === 0) await registrarEvento(tenantId, 'trial_expirado');
+}
+
+// ---------- US68 — IA Engine (motor conversacional Claude Haiku 4.5) ----------
+// Substitui o fluxo de bot por menus (n8n) pra tenants com tecnologia='ia'.
+// O roteador (rota /webhook/whatsapp, registrada em start()) intercepta o
+// webhook da Evolution API antes do n8n: tenants 'bot' são repassados sem
+// alteração (n8n continua funcionando exatamente como hoje); tenants 'ia'
+// são processados por este bloco.
+
+const IA_INTENTS_VALIDOS = new Set(['agendar', 'reagendar', 'cancelar', 'consultar', 'unknown', 'fallback_humano']);
+const IA_HISTORICO_MENSAGENS = 10;
+const IA_DIAS_DISPONIBILIDADE = 7;
+const IA_SLOTS_POR_DIA_PROFISSIONAL = 4;
+const IA_DURACAO_PADRAO_MINUTOS = 30;
+
+// US68/CA02 — disponibilidade real dos próximos N dias por profissional,
+// calculada contra a agenda do banco (nunca hardcoded/alucinada pela IA).
+// Reaproveita dentroDoHorarioFuncionamento/buscarBloqueioConflitante — mesma
+// validação já usada em POST/PATCH /api/agendamentos — pra não ter dois
+// critérios de "horário válido" divergentes no sistema.
+async function calcularDisponibilidadeIA(tenant) {
+  const { rows: profissionais } = await pool.query(
+    'SELECT id, nome FROM profissionais WHERE tenant_id = $1 ORDER BY nome',
+    [tenant.id]
+  );
+  if (!profissionais.length) return [];
+
+  const { rows: agendamentosFuturos } = await pool.query(
+    `SELECT profissional_id, data_hora FROM agendamentos
+     WHERE tenant_id = $1 AND status = 'confirmado' AND data_hora > now()
+       AND data_hora < now() + ($2 * interval '1 day')`,
+    [tenant.id, IA_DIAS_DISPONIBILIDADE]
+  );
+  const ocupadosPorProfissional = new Map();
+  for (const ag of agendamentosFuturos) {
+    const lista = ocupadosPorProfissional.get(ag.profissional_id) || [];
+    lista.push(new Date(ag.data_hora).getTime());
+    ocupadosPorProfissional.set(ag.profissional_id, lista);
+  }
+
+  const aberturaMinutos = horarioParaMinutos(tenant.horario_abertura);
+  const fechamentoMinutos = horarioParaMinutos(tenant.horario_fechamento);
+  const resultado = [];
+
+  for (const prof of profissionais) {
+    const slots = [];
+    for (let dia = 0; dia < IA_DIAS_DISPONIBILIDADE && slots.length < IA_SLOTS_POR_DIA_PROFISSIONAL * IA_DIAS_DISPONIBILIDADE; dia++) {
+      const dataBase = new Date(Date.now() - OFFSET_BRASILIA_MINUTOS * 60000 + dia * 86400000);
+      const dataISO = dataBase.toISOString().slice(0, 10);
+      let encontradosNoDia = 0;
+      for (let minutos = aberturaMinutos; minutos < fechamentoMinutos && encontradosNoDia < IA_SLOTS_POR_DIA_PROFISSIONAL; minutos += IA_DURACAO_PADRAO_MINUTOS) {
+        const hh = String(Math.floor(minutos / 60)).padStart(2, '0');
+        const mm = String(minutos % 60).padStart(2, '0');
+        const candidatoISO = `${dataISO}T${hh}:${mm}:00-03:00`;
+        const candidatoMs = new Date(candidatoISO).getTime();
+        if (candidatoMs <= Date.now()) continue;
+        const { valido } = dentroDoHorarioFuncionamento(tenant, candidatoISO, IA_DURACAO_PADRAO_MINUTOS);
+        if (!valido) continue;
+        const ocupados = ocupadosPorProfissional.get(prof.id) || [];
+        if (ocupados.some((ts) => Math.abs(ts - candidatoMs) < IA_DURACAO_PADRAO_MINUTOS * 60000)) continue;
+        // eslint-disable-next-line no-await-in-loop
+        const bloqueio = await buscarBloqueioConflitante(tenant.id, prof.id, candidatoISO, IA_DURACAO_PADRAO_MINUTOS);
+        if (bloqueio) continue;
+        slots.push({ profissionalId: prof.id, profissionalNome: prof.nome, dataHoraISO: candidatoISO });
+        encontradosNoDia++;
+      }
+    }
+    if (slots.length) resultado.push({ profissional: prof.nome, slots });
+  }
+  return resultado;
+}
+
+// US68/CA02 — monta o system prompt com o contexto real do tenant (serviços,
+// profissionais, disponibilidade) — a IA nunca inventa preço/horário porque
+// tudo que ela pode oferecer já vem pronto aqui.
+async function montarContextoIA(tenant) {
+  const { rows: servicos } = await pool.query(
+    'SELECT nome, duracao_minutos, preco FROM servicos WHERE tenant_id = $1 AND ativo = true AND excluido_em IS NULL ORDER BY nome',
+    [tenant.id]
+  );
+  const disponibilidade = await calcularDisponibilidadeIA(tenant);
+
+  const listaServicos = servicos.length
+    ? servicos.map((s) => `- ${s.nome} (${s.duracao_minutos}min, R$ ${Number(s.preco).toFixed(2)})`).join('\n')
+    : '(nenhum serviço cadastrado ainda)';
+
+  // Cada slot lista o texto amigável E o ISO exato lado a lado — a IA nunca
+  // reconstrói o ISO sozinha (já causou bug real: ano errado, "2024" em vez
+  // do ano corrente, quando só o texto formatado era mostrado). Ela só copia
+  // o valor entre colchetes.
+  const listaDisponibilidade = disponibilidade.length
+    ? disponibilidade.map((p) => {
+        const horarios = p.slots.slice(0, 8).map((s) => {
+          const d = new Date(s.dataHoraISO);
+          const texto = d.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+          return `${texto} [${s.dataHoraISO}]`;
+        }).join(', ');
+        return `- ${p.profissional}: ${horarios}`;
+      }).join('\n')
+    : '(sem horários livres nos próximos dias)';
+
+  const agoraBrasilia = new Date(Date.now() - OFFSET_BRASILIA_MINUTOS * 60000);
+  const hojeFormatado = agoraBrasilia.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' });
+
+  return `Você é a atendente virtual do salão "${tenant.nome}", via WhatsApp. Responda em português do Brasil, de forma breve, calorosa e direta — como uma recepcionista experiente, nunca como um robô.
+
+Hoje é ${hojeFormatado}.
+
+SERVIÇOS DISPONÍVEIS:
+${listaServicos}
+
+HORÁRIOS LIVRES (próximos ${IA_DIAS_DISPONIBILIDADE} dias — cada horário mostra o texto e, entre colchetes, o valor ISO exato que você deve copiar em "dataHoraISO"; nunca invente ou monte um ISO por conta própria):
+${listaDisponibilidade}
+
+Sua tarefa é ajudar o cliente a AGENDAR, REAGENDAR ou CANCELAR um horário, ou CONSULTAR informações do salão. Você NUNCA executa a ação diretamente — você só entende a intenção do cliente e devolve um JSON estruturado; quem executa é o sistema.
+
+Responda SEMPRE e SOMENTE com um objeto JSON válido (sem texto antes/depois, sem markdown), no formato exato:
+{"intent": "agendar" | "reagendar" | "cancelar" | "consultar" | "unknown" | "fallback_humano", "params": {"servicoNome": string|null, "profissionalNome": string|null, "dataHoraISO": string|null}, "resposta": "texto natural pra enviar ao cliente"}
+
+Regras:
+- Use intent "unknown" quando a mensagem não deixar clara a intenção — nesse caso "resposta" deve pedir o esclarecimento que falta.
+- Use intent "agendar"/"reagendar" SÓ quando já tiver serviço, profissional (ou "qualquer um") e data/hora confirmados pelo cliente na conversa — antes disso, pergunte o que falta usando intent "unknown".
+- "dataHoraISO" deve ser exatamente um dos valores entre colchetes [ ] listados acima em HORÁRIOS LIVRES — copie o texto entre colchetes literalmente, nunca monte ou invente um ISO novo.
+- Use intent "cancelar" quando o cliente quiser cancelar um agendamento existente (não precisa de dataHoraISO nesse caso).
+- Use intent "fallback_humano" quando o cliente pedir explicitamente para falar com uma pessoa, reclamar de forma que a IA não deva resolver sozinha, ou quando a conversa estiver claramente travada após tentativas de esclarecimento.
+- "resposta" é sempre em linguagem natural, nunca contém JSON nem menciona "intent"/"params".`;
+}
+
+// US68/CA05 — histórico persistido por tenant+cliente; carregado a cada
+// mensagem nova pra dar contexto de conversa à IA (sem estado em memória).
+async function buscarHistoricoIA(tenantId, clienteId) {
+  const { rows } = await pool.query(
+    `SELECT role, conteudo FROM conversas_ia
+     WHERE tenant_id = $1 AND cliente_id = $2
+     ORDER BY criado_em DESC LIMIT $3`,
+    [tenantId, clienteId, IA_HISTORICO_MENSAGENS]
+  );
+  return rows.reverse().map((r) => ({ role: r.role, content: r.conteudo }));
+}
+
+async function salvarMensagemIA(tenantId, clienteId, role, conteudo, intent = null) {
+  await pool.query(
+    'INSERT INTO conversas_ia (tenant_id, cliente_id, role, conteudo, intent) VALUES ($1, $2, $3, $4, $5)',
+    [tenantId, clienteId, role, conteudo, intent]
+  );
+}
+
+// US68/CA03 — parser de intenção: só aceita o JSON estruturado da IA, nunca
+// deixa a IA executar ação direto. JSON inválido ou intent desconhecido
+// degrada pra "unknown" com uma resposta genérica — nunca lança erro pro
+// cliente ver.
+function parsearIntentIA(textoResposta) {
+  let bruto;
+  try {
+    // A IA às vezes envolve o JSON em ```json ... ``` mesmo sendo instruída a
+    // não fazer isso — extrai o primeiro objeto JSON encontrado por segurança.
+    const match = textoResposta.match(/\{[\s\S]*\}/);
+    bruto = JSON.parse(match ? match[0] : textoResposta);
+  } catch {
+    return { intent: 'unknown', params: {}, resposta: 'Desculpa, não entendi. Pode repetir de outro jeito?' };
+  }
+  const intent = IA_INTENTS_VALIDOS.has(bruto.intent) ? bruto.intent : 'unknown';
+  const params = (bruto.params && typeof bruto.params === 'object') ? bruto.params : {};
+  const resposta = typeof bruto.resposta === 'string' && bruto.resposta.trim()
+    ? bruto.resposta.trim()
+    : 'Desculpa, não entendi. Pode repetir de outro jeito?';
+  return { intent, params, resposta };
+}
+
+// US68/CA04 — executor de ação: só roda depois do parser validar o JSON.
+// Resolve nomes (serviço/profissional) recebidos em texto livre da IA pros
+// IDs reais do tenant; nunca deleta agendamento, só troca status (mesmo
+// padrão já usado no resto do sistema, ex. DELETE /api/agendamentos).
+async function executarAcaoIA({ intent, params, tenantId, clienteId }) {
+  if (intent === 'agendar' || intent === 'reagendar') {
+    if (!params.dataHoraISO) throw new Error('HorarioNaoInformado');
+    const { rows: servicoRows } = params.servicoNome
+      ? await pool.query('SELECT id, nome, preco FROM servicos WHERE tenant_id = $1 AND ativo = true AND nome ILIKE $2 LIMIT 1', [tenantId, `%${params.servicoNome}%`])
+      : { rows: [] };
+    const servico = servicoRows[0] || null;
+    const { rows: profRows } = params.profissionalNome
+      ? await pool.query('SELECT id, nome FROM profissionais WHERE tenant_id = $1 AND nome ILIKE $2 LIMIT 1', [tenantId, `%${params.profissionalNome}%`])
+      : { rows: [] };
+    let profissional = profRows[0] || null;
+    if (!profissional) {
+      const { rows: qualquer } = await pool.query('SELECT id, nome FROM profissionais WHERE tenant_id = $1 ORDER BY nome LIMIT 1', [tenantId]);
+      profissional = qualquer[0] || null;
+    }
+    if (!profissional) throw new Error('SemProfissionalDisponivel');
+
+    const duracao = servico ? servico.duracao_minutos : IA_DURACAO_PADRAO_MINUTOS;
+    const { rows: conflito } = await pool.query(
+      `SELECT id FROM agendamentos
+       WHERE tenant_id = $1 AND profissional_id = $2 AND status = 'confirmado'
+         AND data_hora < $3::timestamptz + ($4 * interval '1 minute')
+         AND $3::timestamptz < data_hora + (${IA_DURACAO_PADRAO_MINUTOS} * interval '1 minute')`,
+      [tenantId, profissional.id, params.dataHoraISO, duracao]
+    );
+    if (conflito.length) throw new Error('HorarioIndisponivel');
+
+    if (intent === 'reagendar') {
+      const { rows: existente } = await pool.query(
+        `SELECT id FROM agendamentos WHERE tenant_id = $1 AND cliente_id = $2 AND status = 'confirmado' AND data_hora > now() ORDER BY data_hora ASC LIMIT 1`,
+        [tenantId, clienteId]
+      );
+      if (existente[0]) {
+        await pool.query('UPDATE agendamentos SET data_hora = $1, profissional_id = $2, updated_at = now() WHERE id = $3', [params.dataHoraISO, profissional.id, existente[0].id]);
+        return { ok: true, agendamentoId: existente[0].id };
+      }
+    }
+
+    const { rows: novo } = await pool.query(
+      `INSERT INTO agendamentos (tenant_id, cliente_id, profissional_id, servico_id, data_hora, status, origem)
+       VALUES ($1, $2, $3, $4, $5, 'confirmado', 'whatsapp')
+       RETURNING id`,
+      [tenantId, clienteId, profissional.id, servico ? servico.id : null, params.dataHoraISO]
+    );
+    return { ok: true, agendamentoId: novo[0].id };
+  }
+
+  if (intent === 'cancelar') {
+    const { rows: existente } = await pool.query(
+      `SELECT id FROM agendamentos WHERE tenant_id = $1 AND cliente_id = $2 AND status = 'confirmado' AND data_hora > now() ORDER BY data_hora ASC LIMIT 1`,
+      [tenantId, clienteId]
+    );
+    if (!existente[0]) throw new Error('NenhumAgendamentoParaCancelar');
+    await pool.query("UPDATE agendamentos SET status = 'cancelado', updated_at = now() WHERE id = $1", [existente[0].id]);
+    return { ok: true, agendamentoId: existente[0].id };
+  }
+
+  // 'consultar', 'unknown' e 'fallback_humano' não têm efeito no banco —
+  // a resposta da IA já é suficiente (ou o handler de fallback, à parte).
+  return { ok: true };
+}
+
+// US68/CA06 — fallback humano: marca a conversa e notifica o salão via
+// WhatsApp (mesma instância, número do responsável já cadastrado em
+// tenants.telefone). Nunca lança — uma falha aqui não pode derrubar a
+// resposta já dada ao cliente.
+async function acionarFallbackHumanoIA(tenant, cliente) {
+  await pool.query("UPDATE clientes SET status_conversa = 'aguardando_humano' WHERE id = $1", [cliente.id]);
+  if (!tenant.telefone) return;
+  try {
+    await evolutionService.enviarTexto(
+      tenant.instancia_whatsapp,
+      tenant.telefone,
+      `⚠️ Atendimento assumido pela IA precisa da sua ajuda.\nCliente: ${cliente.nome || cliente.telefone}\nEntre em contato direto pelo WhatsApp do salão pra continuar o atendimento.`
+    );
+  } catch (erro) {
+    fastify.log.error({ erro: erro.message, tenantId: tenant.id }, 'Falha ao notificar salão sobre fallback humano (US68.6)');
+  }
+}
+
+// US68 — orquestra uma mensagem recebida de um tenant com tecnologia='ia':
+// busca/cria o cliente, monta contexto+histórico, chama Claude, valida a
+// intenção, executa a ação (com fallback textual se der conflito) e persiste
+// a conversa. Sempre responde algo ao cliente — mesmo em erro.
+async function processarMensagemIA({ tenant, telefone, mensagem, pushName }) {
+  let { rows: clienteRows } = await pool.query(
+    'SELECT id, nome, status_conversa FROM clientes WHERE tenant_id = $1 AND telefone = $2 LIMIT 1',
+    [tenant.id, telefone]
+  );
+  let cliente = clienteRows[0];
+  if (!cliente) {
+    const { rows: criado } = await pool.query(
+      'INSERT INTO clientes (tenant_id, nome, telefone) VALUES ($1, $2, $3) RETURNING id, nome, status_conversa',
+      [tenant.id, pushName || null, telefone]
+    );
+    cliente = criado[0];
+  }
+
+  // US68/CA06 — não processa via IA enquanto aguarda retomada humana.
+  if (cliente.status_conversa === 'aguardando_humano') return;
+
+  await salvarMensagemIA(tenant.id, cliente.id, 'user', mensagem);
+
+  const system = await montarContextoIA(tenant);
+  const historico = await buscarHistoricoIA(tenant.id, cliente.id);
+  const respostaBruta = await anthropicService.chamarClaude({ system, mensagens: [...historico, { role: 'user', content: mensagem }] });
+  const { intent, params, resposta } = parsearIntentIA(respostaBruta);
+
+  let textoFinal = resposta;
+  if (intent === 'fallback_humano') {
+    await acionarFallbackHumanoIA(tenant, cliente);
+  } else if (intent === 'agendar' || intent === 'reagendar' || intent === 'cancelar') {
+    try {
+      await executarAcaoIA({ intent, params, tenantId: tenant.id, clienteId: cliente.id });
+    } catch (erro) {
+      const mensagensErro = {
+        HorarioIndisponivel: 'Poxa, esse horário acabou de ficar indisponível. Pode escolher outro dos que te passei?',
+        HorarioNaoInformado: 'Não peguei direito o horário — pode me dizer de novo, por favor?',
+        SemProfissionalDisponivel: 'No momento não temos profissional disponível pra esse atendimento. Posso te ajudar de outra forma?',
+        NenhumAgendamentoParaCancelar: 'Não encontrei nenhum agendamento seu pra cancelar. Confere pra mim o que você gostaria?',
+      };
+      textoFinal = mensagensErro[erro.message] || 'Tive um problema pra confirmar isso agora. Pode tentar de novo em instantes?';
+      if (!mensagensErro[erro.message]) {
+        fastify.log.warn({ erro: erro.message, intent, params, tenantId: tenant.id }, 'Executor de ação IA (US68.5) falhou com erro não mapeado');
+      }
+    }
+  }
+
+  await salvarMensagemIA(tenant.id, cliente.id, 'assistant', textoFinal, intent);
+
+  if (tenant.instancia_whatsapp) {
+    try {
+      await evolutionService.enviarTexto(tenant.instancia_whatsapp, telefone, textoFinal);
+    } catch (erro) {
+      // Falha no envio (ex.: instância desconectada) não pode apagar o que
+      // já foi persistido (agendamento criado, conversa salva) — só loga.
+      fastify.log.error({ erro: erro.message, tenantId: tenant.id }, 'Falha ao enviar resposta da IA via Evolution API (US68)');
+    }
+  }
 }
 
 async function start() {
@@ -721,6 +1035,71 @@ async function start() {
       };
     });
   }
+
+  // US68.2 — roteador: recebe o webhook da Evolution API no lugar do n8n e
+  // decide, por tenant.tecnologia, se processa pelo IA Engine (US68) ou
+  // repassa sem alteração pro n8n (fluxo de bot atual, intocado). Sem auth —
+  // é um webhook externo, mesmo padrão de rota pública já usado em
+  // /api/planos. Tenant desconhecido/inativo ou qualquer erro no
+  // processamento cai no repasse pro n8n — nunca perde a mensagem
+  // silenciosamente nem quebra o fluxo de bot existente.
+  fastify.post('/webhook/whatsapp', async (request, reply) => {
+    const body = request.body || {};
+    const instanceName = body.instance;
+
+    let tenant = null;
+    if (instanceName) {
+      const { rows } = await pool.query(
+        `SELECT id, nome, telefone, instancia_whatsapp, tecnologia,
+                dias_funcionamento, horario_abertura, horario_fechamento,
+                horario_almoco_ativo, horario_almoco_inicio, horario_almoco_fim
+         FROM tenants WHERE instancia_whatsapp = $1 AND ativo = true LIMIT 1`,
+        [instanceName]
+      );
+      tenant = rows[0] || null;
+    }
+
+    if (tenant && tenant.tecnologia === 'ia') {
+      try {
+        const data = body.data || {};
+        if (!data.key || data.key.fromMe) return reply.code(200).send({ ok: true });
+        const remoteJid = data.key.remoteJid || '';
+        const telefone = remoteJid.replace('@s.whatsapp.net', '').replace('@lid', '').replace('@g.us', '');
+        const mensagem = (data.message && (data.message.conversation || (data.message.extendedTextMessage && data.message.extendedTextMessage.text))) || '';
+        if (telefone && mensagem.trim()) {
+          await processarMensagemIA({ tenant, telefone, mensagem: mensagem.trim(), pushName: data.pushName });
+        }
+        return reply.code(200).send({ ok: true });
+      } catch (erro) {
+        fastify.log.error({ erro: erro.message, tenantId: tenant.id }, 'Falha no IA Engine (US68) — mensagem não processada');
+        return reply.code(200).send({ ok: true });
+      }
+    }
+
+    // tecnologia='bot', tenant não encontrado/inativo, ou N8N_WEBHOOK_URL
+    // ausente em dev: repassa o payload original sem alteração — é
+    // exatamente o que a Evolution API fazia antes deste roteador existir.
+    const n8nUrl = process.env.N8N_WEBHOOK_URL;
+    if (!n8nUrl) return reply.code(200).send({ ok: true });
+    try {
+      const resposta = await fetch(n8nUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(15000),
+      });
+      const texto = await resposta.text();
+      reply.code(resposta.status);
+      try {
+        return reply.send(JSON.parse(texto));
+      } catch {
+        return reply.send(texto);
+      }
+    } catch (erro) {
+      fastify.log.error({ erro: erro.message }, 'Falha ao repassar webhook pro n8n (US68.2)');
+      return reply.code(200).send({ ok: true });
+    }
+  });
 
   fastify.get('/api/planos', async () => {
     const { rows } = await pool.query(
