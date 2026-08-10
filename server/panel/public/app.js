@@ -58,14 +58,15 @@ async function verificarStatusConta() {
 
   // US66 — modal de primeiros passos exibido automaticamente só no primeiro
   // acesso elegível, sem ocupar espaço fixo na sidebar (substitui a tela
-  // dedicada + item fixo da US56). `menuAtual === 'agendamento'` (não só
-  // `!== algo`) de propósito: 'agendamento' é o valor inicial intocado antes
-  // de qualquer navegação — essa checagem só abre o modal sozinho se o
-  // usuário ainda não clicou em nada desde que a página carregou. Como essa
-  // chamada de status é assíncrona, ela pode resolver depois de o usuário já
-  // ter navegado manualmente pra outra tela; nesse caso `menuAtual` já mudou
-  // e o onboarding não deve interromper a navegação em andamento.
-  if (onboardingElegivel(status) && menuAtual === 'agendamento') {
+  // dedicada + item fixo da US56). `menuAtual === 'inicio'` (não só
+  // `!== algo`) de propósito: 'inicio' é o valor inicial intocado antes
+  // de qualquer navegação (tela pós-login) — essa checagem só abre o modal
+  // sozinho se o usuário ainda não clicou em nada desde que a página
+  // carregou. Como essa chamada de status é assíncrona, ela pode resolver
+  // depois de o usuário já ter navegado manualmente pra outra tela; nesse
+  // caso `menuAtual` já mudou e o onboarding não deve interromper a
+  // navegação em andamento.
+  if (onboardingElegivel(status) && menuAtual === 'inicio') {
     mostrarModalOnboarding(status);
   }
 
@@ -262,7 +263,7 @@ const conteudo = document.getElementById('conteudo');
 const menuEl = document.querySelector('.menu');
 const subtabsEl = document.getElementById('subtabs');
 const tabs = document.querySelectorAll('.tab');
-let menuAtual = 'agendamento';
+let menuAtual = 'inicio';
 let abaAtual = 'dia';
 let dataRef = new Date();
 let configuracao = { dias_funcionamento: [1, 2, 3, 4, 5, 6], formato_hora: '24h' };
@@ -310,6 +311,28 @@ menuEl.querySelectorAll('.menu-item').forEach((item) => {
 menuCadastrosToggle.addEventListener('click', () => {
   menuCadastrosSubmenu.classList.toggle('aberto');
   menuCadastrosToggle.classList.toggle('expandido');
+});
+
+// Logo no cabeçalho (saiu da sidebar) — sempre volta pro Início, sem reload
+// de página, reaproveitando o mesmo caminho de navegação dos itens de menu.
+const topbarLogo = document.getElementById('topbar-logo');
+if (topbarLogo) topbarLogo.addEventListener('click', () => selecionarMenu('inicio'));
+
+// Ocultar/exibir a sidebar — estado persistido em localStorage pra
+// sobreviver a reload. O botão de alternar fica no topbar (fora da
+// sidebar), então continua acessível mesmo com o menu oculto.
+const painelSidebar = document.getElementById('painel-sidebar');
+const btnToggleSidebar = document.getElementById('btn-toggle-sidebar');
+function aplicarSidebarOculta(oculta) {
+  painelSidebar.classList.toggle('sidebar-oculta', oculta);
+  btnToggleSidebar.setAttribute('aria-label', oculta ? 'Exibir menu' : 'Ocultar menu');
+  btnToggleSidebar.title = oculta ? 'Exibir menu' : 'Ocultar menu';
+}
+aplicarSidebarOculta(localStorage.getItem('kyvvo_sidebar_oculta') === '1');
+btnToggleSidebar.addEventListener('click', () => {
+  const oculta = !painelSidebar.classList.contains('sidebar-oculta');
+  aplicarSidebarOculta(oculta);
+  localStorage.setItem('kyvvo_sidebar_oculta', oculta ? '1' : '0');
 });
 
 // ---------- User menu (avatar + dropdown) ----------
@@ -3111,8 +3134,8 @@ async function renderEquipe() {
       <button class="btn-novo-agendamento" id="btn-convidar-membro">+ Convidar membro</button>
     </div>
     <h4 class="pagamento-historico-titulo">Membros</h4>
-    <div class="tabela-wrapper">
-      <table class="tabela-tenants">
+    <div class="tabela-wrapper tabela-equipe-wrapper">
+      <table class="tabela-tenants tabela-equipe">
         <thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Status</th><th></th></tr></thead>
         <tbody>
           ${dados.membros.length ? dados.membros.map(renderEquipeMembroLinha).join('') : '<tr><td colspan="5">Nenhum membro cadastrado.</td></tr>'}
@@ -3120,8 +3143,8 @@ async function renderEquipe() {
       </table>
     </div>
     <h4 class="pagamento-historico-titulo">Convites</h4>
-    <div class="tabela-wrapper">
-      <table class="tabela-tenants">
+    <div class="tabela-wrapper tabela-equipe-wrapper">
+      <table class="tabela-tenants tabela-equipe">
         <thead><tr><th>E-mail</th><th>Perfil</th><th>Status</th><th>Expira em</th><th></th></tr></thead>
         <tbody>
           ${dados.convites.length ? dados.convites.map(renderEquipeConviteLinha).join('') : '<tr><td colspan="5">Nenhum convite pendente.</td></tr>'}
@@ -3167,8 +3190,8 @@ function renderEquipeMembroLinha(m) {
       <td>${EQUIPE_ROLE_LABEL[m.role] || m.role}</td>
       <td><span class="badge badge-status ${m.ativo ? 'badge-status-ativo' : 'badge-status-inativo'}">${m.ativo ? 'Ativo' : 'Desativado'}</span></td>
       <td>
-        <button class="btn-secundario" data-acao-membro="${m.ativo ? 'desativar' : 'reativar'}" data-id="${m.id}">${m.ativo ? 'Desativar' : 'Reativar'}</button>
-        <button class="btn-secundario acao-perigo" data-acao-membro="remover" data-id="${m.id}">Remover</button>
+        <button class="btn-secundario btn-tabela" data-acao-membro="${m.ativo ? 'desativar' : 'reativar'}" data-id="${m.id}">${m.ativo ? 'Desativar' : 'Reativar'}</button>
+        <button class="btn-secundario btn-tabela acao-perigo" data-acao-membro="remover" data-id="${m.id}">Remover</button>
       </td>
     </tr>
   `;
@@ -3181,7 +3204,7 @@ function renderEquipeConviteLinha(c) {
       <td>${EQUIPE_ROLE_LABEL[c.role] || c.role}</td>
       <td><span class="badge badge-status ${EQUIPE_CONVITE_STATUS_BADGE[c.status] || 'badge-status-inativo'}">${EQUIPE_CONVITE_STATUS_LABEL[c.status] || c.status}</span></td>
       <td>${formatarDataCurtaISO(c.expires_at.slice(0, 10))}</td>
-      <td>${c.status === 'pendente' ? `<button class="btn-secundario acao-perigo" data-acao-convite="cancelar" data-id="${c.id}">Cancelar</button>` : ''}</td>
+      <td>${c.status === 'pendente' ? `<button class="btn-secundario btn-tabela acao-perigo" data-acao-convite="cancelar" data-id="${c.id}">Cancelar</button>` : ''}</td>
     </tr>
   `;
 }
