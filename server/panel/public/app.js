@@ -1142,7 +1142,7 @@ conteudo.addEventListener('click', (e) => {
   const tabFinanceiro = e.target.closest('[data-financeiro-aba]');
   if (tabFinanceiro) {
     abaFinanceiroAtiva = tabFinanceiro.dataset.financeiroAba;
-    detalhamentoSemanaAberto = false;
+    detalhamentoFinanceiroAberto = false;
     renderFinanceiro();
     return;
   }
@@ -1187,6 +1187,22 @@ conteudo.addEventListener('click', (e) => {
     if (acaoBtn.dataset.acao === 'cancelar') abrirModalCancelar(ag);
     if (acaoBtn.dataset.acao === 'reagendar') abrirModalReagendar(ag);
     if (acaoBtn.dataset.acao === 'encaixar') abrirModalEncaixe(ag);
+  }
+
+  // PR4 — menu de ações por linha de lançamento no Financeiro (Confirmar/
+  // Cancelar pagamento, Reagendar), só existe em lançamento vinculado a
+  // agendamento com status 'previsto' (ver renderLancamentoItem).
+  const acaoLancamentoBtn = e.target.closest('[data-acao-lancamento]');
+  if (acaoLancamentoBtn) {
+    document.querySelectorAll('.menu-acoes.aberto').forEach((m) => m.classList.remove('aberto'));
+    const l = lancamentosAtuais.find((x) => x.id === acaoLancamentoBtn.dataset.id);
+    if (!l) return;
+    const acao = acaoLancamentoBtn.dataset.acaoLancamento;
+    if (acao === 'confirmar') confirmarPagamentoLancamento(l);
+    if (acao === 'cancelar') abrirModalCancelarPagamentoLancamento(l);
+    if (acao === 'reagendar') {
+      abrirModalReagendar({ id: l.agendamento_id, data_hora: l.data, profissional_id: l.profissional_id, servico_id: l.servico_id });
+    }
   }
 
   // US17 — ações de editar/excluir nas listas de Serviços e Profissionais.
@@ -1263,10 +1279,13 @@ let mesFinanceiroRef = new Date();
 // US71 — abas Mês/Semana/Dia da página /financeiro. `semanaFinanceiroRef`/
 // `diaFinanceiroRef` guardam só uma data qualquer dentro do período (o
 // início real da semana é sempre recalculado via inicioDaSemana()).
-let abaFinanceiroAtiva = 'mes';
+let abaFinanceiroAtiva = 'dia';
 let semanaFinanceiroRef = new Date();
 let diaFinanceiroRef = new Date();
-let detalhamentoSemanaAberto = false;
+// PR4 — colapso "ver/ocultar detalhamento" generalizado pras 3 abas (antes
+// só existia na Semana, daí o nome antigo detalhamentoSemanaAberto).
+let detalhamentoFinanceiroAberto = false;
+let lancamentosAtuais = [];
 
 const MESES_ABREV_FINANCEIRO = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
@@ -1305,8 +1324,8 @@ function renderGraficoSemanasFinanceiro(semanas) {
       ${semanas.map((s) => `
         <div class="financeiro-grafico-coluna">
           <div class="financeiro-grafico-barras">
-            <div class="financeiro-grafico-barra financeiro-grafico-barra-realizado" style="height:${Math.round((s.realizado / max) * 100)}%" title="Realizado ${s.label}: ${formatarPreco(s.realizado)}"></div>
-            <div class="financeiro-grafico-barra financeiro-grafico-barra-previsto" style="height:${Math.round((s.previsto / max) * 100)}%" title="Previsto ${s.label}: ${formatarPreco(s.previsto)}"></div>
+            <div class="financeiro-grafico-barra financeiro-grafico-barra-realizado" style="height:${Math.round((s.realizado / max) * 100)}%" data-tooltip="Realizado ${s.label}: ${formatarPreco(s.realizado)}"></div>
+            <div class="financeiro-grafico-barra financeiro-grafico-barra-previsto" style="height:${Math.round((s.previsto / max) * 100)}%" data-tooltip="Previsto ${s.label}: ${formatarPreco(s.previsto)}"></div>
           </div>
           <div class="financeiro-grafico-label">${s.label}</div>
         </div>
@@ -1314,6 +1333,39 @@ function renderGraficoSemanasFinanceiro(semanas) {
     </div>
   `;
 }
+
+// PR4 — tooltip customizado do gráfico do Financeiro, no lugar do atributo
+// title nativo do navegador (sem controle de estilo/posição/delay). Um único
+// elemento reaproveitado entre hovers, seguindo o cursor.
+let elTooltipGrafico = null;
+function mostrarTooltipGrafico(texto, x, y) {
+  if (!elTooltipGrafico) {
+    elTooltipGrafico = document.createElement('div');
+    elTooltipGrafico.className = 'financeiro-grafico-tooltip';
+    document.body.appendChild(elTooltipGrafico);
+  }
+  elTooltipGrafico.textContent = texto;
+  elTooltipGrafico.style.left = `${x + 14}px`;
+  elTooltipGrafico.style.top = `${y + 14}px`;
+  elTooltipGrafico.style.display = 'block';
+}
+function ocultarTooltipGrafico() {
+  if (elTooltipGrafico) elTooltipGrafico.style.display = 'none';
+}
+conteudo.addEventListener('mouseover', (e) => {
+  const barra = e.target.closest('.financeiro-grafico-barra');
+  if (barra) mostrarTooltipGrafico(barra.dataset.tooltip, e.clientX, e.clientY);
+});
+conteudo.addEventListener('mousemove', (e) => {
+  if (!elTooltipGrafico || elTooltipGrafico.style.display !== 'block') return;
+  if (e.target.closest('.financeiro-grafico-barra')) {
+    elTooltipGrafico.style.left = `${e.clientX + 14}px`;
+    elTooltipGrafico.style.top = `${e.clientY + 14}px`;
+  }
+});
+conteudo.addEventListener('mouseout', (e) => {
+  if (e.target.closest('.financeiro-grafico-barra')) ocultarTooltipGrafico();
+});
 
 // US71/CA05 — abre o Financeiro já na aba/período desejado. Pensada pra ser
 // chamada pelos cards do resumo financeiro na tela inicial (US70): quando as
@@ -1326,12 +1378,12 @@ function abrirFinanceiroComFiltro(periodo, referencia) {
   } else if (abaFinanceiroAtiva === 'mes' && referencia) {
     mesFinanceiroRef = new Date(`${referencia}-01T12:00:00`);
   }
-  detalhamentoSemanaAberto = false;
+  detalhamentoFinanceiroAberto = false;
   selecionarMenu('modulo:financeiro');
 }
 
 function tabsFinanceiroHtml() {
-  const abas = [['mes', 'Mês'], ['semana', 'Semana'], ['dia', 'Dia']];
+  const abas = [['dia', 'Dia'], ['semana', 'Semana'], ['mes', 'Mês']];
   return `
     <div class="subtabs-financeiro" role="tablist" data-testid="tabs-financeiro">
       ${abas.map(([chave, rotulo]) => `
@@ -1368,204 +1420,209 @@ function renderLancamentoItem(l) {
     ? `<span class="badge ${LANCAMENTO_STATUS_BADGE[l.status] || ''}">${LANCAMENTO_STATUS_LABEL[l.status] || l.status}</span>`
     : '';
 
+  // PR4 — menu sanduíche (Confirmar/Cancelar pagamento, Reagendar) só em
+  // lançamento vinculado a agendamento ainda "previsto"; manual (sempre
+  // realizado) e já concluído/cancelado continuam só leitura.
+  const podeGerenciar = origemAgendamento && l.status === 'previsto';
+
   return `
     <div class="agendamento-item" data-testid="lancamento-item">
-      <div class="agendamento-linha-principal">
+      <div class="agendamento-linha-principal" ${podeGerenciar ? `data-acoes-toggle="lancamento-${l.id}"` : ''}>
         <div>
           <div class="agendamento-hora">${titulo}${statusBadge}</div>
           <div class="agendamento-detalhe">${detalhe}</div>
         </div>
         <div class="${classeTipo}">${sinal} ${formatarPreco(l.valor)}</div>
+        ${podeGerenciar ? '<button class="btn-acoes" aria-label="Ações">⋮</button>' : ''}
       </div>
+      ${podeGerenciar ? `
+        <div class="menu-acoes" id="menu-acoes-lancamento-${l.id}">
+          <button data-acao-lancamento="confirmar" data-id="${l.id}">Confirmar pagamento</button>
+          <button data-acao-lancamento="cancelar" data-id="${l.id}" class="acao-perigo">Cancelar pagamento</button>
+          <button data-acao-lancamento="reagendar" data-id="${l.id}">Reagendar</button>
+        </div>
+      ` : ''}
     </div>
   `;
 }
 
-// US71 — /financeiro virou 3 abas (Mês/Semana/Dia); cada uma tem seu próprio
-// endpoint/estado, mas compartilham a barra de abas (tabsFinanceiroHtml) e o
-// item de lançamento (renderLancamentoItem).
-async function renderFinanceiro() {
-  conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
-  if (abaFinanceiroAtiva === 'semana') return renderFinanceiroSemana();
-  if (abaFinanceiroAtiva === 'dia') return renderFinanceiroDia();
-  return renderFinanceiroMes();
+// PR4 — Confirmar pagamento é ação direta (sem modal, "confirmar" já é a
+// confirmação); reaproveita o mesmo PATCH que abrirModalConcluir usa no
+// menu da Agenda — sincronizarLancamentoFinanceiro (US64) já converte o
+// lançamento de previsto pra realizado sozinho, sem endpoint próprio.
+async function confirmarPagamentoLancamento(l) {
+  const resultado = await api(`/api/agendamentos/${l.agendamento_id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status: 'concluido' }),
+  });
+  if (resultado && !resultado.error) {
+    mostrarToast('Pagamento confirmado.', 'sucesso');
+    render();
+  } else {
+    mostrarToast((resultado && resultado.error) || 'Erro ao confirmar pagamento.', 'erro');
+  }
 }
 
-async function renderFinanceiroMes() {
-  const mesISO = formatarDataISO(mesFinanceiroRef).slice(0, 7);
-  const data = await api(`/api/financeiro/lancamentos?mes=${mesISO}`);
-  if (!data) return;
+// PR4 — Cancelar pagamento segue o mesmo padrão de abrirModalCancelar (ST08.4),
+// com o texto de aviso pedido explicitamente ("operação não pode ser
+// desfeita"). Mesmo PATCH — sincronizarLancamentoFinanceiro remove o valor
+// do previsto quando o agendamento é cancelado.
+function abrirModalCancelarPagamentoLancamento(l) {
+  abrirModal(
+    '<h3>Cancelar pagamento</h3>',
+    `
+      <p class="modal-texto">Deseja cancelar, essa operação não pode ser desfeita?</p>
+      <div class="modal-acoes">
+        <button class="btn-secundario" id="btn-sair-cancelar-pagamento">Sair</button>
+        <button class="btn-perigo" id="btn-confirmar-cancelar-pagamento">Confirmar</button>
+      </div>
+    `
+  );
 
+  document.getElementById('btn-sair-cancelar-pagamento').addEventListener('click', fecharModal);
+  document.getElementById('btn-confirmar-cancelar-pagamento').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-confirmar-cancelar-pagamento');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    const resultado = await api(`/api/agendamentos/${l.agendamento_id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'cancelado' }),
+    });
+
+    if (resultado && !resultado.error) {
+      fecharModal();
+      mostrarToast('Pagamento cancelado.', 'sucesso');
+      render();
+    } else {
+      mostrarToast((resultado && resultado.error) || 'Erro ao cancelar pagamento.', 'erro');
+      btn.disabled = false;
+      btn.textContent = 'Confirmar';
+    }
+  });
+}
+
+// PR4 — labels do card "Total {PERÍODO}" por aba.
+const LABEL_TOTAL_FINANCEIRO = { dia: 'TOTAL DIA', semana: 'TOTAL SEMANA', mes: 'TOTAL MÊS' };
+
+function referenciaFinanceiroAtiva() {
+  if (abaFinanceiroAtiva === 'semana') return formatarDataISO(inicioDaSemana(semanaFinanceiroRef));
+  if (abaFinanceiroAtiva === 'dia') return formatarDataISO(diaFinanceiroRef);
+  return formatarDataISO(mesFinanceiroRef).slice(0, 7);
+}
+
+function navPeriodoFinanceiroHtml() {
+  if (abaFinanceiroAtiva === 'semana') {
+    const inicio = inicioDaSemana(semanaFinanceiroRef);
+    return `
+      <div class="nav-periodo">
+        <button data-nav="-1" data-testid="nav-semana-anterior">← Semana anterior</button>
+        <strong>${labelIntervaloSemanaFinanceiro(inicio)}</strong>
+        <button data-nav="1" data-testid="nav-semana-proxima">Próxima semana →</button>
+      </div>
+    `;
+  }
+  if (abaFinanceiroAtiva === 'dia') {
+    const dataLabel = diaFinanceiroRef.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Sao_Paulo' });
+    return `
+      <div class="nav-periodo">
+        <button data-nav="-1" data-testid="nav-dia-anterior">← Dia anterior</button>
+        <div class="nav-periodo-data">
+          <strong>${dataLabel}</strong>
+          <div class="nav-periodo-dia-semana">${nomeDiaSemana(diaFinanceiroRef)}</div>
+        </div>
+        <button data-nav="1" data-testid="nav-dia-proximo">Próximo dia →</button>
+      </div>
+    `;
+  }
   const mesLabel = mesFinanceiroRef.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'America/Sao_Paulo' });
-  // US71/CA02 — gráfico só faz sentido quando já há a distinção previsto/
-  // realizado (US64); payload antigo (sem esses campos) não teria o que
-  // agrupar de diferente das barras.
-  const semanas = data.resumo.previsto != null ? agruparPorSemanaDoMes(data.lancamentos) : [];
-
-  let html = tabsFinanceiroHtml() + `
+  return `
     <div class="nav-periodo">
       <button data-nav="-1" data-testid="nav-mes-anterior">← Mês anterior</button>
       <strong>${mesLabel}</strong>
       <button data-nav="1" data-testid="nav-mes-proximo">Próximo mês →</button>
     </div>
+  `;
+}
+
+function bindNavPeriodoFinanceiro() {
+  const btnAnterior = conteudo.querySelector('[data-nav="-1"]');
+  const btnProximo = conteudo.querySelector('[data-nav="1"]');
+  if (abaFinanceiroAtiva === 'semana') {
+    btnAnterior.addEventListener('click', () => { semanaFinanceiroRef.setDate(semanaFinanceiroRef.getDate() - 7); renderFinanceiro(); });
+    btnProximo.addEventListener('click', () => { semanaFinanceiroRef.setDate(semanaFinanceiroRef.getDate() + 7); renderFinanceiro(); });
+  } else if (abaFinanceiroAtiva === 'dia') {
+    btnAnterior.addEventListener('click', () => { diaFinanceiroRef.setDate(diaFinanceiroRef.getDate() - 1); renderFinanceiro(); });
+    btnProximo.addEventListener('click', () => { diaFinanceiroRef.setDate(diaFinanceiroRef.getDate() + 1); renderFinanceiro(); });
+  } else {
+    btnAnterior.addEventListener('click', () => { mesFinanceiroRef.setMonth(mesFinanceiroRef.getMonth() - 1); renderFinanceiro(); });
+    btnProximo.addEventListener('click', () => { mesFinanceiroRef.setMonth(mesFinanceiroRef.getMonth() + 1); renderFinanceiro(); });
+  }
+}
+
+// PR4 — as 3 abas (Dia/Semana/Mês) usam o mesmo endpoint unificado
+// (?periodo=dia|semana|mes&referencia=...), os mesmos 4 cards (Receita
+// prevista/Receita Realizada/Saídas/Total) e o mesmo colapso de
+// detalhamento — só nav do período, label do card Total e o gráfico (só
+// Mês) mudam por aba.
+async function renderFinanceiro() {
+  conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
+  const periodo = abaFinanceiroAtiva;
+  const referencia = referenciaFinanceiroAtiva();
+  const data = await api(`/api/financeiro/lancamentos?periodo=${periodo}&referencia=${referencia}`);
+  if (!data) return;
+
+  lancamentosAtuais = data.lancamentos;
+  // Decisão confirmada com o Bruno: Total = Previsto − Saídas (literal, não
+  // soma a Receita Realizada, que já aparece separada no card ao lado).
+  const total = data.resumo.previsto - data.resumo.saidas;
+
+  let html = tabsFinanceiroHtml() + navPeriodoFinanceiroHtml() + `
     <div class="financeiro-resumo">
-      <div class="financeiro-resumo-card">
-        <div class="financeiro-resumo-label">Entradas</div>
-        <div class="financeiro-entrada">${formatarPreco(data.resumo.entradas)}</div>
+      <div class="financeiro-resumo-card" data-testid="card-previsto">
+        <div class="financeiro-resumo-label">Receita prevista</div>
+        <div class="financeiro-previsto">${formatarPreco(data.resumo.previsto)}</div>
       </div>
-      <div class="financeiro-resumo-card">
+      <div class="financeiro-resumo-card" data-testid="card-realizado">
+        <div class="financeiro-resumo-label">Receita Realizada</div>
+        <div class="financeiro-entrada">${formatarPreco(data.resumo.realizado)}</div>
+      </div>
+      <div class="financeiro-resumo-card" data-testid="card-saidas">
         <div class="financeiro-resumo-label">Saídas</div>
         <div class="financeiro-saida">${formatarPreco(data.resumo.saidas)}</div>
       </div>
-      <div class="financeiro-resumo-card">
-        <div class="financeiro-resumo-label">Saldo</div>
-        <div class="${data.resumo.saldo >= 0 ? 'financeiro-entrada' : 'financeiro-saida'}">${formatarPreco(data.resumo.saldo)}</div>
-      </div>
-      ${data.resumo.previsto != null ? `
-        <div class="financeiro-resumo-card" data-testid="card-previsto">
-          <div class="financeiro-resumo-label">Receita prevista</div>
-          <div class="financeiro-previsto">${formatarPreco(data.resumo.previsto)}</div>
-        </div>
-        <div class="financeiro-resumo-card" data-testid="card-realizado">
-          <div class="financeiro-resumo-label">Receita realizada</div>
-          <div class="financeiro-entrada">${formatarPreco(data.resumo.realizado)}</div>
-        </div>
-        <div class="financeiro-resumo-card" data-testid="card-total">
-          <div class="financeiro-resumo-label">Total do mês</div>
-          <div class="financeiro-entrada">${formatarPreco(data.resumo.previsto + data.resumo.realizado)}</div>
-        </div>
-      ` : ''}
-    </div>
-    ${semanas.length ? renderGraficoSemanasFinanceiro(semanas) : ''}
-    <button class="btn-novo-agendamento" id="btn-novo-lancamento" style="margin-bottom:16px">+ Novo lançamento</button>
-  `;
-
-  html += data.lancamentos.length
-    ? data.lancamentos.map(renderLancamentoItem).join('')
-    : '<div class="vazio">Nenhum lançamento neste mês.</div>';
-
-  conteudo.innerHTML = html;
-  conteudo.querySelector('[data-nav="-1"]').addEventListener('click', () => {
-    mesFinanceiroRef.setMonth(mesFinanceiroRef.getMonth() - 1);
-    renderFinanceiro();
-  });
-  conteudo.querySelector('[data-nav="1"]').addEventListener('click', () => {
-    mesFinanceiroRef.setMonth(mesFinanceiroRef.getMonth() + 1);
-    renderFinanceiro();
-  });
-  document.getElementById('btn-novo-lancamento').addEventListener('click', abrirModalLancamento);
-}
-
-// US71/CA03 — resumo da semana + detalhamento expansível (fechado por
-// padrão; só busca a lista de lançamentos quando aberto, pra não pagar o
-// custo da segunda chamada de API sem o usuário ter pedido).
-async function renderFinanceiroSemana() {
-  const inicio = inicioDaSemana(semanaFinanceiroRef);
-  const referencia = formatarDataISO(inicio);
-  const [resumo, detalhamento] = await Promise.all([
-    api(`/api/financeiro/resumo?periodo=semana&referencia=${referencia}`),
-    detalhamentoSemanaAberto ? api(`/api/financeiro/lancamentos?periodo=semana&referencia=${referencia}`) : Promise.resolve(null),
-  ]);
-  if (!resumo) return;
-
-  let html = tabsFinanceiroHtml() + `
-    <div class="nav-periodo">
-      <button data-nav="-1" data-testid="nav-semana-anterior">← Semana anterior</button>
-      <strong>${labelIntervaloSemanaFinanceiro(inicio)}</strong>
-      <button data-nav="1" data-testid="nav-semana-proxima">Próxima semana →</button>
-    </div>
-    <div class="financeiro-resumo">
-      <div class="financeiro-resumo-card" data-testid="card-realizado">
-        <div class="financeiro-resumo-label">Realizado</div>
-        <div class="financeiro-entrada">${formatarPreco(resumo.realizado)}</div>
-      </div>
-      <div class="financeiro-resumo-card" data-testid="card-previsto">
-        <div class="financeiro-resumo-label">Previsto</div>
-        <div class="financeiro-previsto">${formatarPreco(resumo.previsto)}</div>
-      </div>
       <div class="financeiro-resumo-card" data-testid="card-total">
-        <div class="financeiro-resumo-label">Total</div>
-        <div class="financeiro-entrada">${formatarPreco(resumo.total)}</div>
+        <div class="financeiro-resumo-label">${LABEL_TOTAL_FINANCEIRO[periodo]}</div>
+        <div class="${total >= 0 ? 'financeiro-entrada' : 'financeiro-saida'}">${formatarPreco(total)}</div>
       </div>
     </div>
-    <button type="button" class="btn-secundario btn-detalhamento-financeiro" id="btn-toggle-detalhamento-semana">${detalhamentoSemanaAberto ? 'Ocultar detalhamento' : 'Ver detalhamento'}</button>
   `;
 
-  if (detalhamentoSemanaAberto) {
-    html += `<div data-testid="lista-lancamentos">`;
-    html += (detalhamento && detalhamento.lancamentos.length)
-      ? detalhamento.lancamentos.map(renderLancamentoItem).join('')
-      : '<div class="vazio">Nenhum lançamento registrado para este período.</div>';
-    html += `</div>`;
+  if (periodo === 'mes') {
+    const semanas = agruparPorSemanaDoMes(data.lancamentos);
+    if (semanas.length) html += renderGraficoSemanasFinanceiro(semanas);
+  }
+
+  html += `<button class="btn-novo-agendamento" id="btn-novo-lancamento" style="margin-bottom:16px">+ Novo lançamento</button>`;
+
+  // Colapso só aparece se houver ao menos 1 lançamento no período.
+  if (data.lancamentos.length) {
+    html += `<button type="button" class="btn-secundario btn-detalhamento-financeiro" id="btn-toggle-detalhamento-financeiro">${detalhamentoFinanceiroAberto ? 'Ocultar detalhamento' : 'Ver detalhamento'}</button>`;
+    if (detalhamentoFinanceiroAberto) {
+      html += `<div data-testid="lista-lancamentos">${data.lancamentos.map(renderLancamentoItem).join('')}</div>`;
+    }
   }
 
   conteudo.innerHTML = html;
-  conteudo.querySelector('[data-nav="-1"]').addEventListener('click', () => {
-    semanaFinanceiroRef.setDate(semanaFinanceiroRef.getDate() - 7);
-    renderFinanceiro();
-  });
-  conteudo.querySelector('[data-nav="1"]').addEventListener('click', () => {
-    semanaFinanceiroRef.setDate(semanaFinanceiroRef.getDate() + 7);
-    renderFinanceiro();
-  });
-  document.getElementById('btn-toggle-detalhamento-semana').addEventListener('click', () => {
-    detalhamentoSemanaAberto = !detalhamentoSemanaAberto;
-    renderFinanceiro();
-  });
-}
-
-// US71/CA04 — resumo do dia + lista sempre visível (sem toggle, diferente da
-// semana: no dia o volume de lançamentos já é pequeno o bastante pra não
-// precisar de um passo extra de expandir).
-async function renderFinanceiroDia() {
-  const referencia = formatarDataISO(diaFinanceiroRef);
-  const [resumo, detalhamento] = await Promise.all([
-    api(`/api/financeiro/resumo?periodo=dia&referencia=${referencia}`),
-    api(`/api/financeiro/lancamentos?periodo=dia&referencia=${referencia}`),
-  ]);
-  if (!resumo || !detalhamento) return;
-
-  const dataLabel = diaFinanceiroRef.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Sao_Paulo' });
-
-  let html = tabsFinanceiroHtml() + `
-    <div class="nav-periodo">
-      <button data-nav="-1" data-testid="nav-dia-anterior">← Dia anterior</button>
-      <div class="nav-periodo-data">
-        <strong>${dataLabel}</strong>
-        <div class="nav-periodo-dia-semana">${nomeDiaSemana(diaFinanceiroRef)}</div>
-      </div>
-      <button data-nav="1" data-testid="nav-dia-proximo">Próximo dia →</button>
-    </div>
-    <div class="financeiro-resumo">
-      <div class="financeiro-resumo-card" data-testid="card-realizado">
-        <div class="financeiro-resumo-label">Realizado</div>
-        <div class="financeiro-entrada">${formatarPreco(resumo.realizado)}</div>
-      </div>
-      <div class="financeiro-resumo-card" data-testid="card-previsto">
-        <div class="financeiro-resumo-label">Previsto</div>
-        <div class="financeiro-previsto">${formatarPreco(resumo.previsto)}</div>
-      </div>
-      <div class="financeiro-resumo-card" data-testid="card-total">
-        <div class="financeiro-resumo-label">Total</div>
-        <div class="financeiro-entrada">${formatarPreco(resumo.total)}</div>
-      </div>
-    </div>
-    <div data-testid="lista-lancamentos">
-  `;
-  html += detalhamento.lancamentos.length
-    ? detalhamento.lancamentos.map(renderLancamentoItem).join('')
-    : '<div class="vazio">Nenhum lançamento registrado para este dia.</div>';
-  html += `</div>`;
-
-  conteudo.innerHTML = html;
-  conteudo.querySelector('[data-nav="-1"]').addEventListener('click', () => {
-    diaFinanceiroRef.setDate(diaFinanceiroRef.getDate() - 1);
-    renderFinanceiro();
-  });
-  conteudo.querySelector('[data-nav="1"]').addEventListener('click', () => {
-    diaFinanceiroRef.setDate(diaFinanceiroRef.getDate() + 1);
-    renderFinanceiro();
-  });
+  bindNavPeriodoFinanceiro();
+  document.getElementById('btn-novo-lancamento').addEventListener('click', abrirModalLancamento);
+  const btnToggleDetalhamento = document.getElementById('btn-toggle-detalhamento-financeiro');
+  if (btnToggleDetalhamento) {
+    btnToggleDetalhamento.addEventListener('click', () => {
+      detalhamentoFinanceiroAberto = !detalhamentoFinanceiroAberto;
+      renderFinanceiro();
+    });
+  }
 }
 
 function abrirModalLancamento() {
