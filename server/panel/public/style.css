@@ -80,19 +80,26 @@ footer.rodape-app {
   border-top: 1px solid #232847;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   flex-wrap: wrap;
   gap: 16px;
-}
-
-footer.rodape-app .logo {
-  margin: 0;
-  font-size: 18px;
 }
 
 .rodape-app-copy {
   font-size: 12px;
   color: #a1a5c4;
+}
+
+/* Logo substituindo a palavra "Kyvvo" dentro do próprio texto do rodapé
+   (em vez de um bloco separado antes do parágrafo) — precisa ficar inline
+   e sem os resets de bloco (centralização/margem) que .logo usa nos outros
+   contextos. */
+.rodape-logo-inline {
+  display: inline;
+  margin: 0;
+  text-align: left;
+  font-size: 13px;
+  vertical-align: baseline;
 }
 
 label {
@@ -185,9 +192,39 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   border-bottom: 1px solid #232847;
 }
 
+.topbar-esquerda { display: flex; align-items: center; gap: 14px; }
 .topbar-textos { display: flex; flex-direction: column; gap: 2px; }
 .topbar .logo { margin: 0; font-size: 20px; }
 .saudacao { font-size: 13px; color: #a1a5c4; }
+
+/* Logo e botão de ocultar sidebar migraram pro topbar (antes viviam só na
+   sidebar) — ambos são <button>, então precisam desfazer o reset genérico
+   de `button` (largura 100%, fundo roxo, padding grande) antes de herdar a
+   aparência de .logo / virar um ícone compacto. */
+.topbar-logo {
+  width: auto;
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 20px;
+}
+.topbar-logo:hover { background: none; opacity: 0.85; }
+
+.btn-toggle-sidebar {
+  width: auto;
+  margin: 0;
+  padding: 6px 8px;
+  background: none;
+  border: 1px solid #2a2f52;
+  border-radius: 8px;
+  color: #a1a5c4;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+.btn-toggle-sidebar:hover { background: rgba(124, 92, 252, 0.08); color: #f2f2f7; }
 
 /* .topbar-nav-link — desde a US53 o admin não usa mais nav no topbar (virou
    sidebar, como o painel do tenant); a classe sobrevive só pro link "←
@@ -219,10 +256,11 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   display: flex;
   flex-direction: column;
   padding: 20px 16px;
-  border-right: 1px solid #232847;
 }
 
-.painel-sidebar .logo { margin: 0 0 24px 4px; font-size: 20px; }
+/* Opção de ocultar o menu (botão fica no topbar, fora da sidebar, pra
+   continuar acessível mesmo com o menu escondido). */
+.painel-sidebar.sidebar-oculta { display: none; }
 
 .painel-main {
   flex: 1;
@@ -292,12 +330,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     width: 100%;
     flex-direction: row;
     align-items: center;
-    border-right: none;
     border-bottom: 1px solid #232847;
     padding: 12px 16px;
     overflow-x: auto;
   }
-  .painel-sidebar .logo { margin: 0 16px 0 0; flex-shrink: 0; }
   .menu { flex-direction: row; gap: 4px; }
   .menu-item { border-left: none; border-bottom: 2px solid transparent; border-radius: 8px 8px 0 0; white-space: nowrap; }
   .menu-item.active { border-left-color: transparent; border-bottom-color: var(--accent); }
@@ -1606,6 +1642,14 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* Fundo por linha (mesmo tom de card do resto do painel, ex: .agendamento-item) */
 .tabela-tenants tbody tr:hover { background: #171c38; }
+
+/* Equipe reaproveita .tabela-tenants (mesma classe usada no admin), mas sem
+   o white-space: nowrap na coluna de ações — os botões (já compactos via
+   .btn-tabela) podem quebrar linha em telas estreitas em vez de forçar
+   scroll horizontal na tabela inteira. Escopado só pra Equipe: não mexe em
+   .tabela-tenants direto, que o admin depende do nowrap+scroll pra caber
+   colunas com texto longo. */
+.tabela-equipe td:last-child { white-space: normal; }
 
 .th-ordenar {
   width: auto;

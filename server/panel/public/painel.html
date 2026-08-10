@@ -20,11 +20,10 @@
 <div id="trial-banner" class="trial-banner" hidden></div>
 <div id="avisos-painel"></div>
 <div class="painel-shell">
-  <aside class="painel-sidebar">
-    <div class="logo">ky<span class="logo-vv">vv</span>o</div>
+  <aside class="painel-sidebar" id="painel-sidebar">
     <nav class="menu">
-      <div class="menu-item" data-menu="inicio">Início</div>
-      <div class="menu-item active" data-menu="agendamento">Agenda</div>
+      <div class="menu-item active" data-menu="inicio">Início</div>
+      <div class="menu-item" data-menu="agendamento">Agenda</div>
       <div class="menu-item-grupo" id="menu-cadastros-toggle">
         <span>Cadastros</span>
         <span class="menu-chevron">▾</span>
@@ -39,8 +38,12 @@
   </aside>
   <div class="painel-main">
     <div class="topbar">
-      <div class="topbar-textos">
-        <div class="saudacao" id="saudacao"></div>
+      <div class="topbar-esquerda">
+        <button class="btn-toggle-sidebar" id="btn-toggle-sidebar" aria-label="Ocultar menu" title="Ocultar menu">☰</button>
+        <button class="logo topbar-logo" id="topbar-logo" aria-label="Ir para o início">ky<span class="logo-vv">vv</span>o</button>
+        <div class="topbar-textos">
+          <div class="saudacao" id="saudacao"></div>
+        </div>
       </div>
       <div class="user-menu" id="user-menu">
         <button class="user-menu-toggle" id="user-menu-toggle">
@@ -64,7 +67,7 @@
         </div>
       </div>
     </div>
-    <div class="subtabs" id="subtabs">
+    <div class="subtabs" id="subtabs" style="display: none;">
       <div class="tab active" data-tab="dia">Dia</div>
       <div class="tab" data-tab="semana">Semana</div>
       <div class="tab" data-tab="mes">Mês</div>
@@ -73,8 +76,7 @@
     <div class="conteudo" id="conteudo"></div>
 
     <footer class="rodape-app">
-      <div class="logo">ky<span class="logo-vv">vv</span>o</div>
-      <p class="rodape-app-copy">© 2026 Kyvvo. Todos os direitos reservados.</p>
+      <p class="rodape-app-copy">© 2026 <span class="logo rodape-logo-inline">ky<span class="logo-vv">vv</span>o</span>. Todos os direitos reservados.</p>
     </footer>
   </div>
 </div>
