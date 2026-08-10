@@ -3293,9 +3293,14 @@ async function start() {
       // exibição (CA "Cenário 8" — identificar cliente/serviço/data do
       // atendimento a partir do financeiro); lançamentos manuais (US18) têm
       // agendamento_id nulo e os três campos vêm null.
+      // profissional_id/servico_id (além do agendamento_id que já vinha) são
+      // pro menu de ações da linha (PR4) reaproveitar abrirModalReagendar(ag),
+      // que precisa desses dois campos pra consultar disponibilidade — sem
+      // eles só dava pra reagendar recarregando o agendamento por outra rota.
       const { rows } = await pool.query(
         `SELECT l.id, l.tipo, l.valor, l.descricao, l.data, l.status, l.agendamento_id,
-                c.nome AS cliente, s.nome AS servico
+                c.nome AS cliente, s.nome AS servico,
+                a.profissional_id, a.servico_id
          FROM lancamentos_financeiros l
          LEFT JOIN agendamentos a ON a.id = l.agendamento_id
          LEFT JOIN clientes c ON c.id = a.cliente_id
