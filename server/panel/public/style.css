@@ -1223,18 +1223,32 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   background: #232847;
 }
 
-/* Busca da listagem de tenants (US27) — full width no mobile, até 400px
-   alinhado à esquerda no desktop (CA06). */
+/* Busca + filtro de status da listagem de tenants (US27/US85) — empilhados
+   no mobile, lado a lado a partir de 640px. */
+.filtros-tenants-wrapper {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
 .busca-tenants-wrapper {
   position: relative;
   width: 100%;
-  margin-bottom: 16px;
+  margin-bottom: 0;
 }
 
 @media (min-width: 640px) {
   .busca-tenants-wrapper {
     max-width: 400px;
   }
+}
+
+.filtro-status-select {
+  width: auto;
+  min-width: 180px;
+  margin: 0;
 }
 
 .busca-tenants-input {

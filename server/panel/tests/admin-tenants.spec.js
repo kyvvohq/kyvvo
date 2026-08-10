@@ -21,7 +21,7 @@ function tenantMock(overrides = {}) {
 }
 
 async function entrarNaListaDeTenants(page, tenants = [], meta = {}) {
-  await page.route('**/admin/api/tenants*', (route) => {
+  await page.route('**/api/tenants*', (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
     return route.fulfill({
       json: { tenants, page: 1, limit: 20, total: tenants.length, total_paginas: 1, ...meta },
@@ -37,7 +37,7 @@ async function entrarNaListaDeTenants(page, tenants = [], meta = {}) {
 test.describe('Admin — listagem de tenants (US26)', () => {
   test('redireciona para o login se não autenticado como admin', async ({ page }) => {
     await page.goto('/admin/painel.html');
-    await expect(page).toHaveURL(/\/admin\/login\.html/);
+    await expect(page).toHaveURL(/\/login\.html/);
   });
 
   test('lista os tenants com as colunas definidas (CA02)', async ({ page }) => {
@@ -52,7 +52,7 @@ test.describe('Admin — listagem de tenants (US26)', () => {
     await expect(linha).toContainText('01/07/2026');
     await expect(linha).toContainText('02/07/2026');
     await expect(linha.locator('.badge-status')).toHaveText('Trial ativo');
-    await expect(linha.locator('.btn-ver-detalhes')).toHaveAttribute('href', '/admin/tenants/t1');
+    await expect(linha.locator('.btn-ver-detalhes')).toHaveAttribute('href', '/tenants/t1');
   });
 
   test('Status "Trial ativo" mostra a contagem de dias restantes (US31/CA06)', async ({ page }) => {
@@ -110,7 +110,7 @@ test.describe('Admin — listagem de tenants (US26)', () => {
 
   test('ordenação padrão por data de cadastro decrescente (CA03)', async ({ page }) => {
     let urlRecebida = null;
-    await page.route('**/admin/api/tenants*', (route) => {
+    await page.route('**/api/tenants*', (route) => {
       urlRecebida = route.request().url();
       return route.fulfill({ json: { tenants: [tenantMock()], page: 1, limit: 20, total: 1, total_paginas: 1 } });
     });
@@ -125,7 +125,7 @@ test.describe('Admin — listagem de tenants (US26)', () => {
 
   test('clicar no cabeçalho de uma coluna reordena a tabela (CA03)', async ({ page }) => {
     const requisicoes = [];
-    await page.route('**/admin/api/tenants*', (route) => {
+    await page.route('**/api/tenants*', (route) => {
       requisicoes.push(route.request().url());
       return route.fulfill({ json: { tenants: [tenantMock()], page: 1, limit: 20, total: 1, total_paginas: 1 } });
     });
@@ -145,7 +145,7 @@ test.describe('Admin — listagem de tenants (US26)', () => {
 
   test('paginação: botões Anterior/Próximo e indicador de página (CA04)', async ({ page }) => {
     const requisicoes = [];
-    await page.route('**/admin/api/tenants*', (route) => {
+    await page.route('**/api/tenants*', (route) => {
       const url = new URL(route.request().url());
       requisicoes.push(url.toString());
       const pagina = Number(url.searchParams.get('page')) || 1;
@@ -178,7 +178,7 @@ test.describe('Admin — busca na listagem de tenants (US27)', () => {
 
   test('digitar aciona a busca com debounce e reseta pra página 1 (CA02, CA05)', async ({ page }) => {
     const requisicoes = [];
-    await page.route('**/admin/api/tenants*', (route) => {
+    await page.route('**/api/tenants*', (route) => {
       requisicoes.push(route.request().url());
       return route.fulfill({ json: { tenants: [tenantMock()], page: 1, limit: 20, total: 1, total_paginas: 1 } });
     });
@@ -195,7 +195,7 @@ test.describe('Admin — busca na listagem de tenants (US27)', () => {
 
   test('busca por trecho do WhatsApp envia o termo ao backend (CA03)', async ({ page }) => {
     const requisicoes = [];
-    await page.route('**/admin/api/tenants*', (route) => {
+    await page.route('**/api/tenants*', (route) => {
       requisicoes.push(route.request().url());
       return route.fulfill({ json: { tenants: [tenantMock()], page: 1, limit: 20, total: 1, total_paginas: 1 } });
     });
@@ -209,7 +209,7 @@ test.describe('Admin — busca na listagem de tenants (US27)', () => {
   });
 
   test('contador e estado vazio de busca sem resultados (CA04)', async ({ page }) => {
-    await page.route('**/admin/api/tenants*', (route) => {
+    await page.route('**/api/tenants*', (route) => {
       const url = new URL(route.request().url());
       const search = url.searchParams.get('search');
       if (search) {
@@ -228,7 +228,7 @@ test.describe('Admin — busca na listagem de tenants (US27)', () => {
 
   test('botão limpar busca aparece ao digitar e restaura a listagem completa (CA04)', async ({ page }) => {
     const requisicoes = [];
-    await page.route('**/admin/api/tenants*', (route) => {
+    await page.route('**/api/tenants*', (route) => {
       const url = new URL(route.request().url());
       requisicoes.push(url.toString());
       const search = url.searchParams.get('search');
@@ -253,5 +253,69 @@ test.describe('Admin — busca na listagem de tenants (US27)', () => {
     await expect(btnLimpar).toBeHidden();
     await expect(page.locator('#busca-tenants')).toHaveValue('');
     await expect.poll(() => requisicoes.at(-1)).not.toContain('search=');
+  });
+});
+
+test.describe('Admin — filtro de status na listagem (US85/CA01)', () => {
+  test('filtra a lista por status selecionado e reseta pra página 1', async ({ page }) => {
+    const requisicoes = [];
+    await page.route('**/api/tenants*', (route) => {
+      const url = new URL(route.request().url());
+      requisicoes.push(url.toString());
+      const status = url.searchParams.get('status');
+      const tenants = status === 'Trial expirado'
+        ? [tenantMock({ id: 't2', nome: 'Salão Expirado', status_conta: 'Trial expirado' })]
+        : [tenantMock()];
+      return route.fulfill({ json: { tenants, page: 1, limit: 20, total: 40, total_paginas: 2 } });
+    });
+    await page.addInitScript(() => {
+      window.localStorage.setItem('kyvvo_admin_token', 'admin-token-fake');
+    });
+    await page.goto('/admin/painel.html');
+
+    await page.click('#btn-pagina-proxima');
+    await expect.poll(() => new URL(requisicoes.at(-1)).searchParams.get('page')).toBe('2');
+
+    await page.selectOption('#filtro-status', 'Trial expirado');
+
+    await expect(page.locator('.tabela-tenants tbody tr')).toContainText('Salão Expirado');
+    await expect.poll(() => requisicoes.at(-1)).toContain('status=Trial+expirado');
+    await expect.poll(() => new URL(requisicoes.at(-1)).searchParams.get('page')).toBe('1');
+  });
+
+  test('combina o filtro de status com a busca por texto já existente (US27)', async ({ page }) => {
+    const requisicoes = [];
+    await page.route('**/api/tenants*', (route) => {
+      requisicoes.push(route.request().url());
+      return route.fulfill({ json: { tenants: [tenantMock()], page: 1, limit: 20, total: 1, total_paginas: 1 } });
+    });
+    await page.addInitScript(() => {
+      window.localStorage.setItem('kyvvo_admin_token', 'admin-token-fake');
+    });
+    await page.goto('/admin/painel.html');
+
+    await page.selectOption('#filtro-status', 'Ativo');
+    await page.fill('#busca-tenants', '3499');
+
+    await expect.poll(() => requisicoes.at(-1)).toContain('status=Ativo');
+    await expect.poll(() => requisicoes.at(-1)).toContain('search=3499');
+  });
+
+  test('voltar pra "Todos os status" remove o parâmetro da requisição', async ({ page }) => {
+    const requisicoes = [];
+    await page.route('**/api/tenants*', (route) => {
+      requisicoes.push(route.request().url());
+      return route.fulfill({ json: { tenants: [tenantMock()], page: 1, limit: 20, total: 1, total_paginas: 1 } });
+    });
+    await page.addInitScript(() => {
+      window.localStorage.setItem('kyvvo_admin_token', 'admin-token-fake');
+    });
+    await page.goto('/admin/painel.html');
+
+    await page.selectOption('#filtro-status', 'Suspenso');
+    await expect.poll(() => requisicoes.at(-1)).toContain('status=Suspenso');
+
+    await page.selectOption('#filtro-status', '');
+    await expect.poll(() => requisicoes.at(-1)).not.toContain('status=');
   });
 });

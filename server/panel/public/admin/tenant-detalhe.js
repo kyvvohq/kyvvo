@@ -44,6 +44,46 @@ const STATUS_CLASSES = {
   Suspenso: 'badge-status-suspenso',
 };
 
+// Duplicado intencionalmente do app.js do painel admin (mesmo raciocínio de
+// isolamento entre as telas admin — ver comentário no topo do arquivo).
+// US85 — a ação de troca de modo (antes na listagem) mudou pra cá.
+const MODO_ATENDIMENTO = {
+  bot: { label: '🤖 Bot', classe: 'badge-modo-bot' },
+  ia: { label: '✨ IA', classe: 'badge-modo-ia' },
+};
+
+// ---------- Modal genérico + toast ----------
+// Duplicado intencionalmente do app.js do painel admin (mesmo raciocínio de
+// isolamento entre as telas admin — ver comentário no topo do arquivo).
+function escFecharModal(e) {
+  if (e.key === 'Escape') fecharModal();
+}
+
+function fecharModal() {
+  const overlay = document.getElementById('modal-overlay');
+  if (overlay) overlay.remove();
+  document.removeEventListener('keydown', escFecharModal);
+}
+
+function abrirModal(tituloHtml, conteudoHtml) {
+  fecharModal();
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal-card">
+      <button class="modal-close" id="modal-close" aria-label="Fechar">✕</button>
+      ${tituloHtml}
+      ${conteudoHtml}
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  document.getElementById('modal-close').addEventListener('click', fecharModal);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) fecharModal(); });
+  document.addEventListener('keydown', escFecharModal);
+  return overlay;
+}
+
 function escapeHtml(valor) {
   return String(valor ?? '').replace(/[&<>"']/g, (c) => ({
     '&': '&amp;',
@@ -180,6 +220,54 @@ function renderSecaoStatus(t) {
   `;
 }
 
+// US85/CA03 — a ação "Alterar modo de atendimento" (antes na listagem, US69)
+// mudou pra cá, perto do histórico completo do tenant. Igual já acontecia na
+// listagem, tenant inativo só mostra o badge, sem botão de alterar.
+function renderSecaoModoAtendimento(t) {
+  const modo = MODO_ATENDIMENTO[t.tecnologia] || MODO_ATENDIMENTO.bot;
+  return `
+    <section class="secao-detalhe">
+      <h3>Modo de atendimento</h3>
+      <p>
+        <strong>Modo atual:</strong> <span class="badge ${modo.classe}">${modo.label}</span>
+        ${t.ativo ? '<button type="button" class="btn-acao-tabela" data-testid="btn-alterar-modo-detalhe">Alterar</button>' : ''}
+      </p>
+    </section>
+  `;
+}
+
+function renderLinhaHistoricoModo(h) {
+  const anterior = MODO_ATENDIMENTO[h.valor_anterior] || MODO_ATENDIMENTO.bot;
+  const novo = MODO_ATENDIMENTO[h.valor_novo] || MODO_ATENDIMENTO.bot;
+  return `
+    <tr>
+      <td>${anterior.label} → ${novo.label}</td>
+      <td>${escapeHtml(h.alterado_por_nome || '—')}</td>
+      <td>${formatarDataHora(h.alterado_em)}</td>
+    </tr>
+  `;
+}
+
+// US85/CA04 — histórico de trocas de modo, mesmo padrão visual do histórico
+// de módulos (US65/CA05), consumindo GET .../modo/historico.
+function renderSecaoHistoricoModo(historico) {
+  return `
+    <section class="secao-detalhe">
+      <h3>Histórico de modo de atendimento</h3>
+      <div class="tabela-wrapper">
+        <table class="tabela-tenants" data-testid="historico-modo">
+          <thead><tr><th>Alteração</th><th>Alterado por</th><th>Data</th></tr></thead>
+          <tbody>${
+            historico.length
+              ? historico.map(renderLinhaHistoricoModo).join('')
+              : '<tr><td colspan="3">Nenhuma alteração registrada ainda.</td></tr>'
+          }</tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
 // US65 — cada módulo do catálogo aparece com seu estado (ativo/inativo) e um
 // toggle pra alterar. Módulo obrigatório (CA04) vem sempre ativo, com o
 // toggle desabilitado e uma explicação no title.
@@ -280,7 +368,12 @@ async function carregarHistoricoModulos(id) {
   return (resultado && resultado.historico) || [];
 }
 
-function renderPagina(data, historico) {
+async function carregarHistoricoModo(id) {
+  const resultado = await api(`/api/tenants/${encodeURIComponent(id)}/modo/historico`).catch(() => null);
+  return (resultado && resultado.historico) || [];
+}
+
+function renderPagina(data, historicoModulos, historicoModo) {
   conteudo.innerHTML = `
     <a class="topbar-nav-link" href="/painel.html">← Voltar para lista</a>
     <h2 class="titulo-detalhe">${escapeHtml(data.nome)}</h2>
@@ -288,11 +381,14 @@ function renderPagina(data, historico) {
     ${renderSecaoNumeroNovo(data)}
     ${renderSecaoResponsavel(data)}
     ${renderSecaoStatus(data)}
+    ${renderSecaoModoAtendimento(data)}
+    ${renderSecaoHistoricoModo(historicoModo)}
     ${renderSecaoModulos(data)}
-    ${renderSecaoHistoricoModulos(historico)}
+    ${renderSecaoHistoricoModulos(historicoModulos)}
     ${renderSecaoAtividade(data)}
   `;
   wireEventosModulos();
+  wireEventosModoAtendimento();
 }
 
 // US65 — alterna um módulo pro tenant da tela atual. Em caso de sucesso,
@@ -317,8 +413,11 @@ async function alterarModulo(moduloKey, ativo, checkbox) {
 
   mostrarToast(`Módulo ${ativo ? 'ativado' : 'desativado'} com sucesso.`, 'sucesso');
   tenantAtual.modulos = resultado.modulos;
-  const historico = await carregarHistoricoModulos(idTenantAtual);
-  renderPagina(tenantAtual, historico);
+  const [historicoModulos, historicoModo] = await Promise.all([
+    carregarHistoricoModulos(idTenantAtual),
+    carregarHistoricoModo(idTenantAtual),
+  ]);
+  renderPagina(tenantAtual, historicoModulos, historicoModo);
 }
 
 function wireEventosModulos() {
@@ -329,14 +428,81 @@ function wireEventosModulos() {
   });
 }
 
+// ---------- Troca de modo de atendimento (US69/CA02, movida pra cá na US85/CA03) ----------
+// Só quem faz essa troca é o admin Kyvvo: o modo está vinculado ao plano
+// contratado, então liberar edição pro salão quebraria a lógica de
+// cobrança (US69/Contexto). O dono do salão só visualiza (CA06, portal).
+async function abrirModalTrocaModo(tenant) {
+  const destino = tenant.tecnologia === 'ia' ? 'bot' : 'ia';
+  const modoAtual = MODO_ATENDIMENTO[tenant.tecnologia] || MODO_ATENDIMENTO.bot;
+  const modoDestino = MODO_ATENDIMENTO[destino];
+
+  const avisoConversas = destino === 'bot'
+    ? '<div class="modal-erro" style="display:block">⚠️ Conversas em andamento serão encerradas.</div>'
+    : '';
+
+  abrirModal(
+    `<h3>Alterar modo de atendimento</h3>`,
+    `
+      <div class="modal-texto">
+        <strong>${escapeHtml(tenant.nome)}</strong><br>
+        Modo atual: <span class="badge ${modoAtual.classe}">${modoAtual.label}</span><br>
+        Novo modo: <span class="badge ${modoDestino.classe}">${modoDestino.label}</span>
+      </div>
+      <div class="modal-texto">A próxima mensagem recebida no WhatsApp deste salão já usará o novo modo.</div>
+      ${avisoConversas}
+      <div class="modal-erro" id="modo-erro"></div>
+      <div class="modal-acoes">
+        <button type="button" class="btn-secundario" id="btn-cancelar-modo">Cancelar</button>
+        <button type="button" class="btn-primario" id="btn-confirmar-modo">Confirmar troca</button>
+      </div>
+    `
+  );
+
+  document.getElementById('btn-cancelar-modo').addEventListener('click', fecharModal);
+  document.getElementById('btn-confirmar-modo').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-confirmar-modo');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    const resultado = await api(`/api/tenants/${tenant.id}/modo`, {
+      method: 'PATCH',
+      body: JSON.stringify({ tecnologia: destino }),
+    });
+
+    if (resultado && !resultado.error) {
+      fecharModal();
+      mostrarToast(`Modo de atendimento alterado para ${modoDestino.label}.`, 'sucesso');
+      tenantAtual.tecnologia = resultado.tecnologia;
+      const [historicoModulos, historicoModo] = await Promise.all([
+        carregarHistoricoModulos(idTenantAtual),
+        carregarHistoricoModo(idTenantAtual),
+      ]);
+      renderPagina(tenantAtual, historicoModulos, historicoModo);
+    } else {
+      document.getElementById('modo-erro').textContent = (resultado && resultado.error) || 'Erro ao alterar modo de atendimento.';
+      btn.disabled = false;
+      btn.textContent = 'Confirmar troca';
+    }
+  });
+}
+
+function wireEventosModoAtendimento() {
+  const btnAlterar = conteudo.querySelector('[data-testid="btn-alterar-modo-detalhe"]');
+  if (btnAlterar) {
+    btnAlterar.addEventListener('click', () => abrirModalTrocaModo(tenantAtual));
+  }
+}
+
 async function renderDetalhe() {
   conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
 
   const id = idDaUrl();
   idTenantAtual = id;
-  const [data, historico] = await Promise.all([
+  const [data, historicoModulos, historicoModo] = await Promise.all([
     api(`/api/tenants/${encodeURIComponent(id)}`),
     carregarHistoricoModulos(id),
+    carregarHistoricoModo(id),
   ]);
   if (!data) return;
 
@@ -349,7 +515,7 @@ async function renderDetalhe() {
   }
 
   tenantAtual = data;
-  renderPagina(data, historico);
+  renderPagina(data, historicoModulos, historicoModo);
 }
 
 renderDetalhe();
