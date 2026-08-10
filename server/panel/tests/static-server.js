@@ -15,8 +15,13 @@ http
   .createServer((req, res) => {
     const urlPath = req.url.split('?')[0];
     // Espelha a rota dinâmica `/admin/tenants/:id` registrada no Fastify real
-    // (US28/CA01) — aqui não existe arquivo físico com esse nome.
-    const rota = /^\/admin\/tenants\/[^/]+$/.test(urlPath) ? '/admin/tenant-detalhe.html' : urlPath;
+    // (US28/CA01) — aqui não existe arquivo físico com esse nome. Aceita tanto
+    // `/admin/tenants/:id` quanto `/tenants/:id` (US83/PR#163 removeu o
+    // prefixo `/admin/` dos links internos do painel; em produção o domínio
+    // admin.kyvvo.com.br resolve o caminho raiz via reescrita do Nginx, fora
+    // do git — aqui replicamos só essa reescrita específica, sem prefixo
+    // colidir com nada do lado tenant).
+    const rota = /^\/(admin\/)?tenants\/[^/]+$/.test(urlPath) ? '/admin/tenant-detalhe.html' : urlPath;
     const filePath = path.join(PUBLIC_DIR, rota === '/' ? '/index.html' : rota);
 
     if (!filePath.startsWith(PUBLIC_DIR)) {

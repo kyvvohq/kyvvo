@@ -3890,6 +3890,36 @@ async function start() {
     status: 't.status',
   };
 
+  // Valores de `status_conta` que a listagem aceita no filtro (US85/CA01) —
+  // mesmos 6 valores que `statusContaTenant` pode retornar. Como
+  // `status_conta` não é coluna do banco (é calculada em memória a partir de
+  // `ativo`/`status`/`ativado_em`), cada valor precisa de uma condição SQL
+  // equivalente — ver `condicaoStatusConta` (US85/CA02).
+  const STATUS_CONTA_VALORES = ['Ativo', 'Não ativado', 'Trial ativo', 'Trial expirado', 'Suspenso', 'Inativo'];
+
+  // Traduz um valor de `status_conta` numa condição SQL sobre as colunas reais
+  // de `tenants`, espelhando a lógica de `statusContaTenant` (US85/CA02).
+  // `pushParam` recebe um valor e devolve seu índice `$n` — usado só pelos
+  // status de trial, que precisam bindar `TRIAL_DIAS`.
+  function condicaoStatusConta(status, pushParam) {
+    switch (status) {
+      case 'Ativo':
+        return `t.ativo = true AND t.status = 'ativo'`;
+      case 'Suspenso':
+        return `t.ativo = true AND t.status = 'suspenso'`;
+      case 'Não ativado':
+        return `t.ativo = true AND t.status = 'trial' AND t.ativado_em IS NULL`;
+      case 'Trial ativo':
+        return `t.ativo = true AND t.status = 'trial' AND t.ativado_em IS NOT NULL AND t.ativado_em + (${pushParam(TRIAL_DIAS)} || ' days')::interval >= now()`;
+      case 'Trial expirado':
+        return `t.ativo = true AND t.status = 'trial' AND t.ativado_em IS NOT NULL AND t.ativado_em + (${pushParam(TRIAL_DIAS)} || ' days')::interval < now()`;
+      case 'Inativo':
+        return `(t.ativo = false OR (t.ativo = true AND t.status NOT IN ('ativo', 'suspenso', 'trial')))`;
+      default:
+        return null;
+    }
+  }
+
   fastify.get('/admin/api/tenants', { preHandler: [fastify.authenticateAdmin] }, async (request) => {
     const { page, limit, order_by: orderByParam, order_dir: orderDirParam } = request.query;
 
@@ -3914,17 +3944,32 @@ async function start() {
     const orderDir = String(orderDirParam).toLowerCase() === 'asc' ? 'ASC' : 'DESC';
 
     // Busca por e-mail (de qualquer usuário do tenant) ou WhatsApp — parâmetro
-    // sempre bindado via $n, nunca interpolado na query (US27/CA05).
+    // sempre bindado via $n, nunca interpolado na query (US27/CA05). Combinada
+    // com o filtro de status_conta (US85/CA01), quando presente.
     const search = typeof request.query.search === 'string' ? request.query.search.trim() : '';
-    const whereClause = search
-      ? `WHERE t.whatsapp ILIKE $1
-           OR EXISTS (SELECT 1 FROM usuarios u WHERE u.tenant_id = t.id AND u.email ILIKE $1)`
-      : '';
-    const searchParams = search ? [`%${search}%`] : [];
+    const statusFiltro = typeof request.query.status === 'string' ? request.query.status.trim() : '';
+
+    const queryParams = [];
+    const pushParam = (valor) => {
+      queryParams.push(valor);
+      return `$${queryParams.length}`;
+    };
+
+    const condicoes = [];
+    if (search) {
+      const placeholder = pushParam(`%${search}%`);
+      condicoes.push(
+        `(t.whatsapp ILIKE ${placeholder} OR EXISTS (SELECT 1 FROM usuarios u WHERE u.tenant_id = t.id AND u.email ILIKE ${placeholder}))`
+      );
+    }
+    if (statusFiltro && STATUS_CONTA_VALORES.includes(statusFiltro)) {
+      condicoes.push(condicaoStatusConta(statusFiltro, pushParam));
+    }
+    const whereClause = condicoes.length ? `WHERE ${condicoes.join(' AND ')}` : '';
 
     const { rows: totalRows } = await pool.query(
       `SELECT COUNT(*)::int AS total FROM tenants t ${whereClause}`,
-      searchParams
+      queryParams
     );
     const total = totalRows[0].total;
 
@@ -3939,8 +3984,8 @@ async function start() {
        ) resp ON true
        ${whereClause}
        ORDER BY ${orderColumn} ${orderDir} NULLS LAST
-       LIMIT $${searchParams.length + 1} OFFSET $${searchParams.length + 2}`,
-      [...searchParams, limitNum, offset]
+       LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2}`,
+      [...queryParams, limitNum, offset]
     );
 
     return {
@@ -4141,6 +4186,22 @@ async function start() {
     } finally {
       client.release();
     }
+  });
+
+  // US85/CA04 — histórico cronológico das trocas de modo de atendimento de um
+  // tenant, mesmo padrão de /admin/api/tenants/:id/modulos/historico.
+  fastify.get('/admin/api/tenants/:id/modo/historico', { preHandler: [fastify.authenticateAdmin] }, async (request) => {
+    const { id } = request.params;
+    const { rows } = await pool.query(
+      `SELECT l.valor_anterior, l.valor_novo, l.alterado_em, a.nome AS alterado_por_nome
+       FROM log_modo_atendimento_tenant l
+       LEFT JOIN kyvvo_admins a ON a.id = l.alterado_por
+       WHERE l.tenant_id = $1
+       ORDER BY l.alterado_em DESC
+       LIMIT 20`,
+      [id]
+    );
+    return { historico: rows };
   });
 
   fastify.post('/admin/api/tenants', { preHandler: [fastify.authenticateAdmin] }, async (request, reply) => {

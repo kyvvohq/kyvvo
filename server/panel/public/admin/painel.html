@@ -46,10 +46,21 @@
       </div>
     </div>
     <div class="conteudo" style="max-width: 1400px;">
-      <div class="busca-tenants-wrapper">
-        <span class="busca-tenants-icone" aria-hidden="true">🔍</span>
-        <input type="search" id="busca-tenants" class="busca-tenants-input" placeholder="Buscar por e-mail ou WhatsApp..." aria-label="Buscar por e-mail ou WhatsApp">
-        <button type="button" id="btn-limpar-busca" class="btn-limpar-busca" hidden aria-label="Limpar busca">✕</button>
+      <div class="filtros-tenants-wrapper">
+        <div class="busca-tenants-wrapper">
+          <span class="busca-tenants-icone" aria-hidden="true">🔍</span>
+          <input type="search" id="busca-tenants" class="busca-tenants-input" placeholder="Buscar por e-mail ou WhatsApp..." aria-label="Buscar por e-mail ou WhatsApp">
+          <button type="button" id="btn-limpar-busca" class="btn-limpar-busca" hidden aria-label="Limpar busca">✕</button>
+        </div>
+        <select id="filtro-status" class="filtro-status-select" aria-label="Filtrar por status">
+          <option value="">Todos os status</option>
+          <option value="Ativo">Ativo</option>
+          <option value="Trial ativo">Trial ativo</option>
+          <option value="Trial expirado">Trial expirado</option>
+          <option value="Não ativado">Não ativado</option>
+          <option value="Suspenso">Suspenso</option>
+          <option value="Inativo">Inativo</option>
+        </select>
       </div>
       <div id="conteudo"></div>
     </div>

@@ -34,16 +34,20 @@ function tenantDetalheMock(overrides = {}) {
   };
 }
 
-async function entrarNoDetalheDoTenant(page, detalhe, { historico = [] } = {}) {
+async function entrarNoDetalheDoTenant(page, detalhe, { historico = [], historicoModo = [] } = {}) {
   // Rotas mais específicas são registradas por último — no Playwright, a
   // rota registrada mais recentemente tem prioridade sobre as anteriores.
-  await page.route('**/admin/api/tenants/*', (route) => {
+  await page.route('**/api/tenants/*', (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
     return route.fulfill({ json: detalhe });
   });
-  await page.route('**/admin/api/tenants/*/modulos/historico', (route) => {
+  await page.route('**/api/tenants/*/modulos/historico', (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
     return route.fulfill({ json: { historico } });
+  });
+  await page.route('**/api/tenants/*/modo/historico', (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    return route.fulfill({ json: { historico: historicoModo } });
   });
   await page.addInitScript(() => {
     window.localStorage.setItem('kyvvo_admin_token', 'admin-token-fake');
@@ -55,7 +59,7 @@ async function entrarNoDetalheDoTenant(page, detalhe, { historico = [] } = {}) {
 test.describe('Admin — detalhe do tenant (US28)', () => {
   test('redireciona para o login se não autenticado como admin', async ({ page }) => {
     await page.goto('/admin/tenants/t1');
-    await expect(page).toHaveURL(/\/admin\/login\.html/);
+    await expect(page).toHaveURL(/\/login\.html/);
   });
 
   test('seção Dados do negócio (CA02)', async ({ page }) => {
@@ -189,7 +193,7 @@ test.describe('Admin — detalhe do tenant (US28)', () => {
   test('ativar módulo inativo pela interface (US65/Cenário 2)', async ({ page }) => {
     await entrarNoDetalheDoTenant(page, tenantDetalheMock());
     let corpoEnviado = null;
-    await page.route('**/admin/api/tenants/t1/modulos/financeiro', (route) => {
+    await page.route('**/api/tenants/t1/modulos/financeiro', (route) => {
       corpoEnviado = route.request().postDataJSON();
       return route.fulfill({
         json: {
@@ -216,7 +220,7 @@ test.describe('Admin — detalhe do tenant (US28)', () => {
       ],
     }));
     let corpoEnviado = null;
-    await page.route('**/admin/api/tenants/t1/modulos/financeiro', (route) => {
+    await page.route('**/api/tenants/t1/modulos/financeiro', (route) => {
       corpoEnviado = route.request().postDataJSON();
       return route.fulfill({
         json: {
@@ -247,7 +251,7 @@ test.describe('Admin — detalhe do tenant (US28)', () => {
     // Mesmo com o toggle desabilitado no front, a API é a fonte de verdade —
     // se ela recusar, a interface precisa refletir o erro sem quebrar.
     await entrarNoDetalheDoTenant(page, tenantDetalheMock());
-    await page.route('**/admin/api/tenants/t1/modulos/agenda_inteligente', (route) => {
+    await page.route('**/api/tenants/t1/modulos/agenda_inteligente', (route) => {
       return route.fulfill({
         status: 400,
         json: { error: 'O módulo "Agenda Inteligente" é obrigatório e não pode ser desativado.' },
@@ -323,11 +327,11 @@ test.describe('Admin — detalhe do tenant (US28)', () => {
   test('botão "Voltar para lista" leva de volta à listagem (CA01)', async ({ page }) => {
     await entrarNoDetalheDoTenant(page, tenantDetalheMock());
     await page.click('text=Voltar para lista');
-    await expect(page).toHaveURL(/\/admin\/painel\.html/);
+    await expect(page).toHaveURL(/\/painel\.html/);
   });
 
   test('tenant inexistente mostra a mensagem de erro do backend', async ({ page }) => {
-    await page.route('**/admin/api/tenants/*', (route) => {
+    await page.route('**/api/tenants/*', (route) => {
       return route.fulfill({ status: 404, json: { error: 'Tenant não encontrado' } });
     });
     await page.addInitScript(() => {
@@ -338,8 +342,8 @@ test.describe('Admin — detalhe do tenant (US28)', () => {
   });
 
   test('clicar numa linha da listagem navega para o detalhe (CA01)', async ({ page }) => {
-    await page.route('**/admin/api/tenants*', (route) => {
-      if (route.request().url().includes('/admin/api/tenants?')) {
+    await page.route('**/api/tenants*', (route) => {
+      if (route.request().url().includes('/api/tenants?')) {
         return route.fulfill({
           json: {
             tenants: [{ id: 't1', nome: 'Salão Kyvvo Teste', status_conta: 'Ativo', cadastrado_em: '2026-07-01T10:00:00Z' }],
@@ -358,6 +362,6 @@ test.describe('Admin — detalhe do tenant (US28)', () => {
     await page.goto('/admin/painel.html');
 
     await page.click('.tabela-tenants tbody tr td:first-child');
-    await expect(page).toHaveURL(/\/admin\/tenants\/t1$/);
+    await expect(page).toHaveURL(/\/tenants\/t1$/);
   });
 });
