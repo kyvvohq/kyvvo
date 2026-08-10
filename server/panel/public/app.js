@@ -2552,6 +2552,11 @@ function renderGradeHorariosDoDia(dataISO, agendamentos) {
     return '<div class="vazio">Nenhum horário configurado (confira Abertura/Fechamento em Configuração).</div>';
   }
 
+  // Destaque de "agora" (PR2) — só quando o dia da grade é hoje, marca a
+  // linha cujo bucket de hora contém o horário atual em Brasília.
+  const ehHoje = dataISO === formatarDataISO(new Date());
+  const horaAtualBucket = ehHoje ? horaChaveGradeBucket(new Date().toISOString()) : null;
+
   return `
     <div class="grade-horarios">
       ${horarios
@@ -2560,8 +2565,9 @@ function renderGradeHorariosDoDia(dataISO, agendamentos) {
           const conteudoLinha = agsDoHorario.length
             ? `<div class="grade-ag-grupo" style="grid-template-columns:repeat(${agsDoHorario.length},1fr)">${agsDoHorario.map(renderAgendamentoGradeCard).join('')}</div>`
             : '<div class="grade-linha-vazia">Disponível</div>';
+          const horaAtual = hora === horaAtualBucket;
           return `
-            <div class="grade-linha">
+            <div class="grade-linha${horaAtual ? ' grade-linha-hora-atual' : ''}">
               <div class="grade-linha-hora">${hora}</div>
               <div class="grade-linha-conteudo">${conteudoLinha}</div>
               <button class="grade-linha-add" data-add-horario="${hora}" data-data="${dataISO}" aria-label="Novo agendamento às ${hora}">+</button>
@@ -2894,12 +2900,13 @@ async function renderSemana() {
     // Número de colunas setado inline (CSS puro não sabe quantos dias
     // dias_funcionamento tem) — grid fluido sem min-width fixo, pra caber
     // todos os dias abertos na tela sem precisar de scroll horizontal (PR8).
+    const hojeISO = formatarDataISO(new Date());
     html += `<div class="semana-colunas" style="grid-template-columns:repeat(${diasAbertos.length},1fr)">`;
     for (const d of diasAbertos) {
       const diaISO = formatarDataISO(d);
       const dataLabel = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' });
       html += `
-        <div class="semana-coluna">
+        <div class="semana-coluna${diaISO === hojeISO ? ' semana-coluna-hoje' : ''}">
           <div class="semana-coluna-cabecalho">
             <div>
               <strong>${nomeDiaSemana(d)}</strong>
@@ -2964,6 +2971,7 @@ async function renderMes() {
     html += '<div class="dia-cel vazio-cel"></div>';
   }
   const diasFuncionamentoMes = configuracao.dias_funcionamento || [1, 2, 3, 4, 5, 6];
+  const hojeISOMes = formatarDataISO(new Date());
   for (let dia = 1; dia <= ultimoDia.getDate(); dia++) {
     const diaISO = `${ano}-${String(mes + 1).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
     const agsDoDia = porDia[diaISO] || [];
@@ -2978,7 +2986,7 @@ async function renderMes() {
           .join('')}</div>`
       : '';
     html += `
-      <div class="dia-cel${fechado ? ' dia-cel-fechado' : ''}">
+      <div class="dia-cel${fechado ? ' dia-cel-fechado' : ''}${diaISO === hojeISOMes ? ' dia-cel-hoje' : ''}">
         <div class="num">${dia}</div>
         ${listaAgendamentos}
         ${fechado ? '' : `<button class="dia-cel-add" data-add-dia="${diaISO}" aria-label="Novo agendamento em ${dia}">+</button>`}
