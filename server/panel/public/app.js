@@ -3592,7 +3592,7 @@ function carregarFacebookSdk(appId) {
   if (fbSdkPromise) return fbSdkPromise;
   fbSdkPromise = new Promise((resolve) => {
     window.fbAsyncInit = function () {
-      FB.init({ appId, cookie: true, xfbml: false, version: 'v22.0' });
+      FB.init({ appId, cookie: true, xfbml: false, version: 'v26.0' });
       resolve();
     };
     const script = document.createElement('script');
