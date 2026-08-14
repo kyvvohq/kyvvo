@@ -64,6 +64,24 @@ async function assinarWebhooks(wabaId, tokenCliente) {
   return chamar('POST', `/${wabaId}/subscribed_apps`, { token: tokenCliente });
 }
 
+// Atribui o Usuário do Sistema compartilhado (dono do META_WHATSAPP_TOKEN) à
+// WABA recém-conectada — equivalente ao "Atribuir pessoas" manual no
+// Business Settings. Sem isso, qualquer chamada feita depois com
+// META_WHATSAPP_TOKEN nessa WABA/número (status, registro, envio de
+// mensagem) volta com "missing permissions" da Meta, mesmo com o ID certo.
+// Usa o token do cliente pra autorizar a atribuição (só ele tem permissão
+// sobre a WABA nesse momento); descobre o id do Usuário do Sistema via /me
+// com o próprio META_WHATSAPP_TOKEN, em vez de guardar mais uma env var.
+async function atribuirUsuarioSistema(wabaId, tokenCliente) {
+  const metaToken = process.env.META_WHATSAPP_TOKEN;
+  if (!metaToken) throw new Error('META_WHATSAPP_TOKEN não configurado no servidor.');
+  const { id: systemUserId } = await chamar('GET', '/me', { token: metaToken });
+  return chamar('POST', `/${wabaId}/assigned_users`, {
+    query: { user: systemUserId, tasks: JSON.stringify(['MANAGE']) },
+    token: tokenCliente,
+  });
+}
+
 // Registra o número pra uso na Cloud API (PIN de verificação em duas
 // etapas). Best-effort: dependendo de como o Embedded Signup foi
 // configurado, o número pode já vir registrado — erro aqui é logado mas não
@@ -116,6 +134,7 @@ async function enviarTexto(phoneNumberId, numeroDestino, texto) {
 module.exports = {
   trocarCodePorToken,
   assinarWebhooks,
+  atribuirUsuarioSistema,
   registrarNumero,
   enviarMensagemTeste,
   enviarTexto,
