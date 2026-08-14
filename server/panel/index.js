@@ -2974,7 +2974,10 @@ async function start() {
 
   // Recebe o resultado do Embedded Signup (code + waba_id + phone_number_id,
   // vindos do postMessage/callback do FB.login no frontend). Troca o code
-  // por um token de curta duração só pra assinar os webhooks dessa WABA — o
+  // por um token de curta duração pra assinar os webhooks dessa WABA e
+  // atribuir o Usuário do Sistema compartilhado a ela (sem essa atribuição,
+  // qualquer chamada futura com META_WHATSAPP_TOKEN nessa WABA/número volta
+  // com "missing permissions" — ver atribuirUsuarioSistema). O
   // envio/recebimento de mensagem continua usando o Usuário do Sistema
   // compartilhado (ver comentário em meta-whatsapp-service.js). O token do
   // cliente não é persistido, só usado nesta chamada.
@@ -2989,6 +2992,7 @@ async function start() {
     try {
       const { access_token: tokenCliente } = await metaWhatsappService.trocarCodePorToken(code);
       await metaWhatsappService.assinarWebhooks(wabaId, tokenCliente);
+      await metaWhatsappService.atribuirUsuarioSistema(wabaId, tokenCliente);
       try {
         await metaWhatsappService.registrarNumero(phoneNumberId);
       } catch (erroRegistro) {
