@@ -2973,10 +2973,11 @@ async function start() {
   });
 
   // Recebe o resultado do Embedded Signup (code + waba_id + phone_number_id,
-  // vindos do postMessage/callback do FB.login no frontend). Não troca por um
-  // token pra guardar — o code só confirma que o signup é legítimo; quem
-  // manda/recebe mensagem continua sendo o Usuário do Sistema compartilhado
-  // (ver comentário em meta-whatsapp-service.js).
+  // vindos do postMessage/callback do FB.login no frontend). Troca o code
+  // por um token de curta duração só pra assinar os webhooks dessa WABA — o
+  // envio/recebimento de mensagem continua usando o Usuário do Sistema
+  // compartilhado (ver comentário em meta-whatsapp-service.js). O token do
+  // cliente não é persistido, só usado nesta chamada.
   fastify.post('/api/whatsapp/conectar', { preHandler: [fastify.authenticate, fastify.requireAdmin] }, async (request, reply) => {
     const { tenantId } = request.user;
     const { code, wabaId, phoneNumberId } = request.body || {};
@@ -2986,8 +2987,8 @@ async function start() {
     }
 
     try {
-      await metaWhatsappService.trocarCodePorToken(code);
-      await metaWhatsappService.assinarWebhooks(wabaId);
+      const { access_token: tokenCliente } = await metaWhatsappService.trocarCodePorToken(code);
+      await metaWhatsappService.assinarWebhooks(wabaId, tokenCliente);
       try {
         await metaWhatsappService.registrarNumero(phoneNumberId);
       } catch (erroRegistro) {

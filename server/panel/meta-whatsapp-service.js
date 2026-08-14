@@ -7,13 +7,12 @@
 // Usuário do Sistema). Sem elas configuradas, as rotas que usam este serviço
 // devolvem erro explicando o que falta, em vez de fingir sucesso.
 //
-// Ponto chave da arquitetura (documentado no plano): o Embedded Signup NÃO
-// gera um token por tenant pra guardar no banco. Ele concede ao nosso
-// Usuário do Sistema (o mesmo META_WHATSAPP_TOKEN já usado pra todos os
-// tenants) acesso à WhatsApp Business Account (WABA) que o tenant conectou —
-// o mesmo efeito de "Atribuir pessoas" feito manualmente no Business
-// Settings da Meta. Por isso as funções abaixo usam META_WHATSAPP_TOKEN, não
-// um token derivado do `code` do tenant.
+// Ponto chave da arquitetura: o token do Embedded Signup (vindo do `code`
+// trocado em trocarCodePorToken) não é persistido — é usado só na hora, pra
+// assinar os webhooks da WABA recém-conectada (assinarWebhooks), já que
+// nesse momento o Usuário do Sistema ainda não tem acesso a ela. Depois de
+// assinado, o envio/recebimento de mensagem passa a usar o
+// META_WHATSAPP_TOKEN do Usuário do Sistema, compartilhado entre tenants.
 
 const GRAPH_API_VERSION = 'v22.0';
 const GRAPH_API_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`;
@@ -40,9 +39,10 @@ async function chamar(metodo, caminho, { query, body, token } = {}) {
 }
 
 // Troca o `code` de autorização (devolvido pelo FB.login do Embedded Signup)
-// por um token de curta duração — usado só pra confirmar que o code é
-// legítimo. O envio/recebimento de mensagem continua usando o
-// META_WHATSAPP_TOKEN do Usuário do Sistema, não este token.
+// por um token de curta duração — usado só pra assinar os webhooks da WABA
+// recém-conectada (ver assinarWebhooks). O envio/recebimento de mensagem
+// continua usando o META_WHATSAPP_TOKEN do Usuário do Sistema, não este
+// token; ele não é persistido em lugar nenhum.
 async function trocarCodePorToken(code) {
   const appId = process.env.META_APP_ID;
   const appSecret = process.env.META_APP_SECRET;
@@ -56,10 +56,12 @@ async function trocarCodePorToken(code) {
 
 // Assina o app do Kyvvo pra receber webhook de mensagens dessa WABA —
 // equivalente ao toggle "Assinar webhooks" do Business Settings da Meta.
-async function assinarWebhooks(wabaId) {
-  const token = process.env.META_WHATSAPP_TOKEN;
-  if (!token) throw new Error('META_WHATSAPP_TOKEN não configurado no servidor.');
-  return chamar('POST', `/${wabaId}/subscribed_apps`, { token });
+// Precisa do token do cliente (vindo de trocarCodePorToken): o
+// META_WHATSAPP_TOKEN do Usuário do Sistema ainda não tem acesso a essa WABA
+// nesse momento do fluxo.
+async function assinarWebhooks(wabaId, tokenCliente) {
+  if (!tokenCliente) throw new Error('Token do cliente não fornecido para assinarWebhooks.');
+  return chamar('POST', `/${wabaId}/subscribed_apps`, { token: tokenCliente });
 }
 
 // Registra o número pra uso na Cloud API (PIN de verificação em duas
