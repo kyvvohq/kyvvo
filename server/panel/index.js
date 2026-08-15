@@ -3410,6 +3410,11 @@ async function start() {
     return {
       status: tenant.status,
       plano: tenant.plano,
+      // GET /api/planos (catálogo público usado no modal de troca) não expõe
+      // `chave` de propósito — só `slug` é identificador externo. Devolve o
+      // slug do plano atual aqui pra o frontend conseguir marcar o plano
+      // corrente na lista sem precisar de outro campo.
+      plano_slug: planoInfo ? planoInfo.slug : null,
       plano_nome: planoInfo ? planoInfo.nome : null,
       valor_plano: planoInfo ? Number(planoInfo.preco_mensal) : null,
       trial_ativo: trial.trialAtivo,
@@ -3749,8 +3754,17 @@ async function start() {
     const { tenantId } = request.user;
     const { plano } = request.body || {};
 
-    const planoInfo = PLANOS_CACHE[plano];
-    if (!planoInfo || !planoInfo.ativo) {
+    // O modal de troca é montado a partir de GET /api/planos (catálogo
+    // público), que só expõe `slug` — não `chave` (ver comentário em
+    // montarResumoPagamentos). Aceita os dois aqui, mesmo padrão de
+    // GET /api/planos/:slug, e resolve pra `chave` (identificador real,
+    // usado em tenants.plano e no PLANOS_CACHE) antes de seguir.
+    const { rows: planoRows } = await pool.query(
+      'SELECT chave, nome, preco_mensal, ativo FROM planos WHERE (slug = $1 OR chave = $1) AND ativo = true',
+      [plano]
+    );
+    const planoInfo = planoRows[0];
+    if (!planoInfo) {
       return reply.code(400).send({ error: 'Plano inválido ou não disponível.' });
     }
 
@@ -3762,7 +3776,7 @@ async function start() {
     if (!tenant || !tenant.asaas_subscription_id || tenant.status === 'cancelado') {
       return reply.code(400).send({ error: 'Nenhuma assinatura ativa pra trocar de plano. Cadastre uma forma de pagamento primeiro.' });
     }
-    if (tenant.plano === plano) {
+    if (tenant.plano === planoInfo.chave) {
       return reply.code(400).send({ error: 'Você já está nesse plano.' });
     }
 
@@ -3773,7 +3787,7 @@ async function start() {
         tenantId,
       });
     } catch (erro) {
-      console.error(`[pagamentos] falha ao trocar plano do tenant ${tenantId} para ${plano}: ${erro.message}`);
+      console.error(`[pagamentos] falha ao trocar plano do tenant ${tenantId} para ${planoInfo.chave}: ${erro.message}`);
       return reply.code(400).send({ error: 'Não foi possível trocar de plano agora. Tente novamente em instantes.' });
     }
 
@@ -3783,7 +3797,7 @@ async function start() {
                  asaas_meio_pagamento, asaas_meio_pagamento_alterado_em, asaas_cartao_final, cpf_cnpj, cancelado_em, acesso_ate,
                  endereco_cep, endereco_logradouro, endereco_numero,
                  endereco_complemento, endereco_bairro, endereco_cidade, endereco_uf`,
-      [tenantId, plano]
+      [tenantId, planoInfo.chave]
     );
 
     return montarResumoPagamentos(atualizado[0]);
