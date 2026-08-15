@@ -1821,7 +1821,7 @@ async function renderPagamentos() {
       ? 'Pix recorrente'
       : 'Não cadastrado';
 
-  let html = '<div class="nav-periodo"><strong>Pagamento</strong></div>';
+  let html = '<div class="nav-periodo"><strong>Cobrança</strong></div>';
 
   if (dados.status === 'trial' && dados.meio_pagamento) {
     // CA05 (US37) — pagamento já cadastrado durante o trial: a cobrança está
@@ -1906,13 +1906,13 @@ async function renderPagamentos() {
           <div class="pagamento-detalhes">
             <button type="button" class="pagamento-detalhes-toggle" id="btn-toggle-detalhes" aria-expanded="false">Detalhes ▾</button>
             <div class="pagamento-detalhes-conteudo" id="pagamento-detalhes-conteudo" hidden>
-              <h4>Alterar forma de pagamento</h4>
+              <h4>Alterar forma de cobrança</h4>
               ${htmlFormPagamento(dados, { comBotaoCancelar: false })}
               ${ativo ? '<button type="button" class="btn-secundario acao-perigo" id="btn-cancelar-assinatura" style="margin-top:12px">Cancelar assinatura</button>' : ''}
             </div>
           </div>
         `}
-      <h4 class="pagamento-historico-titulo">Histórico pagamentos</h4>
+      <h4 class="pagamento-historico-titulo">Histórico de cobranças</h4>
       <div class="tabela-wrapper">
         <table class="tabela-tenants">
           <thead><tr><th>Data</th><th>Valor</th><th>Status</th><th>Meio de pagamento</th></tr></thead>

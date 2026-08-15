@@ -1050,7 +1050,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   font-weight: 400;
   color: #a1a5c4;
   margin-top: 2px;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: break-word;
 }
 
 /* US46.1 — explica as duas formas de conectar o WhatsApp (self-service vs.
