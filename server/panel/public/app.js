@@ -326,6 +326,7 @@ const painelSidebar = document.getElementById('painel-sidebar');
 const btnToggleSidebar = document.getElementById('btn-toggle-sidebar');
 function aplicarSidebarOculta(oculta) {
   painelSidebar.classList.toggle('sidebar-oculta', oculta);
+  btnToggleSidebar.textContent = oculta ? '>' : '<';
   btnToggleSidebar.setAttribute('aria-label', oculta ? 'Exibir menu' : 'Ocultar menu');
   btnToggleSidebar.title = oculta ? 'Exibir menu' : 'Ocultar menu';
 }
