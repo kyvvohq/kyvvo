@@ -19,6 +19,35 @@
 <body>
 <div id="trial-banner" class="trial-banner" hidden></div>
 <div id="avisos-painel"></div>
+<div class="topbar">
+  <div class="topbar-esquerda">
+    <button class="logo topbar-logo" id="topbar-logo" aria-label="Ir para o início">ky<span class="logo-vv">vv</span>o</button>
+    <div class="topbar-textos">
+      <div class="saudacao" id="saudacao"></div>
+    </div>
+  </div>
+  <div class="user-menu" id="user-menu">
+    <button class="user-menu-toggle" id="user-menu-toggle">
+      <div class="user-menu-avatar" id="user-menu-avatar"></div>
+      <div class="user-menu-textos">
+        <div class="user-menu-nome" id="user-menu-nome"></div>
+        <div class="user-menu-empresa" id="user-menu-empresa"></div>
+      </div>
+      <span class="user-menu-chevron">▾</span>
+    </button>
+    <div class="user-menu-dropdown" id="user-menu-dropdown" hidden>
+      <div class="user-menu-item" data-menu="perfil">Meu Perfil</div>
+      <div class="user-menu-item" data-menu="empresa" data-somente-admin>Minha Empresa</div>
+      <div class="user-menu-item" data-menu="equipe" data-somente-admin>Equipe</div>
+      <div class="user-menu-item" data-menu="whatsapp">WhatsApp</div>
+      <div class="user-menu-item" data-menu="pagamentos" data-somente-admin>Cobrança</div>
+      <div class="user-menu-item" data-menu="configuracao" data-somente-admin>Preferências</div>
+      <div class="user-menu-item" data-menu="ajuda">Ajuda</div>
+      <div class="user-menu-divisor"></div>
+      <button class="user-menu-sair" id="btn-sair"><span aria-hidden="true">⎋</span> Sair</button>
+    </div>
+  </div>
+</div>
 <div class="painel-shell">
   <aside class="painel-sidebar" id="painel-sidebar">
     <nav class="menu">
@@ -36,37 +65,8 @@
       </div>
     </nav>
   </aside>
+  <button class="btn-toggle-sidebar" id="btn-toggle-sidebar" aria-label="Ocultar menu" title="Ocultar menu">&lt;</button>
   <div class="painel-main">
-    <div class="topbar">
-      <div class="topbar-esquerda">
-        <button class="btn-toggle-sidebar" id="btn-toggle-sidebar" aria-label="Ocultar menu" title="Ocultar menu">☰</button>
-        <button class="logo topbar-logo" id="topbar-logo" aria-label="Ir para o início">ky<span class="logo-vv">vv</span>o</button>
-        <div class="topbar-textos">
-          <div class="saudacao" id="saudacao"></div>
-        </div>
-      </div>
-      <div class="user-menu" id="user-menu">
-        <button class="user-menu-toggle" id="user-menu-toggle">
-          <div class="user-menu-avatar" id="user-menu-avatar"></div>
-          <div class="user-menu-textos">
-            <div class="user-menu-nome" id="user-menu-nome"></div>
-            <div class="user-menu-empresa" id="user-menu-empresa"></div>
-          </div>
-          <span class="user-menu-chevron">▾</span>
-        </button>
-        <div class="user-menu-dropdown" id="user-menu-dropdown" hidden>
-          <div class="user-menu-item" data-menu="perfil">Meu Perfil</div>
-          <div class="user-menu-item" data-menu="empresa" data-somente-admin>Minha Empresa</div>
-          <div class="user-menu-item" data-menu="equipe" data-somente-admin>Equipe</div>
-          <div class="user-menu-item" data-menu="whatsapp">WhatsApp</div>
-          <div class="user-menu-item" data-menu="pagamentos" data-somente-admin>Cobrança</div>
-          <div class="user-menu-item" data-menu="configuracao" data-somente-admin>Preferências</div>
-          <div class="user-menu-item" data-menu="ajuda">Ajuda</div>
-          <div class="user-menu-divisor"></div>
-          <button class="user-menu-sair" id="btn-sair"><span aria-hidden="true">⎋</span> Sair</button>
-        </div>
-      </div>
-    </div>
     <div class="subtabs" id="subtabs" style="display: none;">
       <div class="tab active" data-tab="dia">Dia</div>
       <div class="tab" data-tab="semana">Semana</div>
@@ -74,12 +74,11 @@
       <button class="btn-novo-agendamento" id="btn-novo-agendamento">+ Novo agendamento</button>
     </div>
     <div class="conteudo" id="conteudo"></div>
-
-    <footer class="rodape-app">
-      <p class="rodape-app-copy">© 2026 <span class="logo rodape-logo-inline">ky<span class="logo-vv">vv</span>o</span>. Todos os direitos reservados.</p>
-    </footer>
   </div>
 </div>
+<footer class="rodape-app">
+  <p class="rodape-app-copy">© 2026 <span class="logo rodape-logo-inline">ky<span class="logo-vv">vv</span>o</span>. Todos os direitos reservados.</p>
+</footer>
 
 <script src="/pagamento-form.js"></script>
 <script src="/app.js"></script>

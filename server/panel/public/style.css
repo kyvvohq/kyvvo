@@ -212,19 +212,38 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 .topbar-logo:hover { background: none; opacity: 0.85; }
 
+/* Alça de ocultar/exibir a sidebar — fica encostada na borda direita da
+   sidebar (não mais no topbar), como uma "aba" entre ela e o conteúdo.
+   Elemento irmão da sidebar (não filho — ver painel.html), pra continuar
+   visível/clicável mesmo com `.painel-sidebar.sidebar-oculta { display:none }`.
+   Reposiciona pra encostar na borda esquerda da tela via :has() quando a
+   sidebar está oculta, sem precisar de mais uma classe controlada por JS. */
 .btn-toggle-sidebar {
-  width: auto;
+  position: absolute;
+  top: 20px;
+  left: 220px;
+  transform: translateX(-50%);
+  width: 22px;
+  height: 22px;
   margin: 0;
-  padding: 6px 8px;
-  background: none;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #12162a;
   border: 1px solid #2a2f52;
-  border-radius: 8px;
+  border-radius: 50%;
   color: #a1a5c4;
-  font-size: 15px;
+  font-size: 12px;
   line-height: 1;
   cursor: pointer;
+  z-index: 5;
 }
-.btn-toggle-sidebar:hover { background: rgba(124, 92, 252, 0.08); color: #f2f2f7; }
+.btn-toggle-sidebar:hover { background: rgba(124, 92, 252, 0.15); color: #f2f2f7; }
+.painel-shell:has(.painel-sidebar.sidebar-oculta) .btn-toggle-sidebar {
+  left: 0;
+  transform: translateX(0);
+}
 
 /* .topbar-nav-link — desde a US53 o admin não usa mais nav no topbar (virou
    sidebar, como o painel do tenant); a classe sobrevive só pro link "←
@@ -248,7 +267,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 /* Menu lateral — compartilhado entre o painel do tenant e todas as páginas
    admin (US53); .topbar/.conteudo continuam as mesmas classes de sempre, só
    aninhadas dentro deste wrapper em vez de mudar as regras delas. */
-.painel-shell { flex: 1; display: flex; width: 100%; }
+.painel-shell { flex: 1; display: flex; width: 100%; position: relative; }
 
 .painel-sidebar {
   width: 220px;
@@ -258,8 +277,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   padding: 20px 16px;
 }
 
-/* Opção de ocultar o menu (botão fica no topbar, fora da sidebar, pra
-   continuar acessível mesmo com o menu escondido). */
+/* Opção de ocultar o menu — o botão (.btn-toggle-sidebar) é irmão da
+   sidebar, não filho, pra continuar acessível mesmo com o menu escondido. */
 .painel-sidebar.sidebar-oculta { display: none; }
 
 .painel-main {
@@ -334,6 +353,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     padding: 12px 16px;
     overflow-x: auto;
   }
+  /* Nesse breakpoint a sidebar vira uma barra horizontal (não uma coluna à
+     esquerda) — a alça de ocultar, pensada pra "encostar" na borda direita
+     de uma sidebar vertical, não faz sentido aqui. */
+  .btn-toggle-sidebar { display: none; }
   .menu { flex-direction: row; gap: 4px; }
   .menu-item { border-left: none; border-bottom: 2px solid transparent; border-radius: 8px 8px 0 0; white-space: nowrap; }
   .menu-item.active { border-left-color: transparent; border-bottom-color: var(--accent); }
