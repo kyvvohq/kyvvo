@@ -1899,7 +1899,8 @@ async function renderPagamentos() {
         ? `<p class="modal-texto">Seu acesso está ativo até ${formatarDataCurtaISO(dados.acesso_ate)}. Após essa data, o sistema será suspenso.</p>`
         : `<p class="modal-texto">
             Próxima cobrança: ${dados.proxima_cobranca ? `${formatarPreco(dados.proxima_cobranca.valor)} em ${formatarDataCurtaISO(dados.proxima_cobranca.data)}` : 'não disponível'}
-          </p>`}
+          </p>
+          <button class="btn-secundario" id="btn-trocar-plano" style="margin-bottom:16px">Trocar de plano</button>`}
       ${cancelado
         ? '<button class="btn-novo-agendamento" id="btn-reativar-pagamento" style="margin-bottom:16px">Reativar assinatura</button>'
         : `
@@ -1931,6 +1932,8 @@ async function renderPagamentos() {
   if (btnCadastrar) btnCadastrar.addEventListener('click', () => abrirModalPagamento(dados));
   const btnReativar = document.getElementById('btn-reativar-pagamento');
   if (btnReativar) btnReativar.addEventListener('click', () => abrirModalPagamento(dados));
+  const btnTrocarPlano = document.getElementById('btn-trocar-plano');
+  if (btnTrocarPlano) btnTrocarPlano.addEventListener('click', () => abrirModalTrocarPlano(dados));
 
   // Collapse "Detalhes" (US35 redesign) — substitui o antigo botão "Alterar
   // forma de pagamento" pra assinatura já ativa: o próprio formulário
@@ -1948,6 +1951,65 @@ async function renderPagamentos() {
     const btnCancelarAssinatura = document.getElementById('btn-cancelar-assinatura');
     if (btnCancelarAssinatura) btnCancelarAssinatura.addEventListener('click', () => abrirModalCancelarAssinatura(dados));
   }
+}
+
+// Modal de troca de plano — lista só os planos ativos (GET /api/planos já
+// filtra por ativo=true), com o plano atual marcado e desabilitado. Sem
+// proration: a troca vale a partir da próxima cobrança (ver comentário em
+// PATCH /api/pagamentos/plano no backend).
+async function abrirModalTrocarPlano(dadosAtuais) {
+  abrirModal('<h3>Trocar de plano</h3>', '<div class="vazio">Carregando planos...</div>', 'modal-card-pagamento');
+  const planos = await api('/api/planos');
+  if (!planos) return;
+
+  const opcoesHtml = planos.map((p) => {
+    const atual = p.chave === dadosAtuais.plano;
+    return `
+      <label class="plano-opcao${atual ? ' plano-opcao-atual' : ''}">
+        <input type="radio" name="plano-novo" value="${p.chave}" ${atual ? 'checked disabled' : ''}>
+        <span class="plano-opcao-nome">${p.nome}${atual ? ' (atual)' : ''}</span>
+        <span class="plano-opcao-preco">${formatarPreco(Number(p.preco_mensal))}/mês</span>
+      </label>
+    `;
+  }).join('');
+
+  const conteudo = `
+    <p class="modal-texto">A troca vale a partir da próxima cobrança — o ciclo atual não muda.</p>
+    <div class="plano-opcoes">${opcoesHtml}</div>
+    <div class="modal-erro" id="trocar-plano-erro"></div>
+    <div class="modal-acoes">
+      <button class="btn-secundario" id="btn-sair-trocar-plano">Sair</button>
+      <button class="btn-primario" id="btn-confirmar-trocar-plano">Confirmar troca</button>
+    </div>
+  `;
+  abrirModal('<h3>Trocar de plano</h3>', conteudo, 'modal-card-pagamento');
+
+  document.getElementById('btn-sair-trocar-plano').addEventListener('click', fecharModal);
+  document.getElementById('btn-confirmar-trocar-plano').addEventListener('click', async () => {
+    const escolhido = document.querySelector('input[name="plano-novo"]:checked:not(:disabled)');
+    if (!escolhido) {
+      document.getElementById('trocar-plano-erro').textContent = 'Escolha um plano diferente do atual.';
+      return;
+    }
+    const btn = document.getElementById('btn-confirmar-trocar-plano');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    const resultado = await api('/api/pagamentos/plano', {
+      method: 'PATCH',
+      body: JSON.stringify({ plano: escolhido.value }),
+    });
+
+    if (resultado && !resultado.error) {
+      fecharModal();
+      mostrarToast('Plano alterado com sucesso.', 'sucesso');
+      renderPagamentos();
+    } else {
+      document.getElementById('trocar-plano-erro').textContent = (resultado && resultado.error) || 'Erro ao trocar de plano.';
+      btn.disabled = false;
+      btn.textContent = 'Confirmar troca';
+    }
+  });
 }
 
 // CA02/CA03/CA04 (US35.2) — modal de confirmação de cancelamento de

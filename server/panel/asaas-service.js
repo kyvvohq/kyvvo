@@ -108,17 +108,21 @@ async function criarSubscription({ customerId, billingType, valor, planoNome, ne
   });
 }
 
-// CA09 — troca o meio de pagamento de uma assinatura existente (atualiza, não
-// cancela). Em modo dev, só loga.
-async function atualizarSubscription({ subscriptionId, billingType, creditCardToken, tenantId }) {
+// CA09 — troca o meio de pagamento e/ou o valor (troca de plano) de uma
+// assinatura existente (atualiza, não cancela). A Asaas não faz cálculo
+// proporcional — o valor novo só vale a partir da próxima cobrança (ver
+// docs.asaas.com/reference/atualizar-assinatura-existente). Em modo dev, só
+// loga.
+async function atualizarSubscription({ subscriptionId, billingType, creditCardToken, valor, tenantId }) {
   if (modoDev()) {
-    console.log(`[asaas-service] (dev) atualiza subscription ${subscriptionId} do tenant ${tenantId} para ${billingType}`);
+    console.log(`[asaas-service] (dev) atualiza subscription ${subscriptionId} do tenant ${tenantId}${billingType ? ` para ${billingType}` : ''}${valor != null ? `, valor ${valor}` : ''}`);
     return { id: subscriptionId };
   }
 
   return chamar('PUT', `/subscriptions/${subscriptionId}`, {
     billingType,
     creditCardToken: billingType === 'CREDIT_CARD' ? creditCardToken : undefined,
+    value: valor,
   });
 }
 

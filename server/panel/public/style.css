@@ -1850,6 +1850,27 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   margin-top: 8px;
 }
 
+/* Lista de planos no modal "Trocar de plano" */
+.plano-opcoes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+.plano-opcao {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid #232847;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.plano-opcao:has(input:disabled) { cursor: default; opacity: 0.6; }
+.plano-opcao-atual { border-color: var(--accent-light); }
+.plano-opcao-nome { flex: 1; color: #f2f2f7; font-weight: 600; }
+.plano-opcao-preco { color: #a1a5c4; font-size: 13px; }
+
 /* US73 — contador de caracteres dos campos de copy de diferencial dos
    planos (headline/frase de benefício) no admin. */
 .contador-caracteres {
