@@ -23,7 +23,7 @@
     <div id="estado-invalido" hidden>
       <h1 class="cadastro-titulo">Convite indisponível</h1>
       <p class="cadastro-sub" id="mensagem-invalido"></p>
-      <p class="cadastro-rodape"><a href="/login.html">Ir para o login</a></p>
+      <p class="cadastro-rodape"><a href="/login">Ir para o login</a></p>
     </div>
 
     <div id="estado-form" hidden>
@@ -172,7 +172,7 @@
         localStorage.setItem('kyvvo_nome', data.nome || '');
         localStorage.setItem('kyvvo_email', data.email || '');
         localStorage.setItem('kyvvo_email_verified', 'true');
-        window.location.href = '/painel.html';
+        window.location.href = '/painel';
         return;
       }
 

@@ -450,7 +450,7 @@
       <p class="hero-v2-sub" data-pt="Agenda, clientes, serviços e equipe — feito pra salões de beleza (e outros pequenos negócios de atendimento por horário) que atendem pelo WhatsApp." data-en="Schedule, clients, services and team — built for beauty salons (and other appointment-based small businesses) that book via WhatsApp.">Agenda, clientes, serviços e equipe — feito pra salões de beleza (e outros pequenos negócios de atendimento por horário) que atendem pelo WhatsApp.</p>
 
       <div class="hero-v2-cta-row">
-        <a class="btn-whatsapp" id="ctaComecar" data-panel-path="/cadastro.html" href="#">
+        <a class="btn-whatsapp" id="ctaComecar" data-panel-path="/cadastro" href="#">
           <span>🚀</span>
           <span data-pt="Começar grátis" data-en="Start free">Começar grátis</span>
         </a>
@@ -668,7 +668,7 @@
     </div>
   </div>
   <div class="how-cta">
-    <a class="btn-whatsapp" data-panel-path="/cadastro.html" href="#" data-pt="Quero experimentar grátis →" data-en="I want to try it free →">Quero experimentar grátis →</a>
+    <a class="btn-whatsapp" data-panel-path="/cadastro" href="#" data-pt="Quero experimentar grátis →" data-en="I want to try it free →">Quero experimentar grátis →</a>
     <p class="hero-cta-sub" data-pt="14 dias grátis. Sem cartão de crédito." data-en="14 days free. No credit card.">14 dias grátis. Sem cartão de crédito.</p>
   </div>
 </section>
@@ -1213,7 +1213,7 @@ function renderPlanoCard(plano) {
       ${plano.frase_beneficio ? `<p class="plano-desc" data-testid="frase-beneficio-${plano.slug}">${plano.frase_beneficio}</p>` : ''}
       ${renderFeaturesPlano(plano)}
       ${renderLimitesPlano(plano)}
-      <a class="plano-cta" data-testid="cta-${plano.slug}" data-panel-path="/cadastro.html?plano=${encodeURIComponent(plano.slug)}" href="#" data-pt="Começar grátis" data-en="Start free">Começar grátis</a>
+      <a class="plano-cta" data-testid="cta-${plano.slug}" data-panel-path="/cadastro?plano=${encodeURIComponent(plano.slug)}" href="#" data-pt="Começar grátis" data-en="Start free">Começar grátis</a>
     </article>
   `;
 }

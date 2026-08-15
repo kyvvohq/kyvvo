@@ -6,7 +6,7 @@
   // Só faz sentido regularizar quem já tem sessão (mesmo padrão de
   // verificar.html) — sem token não tem o que cadastrar aqui.
   if (!localStorage.getItem('kyvvo_token')) {
-    window.location.href = '/login.html';
+    window.location.href = '/login';
   }
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -56,7 +56,7 @@
     });
     if (res.status === 401) {
       localStorage.removeItem('kyvvo_token');
-      window.location.href = '/login.html';
+      window.location.href = '/login';
       return null;
     }
     return res.json();
@@ -144,7 +144,7 @@
     // (calcularBloqueioAssinatura), calculada no backend.
     const copy = BLOQUEIO_COPY[dados.bloqueio_motivo];
     if (!copy) {
-      window.location.href = '/painel.html';
+      window.location.href = '/painel';
       return;
     }
 
@@ -174,7 +174,7 @@
     // navegação trocar a tela.
     wireFormPagamento(dados, {
       onSucesso: () => {
-        setTimeout(() => { window.location.href = '/painel.html'; }, 1500);
+        setTimeout(() => { window.location.href = '/painel'; }, 1500);
       },
     });
   }

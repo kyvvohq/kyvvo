@@ -16,7 +16,7 @@ async function injectPartial(url, targetId) {
 function openLoginModal() {
   const overlay = document.getElementById('loginModalOverlay');
   const iframe = document.getElementById('loginIframe');
-  iframe.src = PANEL_ORIGIN + '/login.html';
+  iframe.src = PANEL_ORIGIN + '/login';
   overlay.classList.add('open');
   document.body.style.overflow = 'hidden';
   // Leitor de tela/teclado: move o foco pro diálogo assim que ele abre (o
@@ -50,8 +50,8 @@ window.addEventListener('message', (e) => {
     const destino = e.data.admin
       ? '/admin/painel.html'
       : e.data.verificar
-        ? '/verificar.html'
-        : '/painel.html';
+        ? '/verificar'
+        : '/painel';
     window.top.location.href = PANEL_ORIGIN + destino;
   }
 });
