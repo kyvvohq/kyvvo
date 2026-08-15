@@ -2992,7 +2992,17 @@ async function start() {
     try {
       const { access_token: tokenCliente } = await metaWhatsappService.trocarCodePorToken(code);
       await metaWhatsappService.assinarWebhooks(wabaId, tokenCliente);
-      await metaWhatsappService.atribuirUsuarioSistema(wabaId, tokenCliente);
+      try {
+        const resultado = await metaWhatsappService.atribuirUsuarioSistema(wabaId, tokenCliente);
+        console.log(`[whatsapp] atribuição do Usuário do Sistema à waba ${wabaId} (tenant ${tenantId}): ${JSON.stringify(resultado)}`);
+      } catch (erroAtribuicao) {
+        // Best-effort — pode depender de aprovação/config pendente do lado da
+        // Meta (ver "Status Pendente" no App Dashboard); não impede a conexão
+        // de ser salva. Sem essa atribuição, chamadas futuras com
+        // META_WHATSAPP_TOKEN nessa WABA/número continuam com permissão
+        // negada até a Meta liberar.
+        console.error(`[whatsapp] falha ao atribuir Usuário do Sistema à waba ${wabaId} do tenant ${tenantId}: ${erroAtribuicao.message}`);
+      }
       try {
         await metaWhatsappService.registrarNumero(phoneNumberId);
       } catch (erroRegistro) {
