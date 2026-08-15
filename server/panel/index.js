@@ -768,6 +768,11 @@ async function start() {
   await fastify.register(staticPlugin, {
     root: path.join(__dirname, 'public'),
     prefix: '/',
+    // Permite acessar /painel em vez de /painel.html (URLs limpas no portal
+    // do tenant) — o `send` por trás do @fastify/static tenta essa extensão
+    // quando o caminho exato não bate com nenhum arquivo. Não quebra links
+    // antigos com `.html`: continuam resolvendo normalmente também.
+    extensions: ['html'],
   });
 
   // Página de detalhe do tenant (US28/CA01) — rota dinâmica que o

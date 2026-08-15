@@ -79,7 +79,7 @@
       <div class="erro" id="erro-geral" role="alert"></div>
     </form>
 
-    <p class="cadastro-rodape">Já tem conta? <a href="/login.html">Entrar</a></p>
+    <p class="cadastro-rodape">Já tem conta? <a href="/login">Entrar</a></p>
   </div>
 </div>
 <footer class="rodape-app">
@@ -89,7 +89,7 @@
 <script>
   // Se já está logado, não faz sentido cadastrar de novo.
   if (localStorage.getItem('kyvvo_token')) {
-    window.location.href = '/painel.html';
+    window.location.href = '/painel';
   }
 
   const form = document.getElementById('form-cadastro');
@@ -383,7 +383,7 @@
         // PostHog (US47).
         if (window.kyvvoIdentify) window.kyvvoIdentify(data.email, { nome: data.nome });
         if (window.kyvvoCapture) window.kyvvoCapture('cadastro_concluido');
-        window.location.href = '/verificar.html';
+        window.location.href = '/verificar';
         return;
       }
 

@@ -28,7 +28,7 @@
 
     <div id="sucesso" class="sucesso" role="status" hidden></div>
 
-    <p class="cadastro-rodape"><a href="/login.html">Voltar para o login</a></p>
+    <p class="cadastro-rodape"><a href="/login">Voltar para o login</a></p>
   </div>
 </div>
 <footer class="rodape-app">
@@ -83,7 +83,7 @@
         // Leva pra tela de redefinição já com o e-mail preenchido — o
         // usuário só precisa copiar o código que chegou por e-mail.
         setTimeout(() => {
-          window.location.href = '/redefinir-senha.html?email=' + encodeURIComponent(email);
+          window.location.href = '/redefinir-senha?email=' + encodeURIComponent(email);
         }, 1800);
         return;
       }

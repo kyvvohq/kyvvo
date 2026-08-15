@@ -37,7 +37,7 @@ async function verificarStatusConta() {
 
   // CA10 — conta não validada: acesso ao portal bloqueado até validar.
   if (status.email_verified === false) {
-    window.location.href = '/verificar.html';
+    window.location.href = '/verificar';
     return;
   }
 
@@ -47,7 +47,7 @@ async function verificarStatusConta() {
   // tente renderizar e tropece nesses 403 antes de mandar o cliente pra tela
   // de regularização.
   if (status.bloqueio_motivo) {
-    window.location.href = '/bloqueio.html';
+    window.location.href = '/bloqueio';
     return;
   }
 
@@ -436,7 +436,7 @@ async function api(path, options = {}) {
   });
   if (res.status === 401) {
     localStorage.removeItem('kyvvo_token');
-    window.location.href = '/login.html';
+    window.location.href = '/login';
     return null;
   }
   return res.json();

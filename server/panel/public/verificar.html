@@ -5,7 +5,7 @@
 <script>
   // Só faz sentido validar quem já tem sessão (cadastro ou login sem validação).
   if (!localStorage.getItem('kyvvo_token')) {
-    window.location.href = '/login.html';
+    window.location.href = '/login';
   }
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -79,7 +79,7 @@
     } catch (e) {}
     // Já verificado: não precisa ficar nesta tela.
     if (verificado) {
-      window.location.href = '/painel.html';
+      window.location.href = '/painel';
       return;
     }
     instrucao.textContent = `Enviamos um código de 6 dígitos para ${mascararEmail(email)} e para seu WhatsApp.`;
@@ -137,7 +137,7 @@
         // Aha Moment do MVP (US47): e-mail validado = trial de 14 dias ativo
         // e usuário liberado pro painel de verdade.
         if (window.kyvvoCapture) window.kyvvoCapture('conta_ativada');
-        window.location.href = '/painel.html?verificado=1';
+        window.location.href = '/painel?verificado=1';
         return;
       }
       erroEl.textContent = data.error || 'Código incorreto. Tente novamente.';

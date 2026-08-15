@@ -38,7 +38,7 @@
       <div class="erro" id="erro" role="alert"></div>
     </form>
 
-    <p class="cadastro-rodape">Não recebeu o código? <a href="/esqueci-senha.html">Solicitar novo</a></p>
+    <p class="cadastro-rodape">Não recebeu o código? <a href="/esqueci-senha">Solicitar novo</a></p>
   </div>
 </div>
 <footer class="rodape-app">
@@ -131,7 +131,7 @@
       const data = await res.json().catch(() => ({}));
 
       if (res.ok) {
-        window.location.href = '/login.html?senha_redefinida=1';
+        window.location.href = '/login?senha_redefinida=1';
         return;
       }
 
