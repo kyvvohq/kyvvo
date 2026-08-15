@@ -3739,6 +3739,56 @@ async function start() {
     return montarResumoPagamentos(atualizado[0]);
   });
 
+  // Troca de plano — disponível a qualquer momento pra quem já tem uma
+  // assinatura (trial com pagamento agendado, ativo, inadimplente ou
+  // suspenso; cancelado não tem assinatura pra alterar, precisa reativar
+  // primeiro). Sem proration: o valor novo só vale a partir da próxima
+  // cobrança (a Asaas não calcula proporcional — ver atualizarSubscription).
+  // Só planos com `ativo=true` na tabela `planos` podem ser escolhidos.
+  fastify.patch('/api/pagamentos/plano', { preHandler: [fastify.authenticate, fastify.requireAdmin] }, async (request, reply) => {
+    const { tenantId } = request.user;
+    const { plano } = request.body || {};
+
+    const planoInfo = PLANOS_CACHE[plano];
+    if (!planoInfo || !planoInfo.ativo) {
+      return reply.code(400).send({ error: 'Plano inválido ou não disponível.' });
+    }
+
+    const { rows } = await pool.query(
+      'SELECT plano, status, asaas_subscription_id FROM tenants WHERE id = $1',
+      [tenantId]
+    );
+    const tenant = rows[0];
+    if (!tenant || !tenant.asaas_subscription_id || tenant.status === 'cancelado') {
+      return reply.code(400).send({ error: 'Nenhuma assinatura ativa pra trocar de plano. Cadastre uma forma de pagamento primeiro.' });
+    }
+    if (tenant.plano === plano) {
+      return reply.code(400).send({ error: 'Você já está nesse plano.' });
+    }
+
+    try {
+      await asaasService.atualizarSubscription({
+        subscriptionId: tenant.asaas_subscription_id,
+        valor: Number(planoInfo.preco_mensal),
+        tenantId,
+      });
+    } catch (erro) {
+      console.error(`[pagamentos] falha ao trocar plano do tenant ${tenantId} para ${plano}: ${erro.message}`);
+      return reply.code(400).send({ error: 'Não foi possível trocar de plano agora. Tente novamente em instantes.' });
+    }
+
+    const { rows: atualizado } = await pool.query(
+      `UPDATE tenants SET plano = $2 WHERE id = $1
+       RETURNING plano, status, ativado_em, asaas_customer_id, asaas_subscription_id,
+                 asaas_meio_pagamento, asaas_meio_pagamento_alterado_em, asaas_cartao_final, cpf_cnpj, cancelado_em, acesso_ate,
+                 endereco_cep, endereco_logradouro, endereco_numero,
+                 endereco_complemento, endereco_bairro, endereco_cidade, endereco_uf`,
+      [tenantId, plano]
+    );
+
+    return montarResumoPagamentos(atualizado[0]);
+  });
+
   // CA01/CA03/CA07 (US35) — cancela a assinatura do tenant logado. Encerra a
   // cobrança recorrente na Asaas mas mantém o acesso até o fim do período já
   // pago (`acesso_ate`, CA05). Só o próprio tenant autenticado pode cancelar
