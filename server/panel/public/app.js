@@ -41,11 +41,12 @@ async function verificarStatusConta() {
     return;
   }
 
-  // US52/CA03 — trial vencido sem assinatura ativa: o backend já bloqueia
-  // essas rotas com 403 (fastify.authenticate), mas o redirect aqui evita
-  // que o painel tente renderizar e tropece nesses 403 antes de mandar o
-  // cliente pra tela de regularização.
-  if (status.status === 'trial' && status.trial_ativo === false) {
+  // US52/CA03 + bloqueio por inadimplência/suspensão/cancelamento vencido —
+  // o backend já bloqueia essas rotas com 403 (fastify.authenticate,
+  // calcularBloqueioAssinatura), mas o redirect aqui evita que o painel
+  // tente renderizar e tropece nesses 403 antes de mandar o cliente pra tela
+  // de regularização.
+  if (status.bloqueio_motivo) {
     window.location.href = '/bloqueio.html';
     return;
   }
