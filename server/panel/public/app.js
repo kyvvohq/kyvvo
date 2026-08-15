@@ -1963,10 +1963,10 @@ async function abrirModalTrocarPlano(dadosAtuais) {
   if (!planos) return;
 
   const opcoesHtml = planos.map((p) => {
-    const atual = p.chave === dadosAtuais.plano;
+    const atual = p.slug === dadosAtuais.plano_slug;
     return `
       <label class="plano-opcao${atual ? ' plano-opcao-atual' : ''}">
-        <input type="radio" name="plano-novo" value="${p.chave}" ${atual ? 'checked disabled' : ''}>
+        <input type="radio" name="plano-novo" value="${p.slug}" ${atual ? 'checked disabled' : ''}>
         <span class="plano-opcao-nome">${p.nome}${atual ? ' (atual)' : ''}</span>
         <span class="plano-opcao-preco">${formatarPreco(Number(p.preco_mensal))}/mês</span>
       </label>
