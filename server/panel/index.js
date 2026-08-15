@@ -68,8 +68,8 @@ const REENVIO_COOLDOWN_SEGUNDOS = 60;
 // CA06 (US38) — configurações gerais editáveis pelo admin. EMAIL_SUPORTE/
 // WHATSAPP_SUPORTE são consumidos por GET /api/tenant/status desde a US52
 // (tela de bloqueio pós-trial precisa dizer como falar com o suporte);
-// CARENCIA_DIAS_INADIMPLENCIA continua sem consumidor no código, só
-// disponível via /admin/api/configuracoes pra quando existir.
+// CARENCIA_DIAS_INADIMPLENCIA é o prazo antes de bloquear quem está
+// 'inadimplente' (ver calcularBloqueioAssinatura/authenticate).
 let CARENCIA_DIAS_INADIMPLENCIA = 3;
 let EMAIL_SUPORTE = 'suporte@kyvvo.com.br';
 let WHATSAPP_SUPORTE = '553484285182';
@@ -814,7 +814,8 @@ async function start() {
     }
 
     const { rows } = await pool.query(
-      `SELECT u.token_version, u.email_verified, u.role, u.ativo, t.status AS tenant_status, t.ativado_em
+      `SELECT u.token_version, u.email_verified, u.role, u.ativo,
+              t.status AS tenant_status, t.ativado_em, t.status_alterado_em, t.acesso_ate
        FROM usuarios u JOIN tenants t ON t.id = u.tenant_id
        WHERE u.id = $1`,
       [request.user.userId]
@@ -843,21 +844,27 @@ async function start() {
       return;
     }
 
-    // US52/CA01-CA07 — trial vencido (calcularTrialTenant, mesma fonte de
-    // verdade usada pra cobrança) sem o tenant ter migrado pra 'ativo'/
-    // outro status comercial: bloqueia módulos operacionais, mantém acesso
-    // à regularização. Só avaliado depois da verificação de e-mail acima —
-    // um tenant recém-cadastrado (ativado_em ainda nulo) sempre bate em
-    // `!trialAtivo`, mas nesse caso email_verified também é false e o early
-    // return acima já resolveu a rota.
-    if (usuario.tenant_status === 'trial' && !calcularTrialTenant({ ativado_em: usuario.ativado_em }).trialAtivo) {
-      if (!ROTAS_LIVRES_SEM_ASSINATURA.has(rotaAtual)) {
+    // US52/CA01-CA07 + bloqueio por inadimplência/suspensão/cancelamento
+    // vencido (calcularBloqueioAssinatura, mesma fonte de verdade usada em
+    // GET /api/tenant/status e na Cobrança): bloqueia módulos operacionais,
+    // mantém acesso à regularização. Só avaliado depois da verificação de
+    // e-mail acima — um tenant recém-cadastrado (ativado_em ainda nulo)
+    // sempre bate em `!trialAtivo`, mas nesse caso email_verified também é
+    // false e o early return acima já resolveu a rota.
+    const bloqueioMotivo = calcularBloqueioAssinatura({
+      status: usuario.tenant_status,
+      ativado_em: usuario.ativado_em,
+      status_alterado_em: usuario.status_alterado_em,
+      acesso_ate: usuario.acesso_ate,
+    });
+    if (bloqueioMotivo && !ROTAS_LIVRES_SEM_ASSINATURA.has(rotaAtual)) {
+      if (bloqueioMotivo === 'trial_expirado') {
         await registrarEventoTrialExpiradoUmaVez(request.user.tenantId);
-        return reply.code(403).send({
-          error: 'Seu período de teste terminou. Cadastre um meio de pagamento para continuar usando o Kyvvo.',
-          bloqueio: 'trial_expirado',
-        });
       }
+      return reply.code(403).send({
+        error: BLOQUEIO_MENSAGENS[bloqueioMotivo],
+        bloqueio: bloqueioMotivo,
+      });
     }
   });
 
@@ -1558,6 +1565,7 @@ async function start() {
     const { userId, tenantId } = request.user;
     const { rows } = await pool.query(
       `SELECT u.email, u.email_verified, u.role, t.status, t.plano, t.trial_expires_at, t.ativado_em,
+              t.status_alterado_em, t.acesso_ate,
               t.onboarding_horario_revisado, t.onboarding_dispensado
        FROM usuarios u JOIN tenants t ON t.id = u.tenant_id
        WHERE u.id = $1`,
@@ -1572,6 +1580,10 @@ async function start() {
     // mais curto (ou já "expirado") do que o que realmente estava valendo.
     // Unifica no mesmo cálculo usado no resto do sistema.
     const trial = calcularTrialTenant(info);
+    // Motivo de bloqueio (mesma fonte de verdade de `authenticate`) — o
+    // frontend usa isso pra redirecionar pra /bloqueio.html antes mesmo de
+    // tropeçar num 403 de alguma outra rota.
+    const bloqueioMotivo = calcularBloqueioAssinatura(info);
 
     // US59 — dados pros avisos contextuais do painel (CA "trial, configuração
     // incompleta e cobrança pendente"): sem serviço/profissional cadastrado
@@ -1596,6 +1608,7 @@ async function start() {
       plano: info.plano,
       trial_ativo: trial.trialAtivo,
       dias_restantes: trial.trialDiasRestantes,
+      bloqueio_motivo: bloqueioMotivo,
       suporte_email: EMAIL_SUPORTE,
       suporte_whatsapp: WHATSAPP_SUPORTE,
       pagamento_pendente: info.status === 'inadimplente',
@@ -3409,6 +3422,10 @@ async function start() {
 
     return {
       status: tenant.status,
+      // Mesma fonte de verdade de `authenticate` — a tela de bloqueio
+      // (bloqueio.html) usa isso pra decidir se mostra a tela de
+      // regularização, em vez de repetir o cálculo de carência em JS.
+      bloqueio_motivo: calcularBloqueioAssinatura(tenant),
       plano: tenant.plano,
       // GET /api/planos (catálogo público usado no modal de troca) não expõe
       // `chave` de propósito — só `slug` é identificador externo. Devolve o
@@ -3455,7 +3472,7 @@ async function start() {
   fastify.get('/api/pagamentos', { preHandler: [fastify.authenticate, fastify.requireAdmin] }, async (request) => {
     const { tenantId } = request.user;
     const { rows } = await pool.query(
-      `SELECT plano, status, ativado_em, asaas_customer_id, asaas_subscription_id,
+      `SELECT plano, status, ativado_em, status_alterado_em, asaas_customer_id, asaas_subscription_id,
               asaas_meio_pagamento, asaas_meio_pagamento_alterado_em, asaas_cartao_final, cpf_cnpj, cancelado_em, acesso_ate,
               endereco_cep, endereco_logradouro, endereco_numero,
               endereco_complemento, endereco_bairro, endereco_cidade, endereco_uf
@@ -3728,7 +3745,7 @@ async function start() {
          cancelado_em = null,
          acesso_ate = null
        WHERE id = $1
-       RETURNING plano, status, ativado_em, asaas_customer_id, asaas_subscription_id,
+       RETURNING plano, status, ativado_em, status_alterado_em, asaas_customer_id, asaas_subscription_id,
                  asaas_meio_pagamento, asaas_meio_pagamento_alterado_em, asaas_cartao_final, cpf_cnpj, cancelado_em, acesso_ate,
                  endereco_cep, endereco_logradouro, endereco_numero,
                  endereco_complemento, endereco_bairro, endereco_cidade, endereco_uf`,
@@ -3793,7 +3810,7 @@ async function start() {
 
     const { rows: atualizado } = await pool.query(
       `UPDATE tenants SET plano = $2 WHERE id = $1
-       RETURNING plano, status, ativado_em, asaas_customer_id, asaas_subscription_id,
+       RETURNING plano, status, ativado_em, status_alterado_em, asaas_customer_id, asaas_subscription_id,
                  asaas_meio_pagamento, asaas_meio_pagamento_alterado_em, asaas_cartao_final, cpf_cnpj, cancelado_em, acesso_ate,
                  endereco_cep, endereco_logradouro, endereco_numero,
                  endereco_complemento, endereco_bairro, endereco_cidade, endereco_uf`,
@@ -3884,7 +3901,15 @@ async function start() {
       return { ok: true };
     }
 
-    await pool.query('UPDATE tenants SET status = $2 WHERE asaas_subscription_id = $1', [subscriptionId, novoStatus]);
+    // status_alterado_em alimenta a carência de CARENCIA_DIAS_INADIMPLENCIA
+    // antes de bloquear quem está 'inadimplente' (ver calcularBloqueioAssinatura)
+    // — só atualiza se o status realmente mudou, senão um evento repetido da
+    // Asaas pro mesmo status reiniciaria a carência do zero.
+    await pool.query(
+      `UPDATE tenants SET status = $2, status_alterado_em = now()
+       WHERE asaas_subscription_id = $1 AND status IS DISTINCT FROM $2`,
+      [subscriptionId, novoStatus]
+    );
     return { ok: true };
   });
 
@@ -3911,6 +3936,49 @@ async function start() {
       trialDiasRestantes: diasRestantes,
     };
   }
+
+  // Bloqueio de acesso por falta de pagamento — usado tanto por
+  // `authenticate` (enforça de verdade) quanto por GET /api/tenant/status e
+  // montarResumoPagamentos (pra frontend saber pra onde redirecionar/o que
+  // mostrar), sempre a partir da mesma fonte de verdade: nunca duplicar essa
+  // conta em mais de um lugar.
+  // - trial vencido sem assinatura: bloqueia (fluxo já existia).
+  // - inadimplente (Asaas PAYMENT_OVERDUE): só bloqueia depois de
+  //   CARENCIA_DIAS_INADIMPLENCIA dias desde a mudança de status — dá tempo
+  //   de a cobrança ser regularizada (retry automático da Asaas, por ex.)
+  //   antes de cortar o acesso.
+  // - suspenso (Asaas PAYMENT_DELETED — cobrança excluída/falhou de vez):
+  //   bloqueia na hora, sem carência — já é o estado mais grave.
+  // - cancelado: bloqueia só depois de `acesso_ate` (o período já pago),
+  //   igual já era feito na Cobrança pra exibição, agora também aqui pra
+  //   valer de verdade.
+  function calcularBloqueioAssinatura(tenant) {
+    if (tenant.status === 'trial') {
+      return calcularTrialTenant(tenant).trialAtivo ? null : 'trial_expirado';
+    }
+    if (tenant.status === 'suspenso') {
+      return 'suspenso';
+    }
+    if (tenant.status === 'inadimplente') {
+      if (!tenant.status_alterado_em) return 'inadimplente';
+      const fimCarencia = new Date(tenant.status_alterado_em).getTime() + CARENCIA_DIAS_INADIMPLENCIA * 24 * 60 * 60 * 1000;
+      return Date.now() >= fimCarencia ? 'inadimplente' : null;
+    }
+    if (tenant.status === 'cancelado') {
+      if (!tenant.acesso_ate) return 'cancelado';
+      // `acesso_ate` é `date` (sem hora) — vale até o fim do próprio dia.
+      const fimAcesso = new Date(`${tenant.acesso_ate}T23:59:59-03:00`).getTime();
+      return Date.now() > fimAcesso ? 'cancelado' : null;
+    }
+    return null;
+  }
+
+  const BLOQUEIO_MENSAGENS = {
+    trial_expirado: 'Seu período de teste terminou. Cadastre um meio de pagamento para continuar usando o Kyvvo.',
+    inadimplente: 'Não conseguimos confirmar seu pagamento. Atualize sua forma de pagamento para reativar o acesso.',
+    suspenso: 'Sua assinatura foi suspensa por falha no pagamento. Atualize sua forma de pagamento para reativar o acesso.',
+    cancelado: 'Sua assinatura foi encerrada e o período pago já terminou. Reative sua assinatura para continuar usando o Kyvvo.',
+  };
 
   // Status de conta exibido na listagem de tenants e no detalhe (US26/US28/
   // CA02) — o estado de trial usa `calcularTrialTenant` (US31), baseada em

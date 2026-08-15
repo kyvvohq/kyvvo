@@ -21,7 +21,7 @@
 <div class="center-screen">
   <div class="card card-bloqueio">
     <div class="logo">ky<span class="logo-vv">vv</span>o</div>
-    <h1 class="cadastro-titulo">Seu período gratuito terminou</h1>
+    <h1 class="cadastro-titulo" id="bloqueio-titulo">Seu período gratuito terminou</h1>
     <p class="cadastro-sub" id="bloqueio-sub">Cadastre um meio de pagamento para continuar usando o Kyvvo. Seus dados continuam salvos e disponíveis assim que a assinatura for ativada.</p>
 
     <div id="bloqueio-plano"></div>
@@ -102,32 +102,65 @@
     api('/api/eventos', { method: 'POST', body: JSON.stringify({ tipo }) });
   }
 
+  // Uma cópia por motivo de bloqueio (calcularBloqueioAssinatura no
+  // backend) — trial e cancelado ainda não têm plano contratado (mostram
+  // "a ser contratado"); inadimplente/suspenso já são pagantes, só
+  // precisam regularizar a forma de pagamento (mostram "atual").
+  const BLOQUEIO_COPY = {
+    trial_expirado: {
+      titulo: 'Seu período gratuito terminou',
+      sub: 'Cadastre um meio de pagamento para continuar usando o Kyvvo. Seus dados continuam salvos e disponíveis assim que a assinatura for ativada.',
+      labelPlano: 'Plano a ser contratado',
+      explicacao: '<p>Enquanto isso, agenda, clientes, serviços e configurações ficam indisponíveis — seus dados continuam preservados e você recupera o acesso completo assim que o pagamento for confirmado.</p><p>A cobrança começa a partir da confirmação do cadastro abaixo.</p>',
+    },
+    inadimplente: {
+      titulo: 'Não conseguimos confirmar seu pagamento',
+      sub: 'Atualize sua forma de pagamento para regularizar sua assinatura. Seus dados continuam salvos e disponíveis assim que o pagamento for confirmado.',
+      labelPlano: 'Plano atual',
+      explicacao: '<p>Enquanto isso, agenda, clientes, serviços e configurações ficam indisponíveis — seus dados continuam preservados e você recupera o acesso completo assim que o pagamento for confirmado.</p>',
+    },
+    suspenso: {
+      titulo: 'Sua assinatura foi suspensa',
+      sub: 'Não conseguimos processar seu pagamento. Atualize sua forma de pagamento para reativar o acesso.',
+      labelPlano: 'Plano atual',
+      explicacao: '<p>Enquanto isso, agenda, clientes, serviços e configurações ficam indisponíveis — seus dados continuam preservados e você recupera o acesso completo assim que o pagamento for confirmado.</p>',
+    },
+    cancelado: {
+      titulo: 'Sua assinatura foi encerrada',
+      sub: 'O período pago da sua assinatura já terminou. Cadastre um meio de pagamento para reativar sua conta.',
+      labelPlano: 'Plano a ser contratado',
+      explicacao: '<p>Enquanto isso, agenda, clientes, serviços e configurações ficam indisponíveis — seus dados continuam preservados e você recupera o acesso completo assim que a assinatura for reativada.</p>',
+    },
+  };
+
   async function montarTelaBloqueio() {
     const dados = await api('/api/pagamentos');
     if (!dados) return;
 
-    // CA — quem não está realmente bloqueado (trial ainda ativo, ou já
-    // pagante) não tem o que fazer aqui; manda de volta pro painel em vez de
-    // mostrar uma tela de cobrança fora de contexto.
-    const bloqueado = dados.status === 'trial' && dados.trial_ativo === false;
-    if (!bloqueado) {
+    // CA — quem não está realmente bloqueado (trial ainda ativo, já
+    // pagante, ou dentro da carência de inadimplência) não tem o que fazer
+    // aqui; manda de volta pro painel em vez de mostrar uma tela de
+    // cobrança fora de contexto. Mesma fonte de verdade de `authenticate`
+    // (calcularBloqueioAssinatura), calculada no backend.
+    const copy = BLOQUEIO_COPY[dados.bloqueio_motivo];
+    if (!copy) {
       window.location.href = '/painel.html';
       return;
     }
 
     registrarEventoAnalytics('bloqueio_exibido');
 
+    document.getElementById('bloqueio-titulo').textContent = copy.titulo;
+    document.getElementById('bloqueio-sub').textContent = copy.sub;
+
     document.getElementById('bloqueio-plano').innerHTML = `
       <div class="financeiro-resumo-card" style="margin-bottom:16px">
-        <div class="financeiro-resumo-label">Plano a ser contratado</div>
+        <div class="financeiro-resumo-label">${copy.labelPlano}</div>
         <div>${dados.plano_nome || 'Profissional'}${dados.valor_plano != null ? ` — ${formatarPreco(dados.valor_plano)}/mês` : ''}</div>
       </div>
     `;
 
-    document.getElementById('bloqueio-explicacao').innerHTML = `
-      <p>Enquanto isso, agenda, clientes, serviços e configurações ficam indisponíveis — seus dados continuam preservados e você recupera o acesso completo assim que o pagamento for confirmado.</p>
-      <p>A cobrança começa a partir da confirmação do cadastro abaixo.</p>
-    `;
+    document.getElementById('bloqueio-explicacao').innerHTML = copy.explicacao;
 
     const suporteEmail = dados.suporte_email || 'suporte@kyvvo.com.br';
     const suporteWhatsapp = dados.suporte_whatsapp;
