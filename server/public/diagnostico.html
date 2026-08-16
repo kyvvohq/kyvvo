@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Diagnóstico do seu negócio — Kyvvo</title>
-<meta name="description" content="Descubra em poucos minutos como o Kyvvo pode organizar a agenda, os clientes e o financeiro do seu negócio de serviços.">
+<meta name="description" content="Descubra em poucos minutos como a Kyvvo pode organizar a agenda, os clientes e o financeiro do seu negócio de serviços.">
 <meta name="robots" content="index, follow">
 <link rel="canonical" href="https://kyvvo.com.br/diagnostico.html">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%237c5cfc'/%3E%3Ctext x='16' y='22' font-family='Arial,sans-serif' font-size='15' font-weight='800' fill='white' text-anchor='middle'%3Evv%3C/text%3E%3C/svg%3E">
@@ -324,7 +324,7 @@ function renderIntro() {
       <span class="meta-item">🎯 100% gratuito</span>
     </div>
     <button class="btn" onclick="start()">Fazer meu diagnóstico →</button>
-    <p class="intro-alt">Prefere falar direto? <a href="https://wa.me/${WHATSAPP_NUMERO}?text=${encodeURIComponent('Olá! Quero saber mais sobre o Kyvvo.')}" target="_blank" rel="noopener">Chamar no WhatsApp</a></p>
+    <p class="intro-alt">Prefere falar direto? <a href="https://wa.me/${WHATSAPP_NUMERO}?text=${encodeURIComponent('Olá! Quero saber mais sobre a Kyvvo.')}" target="_blank" rel="noopener">Chamar no WhatsApp</a></p>
   `;
   app.appendChild(div);
 }
@@ -407,7 +407,7 @@ function renderResult() {
   }
 
   if (mensagensDor.length === 0) {
-    mensagensDor.push({ icon: '✨', text: 'Seu negócio já tem uma boa base. O Kyvvo pode elevar ainda mais sua organização e experiência do cliente.' });
+    mensagensDor.push({ icon: '✨', text: 'Seu negócio já tem uma boa base. A Kyvvo pode elevar ainda mais sua organização e experiência do cliente.' });
   }
 
   // Plano sugerido
@@ -440,7 +440,7 @@ function renderResult() {
     </div>
 
     <div class="cta-box">
-      <h3>O Kyvvo resolve tudo isso</h3>
+      <h3>A Kyvvo resolve tudo isso</h3>
       <p>Com base no seu diagnóstico, o plano <strong>${plano}</strong> se encaixa perfeitamente.<br>${planoDesc}</p>
       <p style="font-size:.8rem;color:var(--accent-light);margin-bottom:16px">✨ 14 dias grátis, sem cartão de crédito</p>
       <button class="btn btn-whatsapp" id="btnWhatsapp">💬 Falar com a equipe Kyvvo</button>
@@ -474,7 +474,7 @@ function renderResult() {
 
 function abrirWhatsApp(nome, plano, score) {
   const msg = encodeURIComponent(
-    `Olá! Acabei de fazer o diagnóstico do Kyvvo e meu resultado foi ${score}% de impacto da gestão manual.\n\nMeu nome é ${nome} e tenho interesse no plano ${plano}.\n\nPode me contar mais?`
+    `Olá! Acabei de fazer o diagnóstico da Kyvvo e meu resultado foi ${score}% de impacto da gestão manual.\n\nMeu nome é ${nome} e tenho interesse no plano ${plano}.\n\nPode me contar mais?`
   );
   window.open('https://wa.me/' + WHATSAPP_NUMERO + '?text=' + msg, '_blank');
 }
