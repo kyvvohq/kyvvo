@@ -832,6 +832,27 @@ async function start() {
     return reply.type('text/html').sendFile('admin/tenant-detalhe.html');
   });
 
+  // Roteamento client-side do portal do tenant (SPA) — cada seção do menu
+  // ganha URL própria (favoritar/compartilhar/recarregar direto numa seção,
+  // botão voltar funcionando entre elas). Antes só /painel existia; clicar
+  // em qualquer item do menu não mudava a URL. O HTML servido é sempre o
+  // mesmo painel.html — app.js lê o path no carregamento e decide qual
+  // seção mostrar (ver ROTAS_MENU/menuDoCaminho em app.js). Mantém o mesmo
+  // padrão do /admin/tenants/:id acima: sem arquivo físico, sem auth aqui
+  // (client-side, igual todo o resto do painel).
+  const ROTAS_PAINEL_TENANT = [
+    '/agenda', '/servicos', '/profissionais', '/clientes', '/bloqueios',
+    '/whatsapp', '/cobranca', '/perfil', '/empresa', '/equipe',
+    '/preferencias', '/ajuda',
+  ];
+  for (const rota of ROTAS_PAINEL_TENANT) {
+    fastify.get(rota, async (request, reply) => reply.type('text/html').sendFile('painel.html'));
+  }
+  // Módulos (Financeiro hoje, outros a caminho — agenda_inteligente,
+  // campanhas_proativas, comissao, dashboards, estoque) — uma rota dinâmica
+  // só, em vez de registrar uma por módulo.
+  fastify.get('/modulo/:chave', async (request, reply) => reply.type('text/html').sendFile('painel.html'));
+
   // Rotas que uma conta ainda não verificada (US20/CA10) precisa continuar
   // acessando pra completar a verificação, pedir reenvio ou sair — checado
   // direto em `authenticate` (em vez de um preHandler à parte que cada rota

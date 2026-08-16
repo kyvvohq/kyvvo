@@ -284,11 +284,50 @@ async function carregarConfiguracao() {
 const menuCadastrosToggle = document.getElementById('menu-cadastros-toggle');
 const menuCadastrosSubmenu = document.getElementById('menu-cadastros-submenu');
 
+// URL própria por seção do menu (favoritar/compartilhar/recarregar direto
+// numa seção, botão voltar funcionando entre elas — antes só /painel
+// existia, trocar de menu nunca mudava a URL). Cada rota aqui tem um
+// fastify.get(...) correspondente no backend (index.js) servindo o mesmo
+// painel.html — é só o app.js que decide o que renderizar a partir do path.
+const ROTAS_MENU = {
+  inicio: '/painel',
+  agendamento: '/agenda',
+  servicos: '/servicos',
+  profissionais: '/profissionais',
+  clientes: '/clientes',
+  bloqueios: '/bloqueios',
+  whatsapp: '/whatsapp',
+  pagamentos: '/cobranca',
+  perfil: '/perfil',
+  empresa: '/empresa',
+  equipe: '/equipe',
+  configuracao: '/preferencias',
+  ajuda: '/ajuda',
+};
+const CAMINHO_PARA_MENU = Object.fromEntries(Object.entries(ROTAS_MENU).map(([menu, caminho]) => [caminho, menu]));
+
+// Módulos (menuAtual = 'modulo:chave', ver render()) não entram no mapa
+// fixo acima — a chave é dinâmica (tenant_modulos), por isso uma regra à
+// parte em vez de mais entradas fixas.
+function caminhoDoMenu(menu) {
+  if (menu.startsWith('modulo:')) return '/modulo/' + menu.slice('modulo:'.length);
+  return ROTAS_MENU[menu] || null;
+}
+function menuDoCaminho(caminho) {
+  if (CAMINHO_PARA_MENU[caminho]) return CAMINHO_PARA_MENU[caminho];
+  const moduloMatch = caminho.match(/^\/modulo\/([a-z0-9_-]+)$/);
+  return moduloMatch ? 'modulo:' + moduloMatch[1] : null;
+}
+
 // Reaproveitada tanto pelos itens da sidebar quanto pelos itens do user
 // menu (dropdown do avatar, ST-user-menu) — os dois só precisam de um jeito
 // de trocar `menuAtual` e re-renderizar; a diferença é só onde o clique
 // aconteceu.
-function selecionarMenu(novoMenu) {
+// `atualizarUrl: false` é usado só pelo listener de popstate e pela leitura
+// inicial da URL no carregamento (abaixo) — nesses dois casos a URL já é a
+// fonte da verdade, empurrar de novo criaria uma entrada redundante no
+// histórico (ou um loop, no caso do popstate).
+function selecionarMenu(novoMenu, { atualizarUrl = true } = {}) {
   menuEl.querySelectorAll('.menu-item').forEach((i) => i.classList.remove('active'));
   const itemSidebar = menuEl.querySelector(`.menu-item[data-menu="${novoMenu}"]`);
   if (itemSidebar) itemSidebar.classList.add('active');
@@ -298,12 +337,34 @@ function selecionarMenu(novoMenu) {
   // (perfil/empresa/pagamentos/configuracao/ajuda) não têm item correspondente
   // na sidebar, então itemSidebar é null e isso vira um no-op — correto,
   // nenhum item da sidebar deve ficar "active" nessas telas.
-  menuCadastrosToggle.classList.toggle('tem-filho-ativo', itemSidebar?.closest('#menu-cadastros-submenu') != null);
+  const dentroDeCadastros = itemSidebar?.closest('#menu-cadastros-submenu') != null;
+  menuCadastrosToggle.classList.toggle('tem-filho-ativo', dentroDeCadastros);
+  // Navegação direta por URL (ex.: carregar /servicos) pula o clique em
+  // "Cadastros" que normalmente abre o submenu — sem isso, o item ficava
+  // "active" escondido dentro de um submenu ainda fechado.
+  if (dentroDeCadastros) {
+    menuCadastrosSubmenu.classList.add('aberto');
+    menuCadastrosToggle.classList.add('expandido');
+  }
   menuAtual = novoMenu;
   subtabsEl.style.display = menuAtual === 'agendamento' ? 'flex' : 'none';
   dataRef = new Date();
+  if (atualizarUrl) {
+    const caminho = caminhoDoMenu(novoMenu);
+    if (caminho && window.location.pathname !== caminho) {
+      history.pushState({ menu: novoMenu }, '', caminho);
+    }
+  }
   render();
 }
+
+// Botão voltar/avançar do navegador — reflete a URL sem empurrar de novo
+// (atualizarUrl: false). Cai em 'inicio' se o path não bater com nenhuma
+// rota conhecida (nunca deveria acontecer vindo de dentro do próprio app,
+// mas cobre alguém editando a URL à mão).
+window.addEventListener('popstate', () => {
+  selecionarMenu(menuDoCaminho(window.location.pathname) || 'inicio', { atualizarUrl: false });
+});
 
 function ativarMenuItem(item) {
   selecionarMenu(item.dataset.menu);
@@ -4165,6 +4226,13 @@ async function renderConfiguracao() {
   });
 }
 
-carregarConfiguracao().then(render);
+// Lê a seção a partir da URL de carregamento (ex.: /agenda) em vez de sempre
+// abrir em Início — selecionarMenu (não só render()) porque também precisa
+// corrigir o "active" da sidebar, que o HTML estático sempre marca em
+// Início. atualizarUrl:false porque a URL já É a fonte — não tem o que
+// empurrar de novo.
+carregarConfiguracao().then(() => {
+  selecionarMenu(menuDoCaminho(window.location.pathname) || 'inicio', { atualizarUrl: false });
+});
 carregarModulosNoMenu();
 carregarUserMenu();
