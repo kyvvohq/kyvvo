@@ -782,8 +782,14 @@ function abrirModalNovoAgendamento(prefill) {
     selectProfissional.innerHTML = '<option value="">Selecione...</option>' +
       profissionais.map((p) => `<option value="${p.id}">${p.nome}</option>`).join('');
     if (profissionais.length <= 1) {
+      // `label { display: block }` (style.css) é regra de autor e vence o
+      // `[hidden]` do user-agent stylesheet independente de especificidade
+      // (mesma pegadinha já documentada em .cadastro-plano[hidden]) — por
+      // isso o display:none precisa ser explícito aqui, não só o atributo.
       labelProfissional.hidden = true;
+      labelProfissional.style.display = 'none';
       selectProfissional.hidden = true;
+      selectProfissional.style.display = 'none';
       selectProfissional.removeAttribute('data-obrigatorio');
       if (profissionais.length === 1) {
         selectProfissional.value = profissionais[0].id;
