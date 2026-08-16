@@ -1955,22 +1955,56 @@ async function renderPagamentos() {
   }
 }
 
+// Rótulos dos limites vindos de GET /api/planos (plano.limites) — mesmo
+// conteúdo/categorias já usadas na grade de preços da landing
+// (server/public/index.html, PLANO_LIMITE_ROTULOS), duplicado aqui porque as
+// duas telas vivem em origens diferentes.
+const PLANO_TROCA_LIMITE_ROTULOS = {
+  conversas_mes: { icone: '💬', singular: 'conversa/mês', plural: 'conversas/mês', ilimitado: 'Conversas ilimitadas' },
+  profissionais: { icone: '👤', singular: 'profissional', plural: 'profissionais', ilimitado: 'Profissionais ilimitados' },
+  unidades: { icone: '🏢', singular: 'unidade', plural: 'unidades', ilimitado: 'Unidades ilimitadas' },
+};
+const PLANO_TROCA_ICONES = ['⭐', '👑', '⚡', '🚀'];
+
+function badgesLimitesPlano(limites) {
+  if (!limites) return '';
+  return Object.entries(PLANO_TROCA_LIMITE_ROTULOS)
+    .filter(([chave]) => limites[chave] !== undefined)
+    .map(([chave, rotulo]) => {
+      const valor = limites[chave];
+      const texto = valor == null || valor === -1
+        ? rotulo.ilimitado
+        : Number(valor) === 1 ? `1 ${rotulo.singular}` : `Até ${valor} ${rotulo.plural}`;
+      return `<span class="plano-opcao-badge">${rotulo.icone} ${texto}</span>`;
+    }).join('');
+}
+
 // Modal de troca de plano — lista só os planos ativos (GET /api/planos já
 // filtra por ativo=true), com o plano atual marcado e desabilitado. Sem
 // proration: a troca vale a partir da próxima cobrança (ver comentário em
-// PATCH /api/pagamentos/plano no backend).
+// PATCH /api/pagamentos/plano no backend). Ícone/cor por posição são só
+// decoração (não vêm do banco); descrição e badges de limite usam os dados
+// reais já cadastrados (frase_beneficio/limites), sem inventar número novo.
 async function abrirModalTrocarPlano(dadosAtuais) {
   abrirModal('<h3>Trocar de plano</h3>', '<div class="vazio">Carregando planos...</div>', 'modal-card-pagamento');
   const planos = await api('/api/planos');
   if (!planos) return;
 
-  const opcoesHtml = planos.map((p) => {
+  const opcoesHtml = planos.map((p, i) => {
     const atual = p.slug === dadosAtuais.plano_slug;
     return `
       <label class="plano-opcao${atual ? ' plano-opcao-atual' : ''}">
         <input type="radio" name="plano-novo" value="${p.slug}" ${atual ? 'checked disabled' : ''}>
-        <span class="plano-opcao-nome">${p.nome}${atual ? ' (atual)' : ''}</span>
-        <span class="plano-opcao-preco">${formatarPreco(Number(p.preco_mensal))}/mês</span>
+        <span class="plano-opcao-icone plano-opcao-icone-${i % PLANO_TROCA_ICONES.length}" aria-hidden="true">${PLANO_TROCA_ICONES[i % PLANO_TROCA_ICONES.length]}</span>
+        <span class="plano-opcao-corpo">
+          <span class="plano-opcao-nome">${p.nome}</span>
+          ${p.frase_beneficio ? `<span class="plano-opcao-desc">${p.frase_beneficio}</span>` : ''}
+          <span class="plano-opcao-badges">${badgesLimitesPlano(p.limites)}</span>
+        </span>
+        <span class="plano-opcao-preco">
+          <span class="plano-opcao-preco-valor">${formatarPreco(Number(p.preco_mensal))}<small>/mês</small></span>
+          <span class="plano-opcao-preco-nota">Cobrados mensalmente</span>
+        </span>
       </label>
     `;
   }).join('');
@@ -1978,19 +2012,26 @@ async function abrirModalTrocarPlano(dadosAtuais) {
   const conteudo = `
     <p class="modal-texto">A troca vale a partir da próxima cobrança — o ciclo atual não muda.</p>
     <div class="plano-opcoes">${opcoesHtml}</div>
+    <div class="plano-troca-aviso">
+      <span class="plano-troca-aviso-icone" aria-hidden="true">🔄</span>
+      <span class="plano-troca-aviso-texto">
+        <strong>A troca vale a partir da próxima cobrança</strong>
+        <span class="plano-troca-aviso-desc">O valor do novo plano será aplicado no próximo ciclo. O ciclo atual continuará normalmente, sem alterações.</span>
+      </span>
+    </div>
     <div class="modal-erro" id="trocar-plano-erro"></div>
     <div class="modal-acoes">
       <button class="btn-secundario" id="btn-sair-trocar-plano">Sair</button>
-      <button class="btn-primario" id="btn-confirmar-trocar-plano">Confirmar troca</button>
+      <button class="btn-primario" id="btn-confirmar-trocar-plano">Confirmar troca →</button>
     </div>
   `;
-  abrirModal('<h3>Trocar de plano</h3>', conteudo, 'modal-card-pagamento');
+  abrirModal('<h3>Trocar de plano</h3>', conteudo, 'modal-card-pagamento modal-card-trocar-plano');
 
   document.getElementById('btn-sair-trocar-plano').addEventListener('click', fecharModal);
   document.getElementById('btn-confirmar-trocar-plano').addEventListener('click', async () => {
     const escolhido = document.querySelector('input[name="plano-novo"]:checked:not(:disabled)');
     if (!escolhido) {
-      document.getElementById('trocar-plano-erro').textContent = 'Escolha um plano diferente do atual.';
+      document.getElementById('trocar-plano-erro').textContent = '⚠️ Escolha um plano diferente do atual.';
       return;
     }
     const btn = document.getElementById('btn-confirmar-trocar-plano');
@@ -2007,9 +2048,9 @@ async function abrirModalTrocarPlano(dadosAtuais) {
       mostrarToast('Plano alterado com sucesso.', 'sucesso');
       renderPagamentos();
     } else {
-      document.getElementById('trocar-plano-erro').textContent = (resultado && resultado.error) || 'Erro ao trocar de plano.';
+      document.getElementById('trocar-plano-erro').textContent = '⚠️ ' + ((resultado && resultado.error) || 'Erro ao trocar de plano.');
       btn.disabled = false;
-      btn.textContent = 'Confirmar troca';
+      btn.textContent = 'Confirmar troca →';
     }
   });
 }
