@@ -2149,6 +2149,22 @@ textarea:focus { outline: none; border-color: var(--accent); }
    de qualquer forma, com o fix de .checkbox-label span acima). */
 .card-cadastro { max-width: 540px; }
 
+/* Espaçamento mais compacto entre campos do cadastro — label/.field-apoio/
+   .field-error são regras genéricas (tag/classe usadas em vários formulários
+   do app inteiro), por isso o ajuste fica escopado só a #form-cadastro em
+   vez de mudar o valor global. */
+#form-cadastro label { margin-top: 10px; }
+#form-cadastro .field-apoio { margin-top: 4px; }
+#form-cadastro .field-error { margin-top: 4px; min-height: 0; }
+
+/* "Li e aceito os Termos..." não erra quase nunca ao ser desmarcado antes
+   do próprio clique de submit — o min-height genérico de .field-error
+   (reservado pra evitar "pulo" de layout quando o erro aparece) deixava um
+   respiro vazio permanente abaixo do checkbox sem necessidade nenhuma.
+   Precisa de #form-cadastro na frente pra ganhar de #form-cadastro
+   .field-error (1 id + 1 classe > 1 id só). */
+#form-cadastro #erro-aceite_termos { margin-top: 0; }
+
 /* US52 — tela de bloqueio pós-trial (bloqueio.html): mais larga que o card
    padrão (380px) pra caber o grid de endereço do formulário de pagamento
    sem espremer, mas ainda compacta — não é uma segunda versão do painel. */
@@ -2311,7 +2327,7 @@ input.invalid, select.invalid {
   font-size: 12.5px;
   color: #a1a5c4;
   line-height: 1.5;
-  margin-top: 14px;
+  margin-top: 10px;
   cursor: pointer;
 }
 
