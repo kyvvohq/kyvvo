@@ -1749,6 +1749,12 @@ async function start() {
         whatsapp_desconectado: !configInfo.meta_phone_number_id,
         horario_nao_confirmado: !info.onboarding_horario_revisado,
       },
+      // Com 0 ou 1 profissional, "qual profissional" nunca é uma decisão
+      // real — o campo/nome só faz sentido mostrar pra quem realmente tem
+      // 2+ (plano Custom). Usado pelo frontend pra esconder o campo em todo
+      // lugar que mostra/pede profissional (Novo agendamento, Agenda,
+      // Bloqueios, Encaixe), não só no menu Profissionais.
+      mostrar_profissional: configInfo.profissionais > 1,
       onboarding_dispensado: !!info.onboarding_dispensado,
     };
   });
