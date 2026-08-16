@@ -1132,6 +1132,14 @@ function renderAgendamentoItem(ag) {
 }
 
 conteudo.addEventListener('click', (e) => {
+  // Clique numa linha do menu Clientes abre o detalhe (nome, telefone, data
+  // de nascimento e histórico de atendimentos).
+  const clienteItemEl = e.target.closest('[data-cliente-id]');
+  if (clienteItemEl) {
+    abrirModalClienteDetalhe(clienteItemEl.dataset.clienteId);
+    return;
+  }
+
   // US63 — atalhos e ações de pendência do dashboard (Início) navegam
   // direto pro menu de destino.
   const atalhoInicioBtn = e.target.closest('[data-acao-atalho-inicio]');
@@ -1448,21 +1456,52 @@ function renderLancamentoItem(l) {
   `;
 }
 
-// PR4 — Confirmar pagamento é ação direta (sem modal, "confirmar" já é a
-// confirmação); reaproveita o mesmo PATCH que abrirModalConcluir usa no
-// menu da Agenda — sincronizarLancamentoFinanceiro (US64) já converte o
-// lançamento de previsto pra realizado sozinho, sem endpoint próprio.
-async function confirmarPagamentoLancamento(l) {
-  const resultado = await api(`/api/agendamentos/${l.agendamento_id}`, {
-    method: 'PATCH',
-    body: JSON.stringify({ status: 'concluido' }),
+// Confirmar pagamento pede a forma de pagamento antes de confirmar — fica
+// registrada no lançamento e aparece no histórico de atendimentos do
+// cliente (menu Clientes). Reaproveita o mesmo PATCH que abrirModalConcluir
+// usa no menu da Agenda — sincronizarLancamentoFinanceiro (US64) já converte
+// o lançamento de previsto pra realizado sozinho, sem endpoint próprio.
+function confirmarPagamentoLancamento(l) {
+  abrirModal(
+    '<h3>Confirmar pagamento</h3>',
+    `
+      <p class="modal-texto">Qual foi a forma de pagamento?</p>
+      <div class="forma-pagamento-opcoes">
+        <label class="forma-pagamento-opcao"><input type="radio" name="forma-pagamento" value="pix" checked> Pix</label>
+        <label class="forma-pagamento-opcao"><input type="radio" name="forma-pagamento" value="cartao"> Cartão</label>
+        <label class="forma-pagamento-opcao"><input type="radio" name="forma-pagamento" value="dinheiro"> Dinheiro</label>
+        <label class="forma-pagamento-opcao"><input type="radio" name="forma-pagamento" value="outro"> Outro</label>
+      </div>
+      <div class="modal-erro" id="confirmar-pagamento-erro"></div>
+      <div class="modal-acoes">
+        <button class="btn-secundario" id="btn-sair-confirmar-pagamento">Sair</button>
+        <button class="btn-primario" id="btn-confirmar-pagamento-lancamento">Confirmar</button>
+      </div>
+    `
+  );
+
+  document.getElementById('btn-sair-confirmar-pagamento').addEventListener('click', fecharModal);
+  document.getElementById('btn-confirmar-pagamento-lancamento').addEventListener('click', async () => {
+    const formaPagamento = document.querySelector('input[name="forma-pagamento"]:checked').value;
+    const btn = document.getElementById('btn-confirmar-pagamento-lancamento');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    const resultado = await api(`/api/agendamentos/${l.agendamento_id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'concluido', forma_pagamento: formaPagamento }),
+    });
+
+    if (resultado && !resultado.error) {
+      fecharModal();
+      mostrarToast('Pagamento confirmado.', 'sucesso');
+      render();
+    } else {
+      document.getElementById('confirmar-pagamento-erro').textContent = (resultado && resultado.error) || 'Erro ao confirmar pagamento.';
+      btn.disabled = false;
+      btn.textContent = 'Confirmar';
+    }
   });
-  if (resultado && !resultado.error) {
-    mostrarToast('Pagamento confirmado.', 'sucesso');
-    render();
-  } else {
-    mostrarToast((resultado && resultado.error) || 'Erro ao confirmar pagamento.', 'erro');
-  }
 }
 
 // PR4 — Cancelar pagamento segue o mesmo padrão de abrirModalCancelar (ST08.4),
@@ -2478,12 +2517,84 @@ function abrirModalExcluirProfissional(profissional) {
 function renderClienteItem(c) {
   const qtd = c.total_agendamentos || 0;
   return `
-    <div class="agendamento-item" data-id="${c.id}">
+    <div class="agendamento-item item-clicavel" data-cliente-id="${c.id}">
       <div class="agendamento-detalhe">Cliente: <strong>${c.nome || 'Sem nome'}</strong></div>
       <div class="agendamento-detalhe">Telefone: ${c.telefone}</div>
       <div class="agendamento-detalhe">${qtd} agendamento${qtd === 1 ? '' : 's'} confirmado${qtd === 1 ? '' : 's'}</div>
     </div>
   `;
+}
+
+function formatarFormaPagamento(forma) {
+  const rotulos = { pix: 'Pix', cartao: 'Cartão', dinheiro: 'Dinheiro', outro: 'Outro' };
+  return rotulos[forma] || 'Não informado';
+}
+
+// Detalhe do cliente (menu Clientes): nome/data de nascimento editáveis
+// (telefone não — é a chave que liga o cliente às mensagens do WhatsApp) +
+// histórico de atendimentos (data, serviço, valor, forma de pagamento).
+async function abrirModalClienteDetalhe(clienteId) {
+  abrirModal('<h3>Cliente</h3>', '<div class="vazio">Carregando...</div>', 'modal-card-pagamento');
+  const dados = await api(`/api/clientes/${clienteId}`);
+  if (!dados) return;
+  const { cliente, historico } = dados;
+
+  const conteudo = `
+    <label for="cliente-nome">Nome</label>
+    <input type="text" id="cliente-nome" value="${cliente.nome || ''}" placeholder="Nome do cliente">
+    <label for="cliente-telefone">Telefone</label>
+    <input type="text" id="cliente-telefone" value="${cliente.telefone}" disabled>
+    <label for="cliente-nascimento">Data de nascimento</label>
+    <input type="date" id="cliente-nascimento" value="${cliente.data_nascimento || ''}">
+    <div class="modal-erro" id="cliente-detalhe-erro"></div>
+    <div class="modal-acoes">
+      <button class="btn-secundario" id="btn-fechar-cliente-detalhe">Fechar</button>
+      <button class="btn-primario" id="btn-salvar-cliente-detalhe">Salvar</button>
+    </div>
+
+    <h4 class="pagamento-historico-titulo">Histórico de atendimentos</h4>
+    <div class="tabela-wrapper">
+      <table class="tabela-tenants">
+        <thead><tr><th>Data</th><th>Serviço</th><th>Valor</th><th>Forma de pagamento</th></tr></thead>
+        <tbody>
+          ${historico.length
+            ? historico.map((h) => `<tr><td>${formatarDataCurta(h.data_hora)}</td><td>${h.servico_nome}</td><td>${h.valor != null ? formatarPreco(Number(h.valor)) : '—'}</td><td>${formatarFormaPagamento(h.forma_pagamento)}</td></tr>`).join('')
+            : '<tr><td colspan="4">Nenhum atendimento registrado ainda.</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+  `;
+  abrirModal(`<h3>${cliente.nome || 'Cliente'}</h3>`, conteudo, 'modal-card-pagamento');
+
+  document.getElementById('btn-fechar-cliente-detalhe').addEventListener('click', fecharModal);
+  document.getElementById('btn-salvar-cliente-detalhe').addEventListener('click', async () => {
+    const nomeNovo = document.getElementById('cliente-nome').value.trim();
+    if (!nomeNovo) {
+      document.getElementById('cliente-detalhe-erro').textContent = 'Nome não pode ficar em branco.';
+      return;
+    }
+    const btn = document.getElementById('btn-salvar-cliente-detalhe');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    const resultado = await api(`/api/clientes/${clienteId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        nome: nomeNovo,
+        data_nascimento: document.getElementById('cliente-nascimento').value || null,
+      }),
+    });
+
+    if (resultado && !resultado.error) {
+      fecharModal();
+      mostrarToast('Cliente atualizado.', 'sucesso');
+      renderClientes();
+    } else {
+      document.getElementById('cliente-detalhe-erro').textContent = (resultado && resultado.error) || 'Erro ao salvar cliente.';
+      btn.disabled = false;
+      btn.textContent = 'Salvar';
+    }
+  });
 }
 
 async function renderClientes() {

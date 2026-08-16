@@ -269,7 +269,7 @@ async function buscarBloqueioConflitante(tenantId, profissionalId, dataHoraISO, 
 // segundo INSERT): o ON CONFLICT usa o índice único uq_lancamentos_agendamento,
 // que também garante isso numa corrida (CA "Cenário 7", evitar duplicidade).
 async function sincronizarLancamentoFinanceiro(client, {
-  tenantId, agendamentoId, servicoNome, servicoPreco, dataHora, statusAgendamento,
+  tenantId, agendamentoId, servicoNome, servicoPreco, dataHora, statusAgendamento, formaPagamento,
 }) {
   // Serviço sem preço (ou preço zero) nunca gera lançamento automático (CA
   // "Cenário 2") — nem na criação nem numa atualização: hoje não existe
@@ -288,12 +288,18 @@ async function sincronizarLancamentoFinanceiro(client, {
       ? 'cancelado'
       : 'previsto';
 
+  // formaPagamento só chega preenchida em "Confirmar pagamento" (US, menu
+  // Financeiro) — as outras chamadas (criar/reagendar/cancelar agendamento)
+  // não sabem a forma de pagamento e não podem apagar a que já foi
+  // registrada, por isso o COALESCE no UPDATE mantém o valor existente
+  // quando formaPagamento vem null.
   await client.query(
-    `INSERT INTO lancamentos_financeiros (tenant_id, agendamento_id, tipo, valor, descricao, data, status)
-     VALUES ($1, $2, 'entrada', $3, $4, ($5::timestamptz AT TIME ZONE 'America/Sao_Paulo')::date, $6)
+    `INSERT INTO lancamentos_financeiros (tenant_id, agendamento_id, tipo, valor, descricao, data, status, forma_pagamento)
+     VALUES ($1, $2, 'entrada', $3, $4, ($5::timestamptz AT TIME ZONE 'America/Sao_Paulo')::date, $6, $7)
      ON CONFLICT (agendamento_id) WHERE agendamento_id IS NOT NULL
-     DO UPDATE SET valor = EXCLUDED.valor, data = EXCLUDED.data, status = EXCLUDED.status, descricao = EXCLUDED.descricao`,
-    [tenantId, agendamentoId, preco, servicoNome, dataHora, statusFinanceiro]
+     DO UPDATE SET valor = EXCLUDED.valor, data = EXCLUDED.data, status = EXCLUDED.status, descricao = EXCLUDED.descricao,
+                    forma_pagamento = COALESCE(EXCLUDED.forma_pagamento, lancamentos_financeiros.forma_pagamento)`,
+    [tenantId, agendamentoId, preco, servicoNome, dataHora, statusFinanceiro, formaPagamento || null]
   );
 }
 
@@ -1748,7 +1754,7 @@ async function start() {
   fastify.patch('/api/agendamentos/:id', { preHandler: [fastify.authenticate] }, async (request, reply) => {
     const { tenantId } = request.user;
     const { id } = request.params;
-    const { status, data_hora: dataHora } = request.body || {};
+    const { status, data_hora: dataHora, forma_pagamento: formaPagamento } = request.body || {};
 
     if (status === undefined && dataHora === undefined) {
       return reply.code(400).send({ error: 'Informe "status" e/ou "data_hora" para atualizar' });
@@ -1757,6 +1763,9 @@ async function start() {
     // realizada (CA "Cenário 5").
     if (status !== undefined && !['confirmado', 'cancelado', 'reagendado', 'concluido'].includes(status)) {
       return reply.code(400).send({ error: 'status inválido' });
+    }
+    if (formaPagamento !== undefined && !['pix', 'cartao', 'dinheiro', 'outro'].includes(formaPagamento)) {
+      return reply.code(400).send({ error: 'forma_pagamento inválida' });
     }
 
     const { rows: atuais } = await pool.query(
@@ -1836,6 +1845,7 @@ async function start() {
         servicoPreco: atual.servico_preco,
         dataHora: dataHora ?? atual.data_hora,
         statusAgendamento: status ?? atual.status,
+        formaPagamento,
       });
 
       await client.query('COMMIT');
@@ -2101,6 +2111,68 @@ async function start() {
       [tenantId, telefone]
     );
     return { cliente: rows[0] || null };
+  });
+
+  // Detalhe do cliente (menu Clientes): dados básicos + histórico de
+  // atendimentos (data, serviço, valor, forma de pagamento). Só agendamentos
+  // 'confirmado'/'concluido' contam como atendimento — mesmo critério já
+  // usado em GET /api/clientes pro total_agendamentos, cancelado não é
+  // histórico de atendimento de verdade.
+  fastify.get('/api/clientes/:id', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const { tenantId } = request.user;
+    const { id } = request.params;
+
+    const { rows: clienteRows } = await pool.query(
+      'SELECT id, nome, telefone, data_nascimento FROM clientes WHERE id = $1 AND tenant_id = $2',
+      [id, tenantId]
+    );
+    const cliente = clienteRows[0];
+    if (!cliente) {
+      return reply.code(404).send({ error: 'Cliente não encontrado' });
+    }
+
+    const { rows: historico } = await pool.query(
+      `SELECT a.id, a.data_hora, a.status, s.nome AS servico_nome,
+              l.valor, l.forma_pagamento
+       FROM agendamentos a
+       JOIN servicos s ON s.id = a.servico_id
+       LEFT JOIN lancamentos_financeiros l ON l.agendamento_id = a.id
+       WHERE a.cliente_id = $1 AND a.tenant_id = $2 AND a.status IN ('confirmado', 'concluido')
+       ORDER BY a.data_hora DESC`,
+      [id, tenantId]
+    );
+
+    return { cliente, historico };
+  });
+
+  // Edita nome/data de nascimento do cliente (US, tela de detalhe) — telefone
+  // não é editável aqui: é a chave que liga o cliente às mensagens recebidas
+  // no WhatsApp (unique tenant_id+telefone), mudar por engano quebraria esse
+  // vínculo silenciosamente.
+  fastify.patch('/api/clientes/:id', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const { tenantId } = request.user;
+    const { id } = request.params;
+    const { nome, data_nascimento: dataNascimento } = request.body || {};
+
+    if (nome !== undefined && !nome.trim()) {
+      return reply.code(400).send({ error: 'Nome não pode ficar em branco.' });
+    }
+    if (dataNascimento !== undefined && dataNascimento !== null && !/^\d{4}-\d{2}-\d{2}$/.test(dataNascimento)) {
+      return reply.code(400).send({ error: 'Data de nascimento inválida.' });
+    }
+
+    const { rows } = await pool.query(
+      `UPDATE clientes SET
+         nome = COALESCE($3, nome),
+         data_nascimento = CASE WHEN $4::boolean THEN $5::date ELSE data_nascimento END
+       WHERE id = $1 AND tenant_id = $2
+       RETURNING id, nome, telefone, data_nascimento`,
+      [id, tenantId, nome ?? null, dataNascimento !== undefined, dataNascimento ?? null]
+    );
+    if (!rows[0]) {
+      return reply.code(404).send({ error: 'Cliente não encontrado' });
+    }
+    return { cliente: rows[0] };
   });
 
   // Lista de profissionais do tenant, usada para popular o dropdown do

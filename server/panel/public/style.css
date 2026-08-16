@@ -647,6 +647,11 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   margin-bottom: 10px;
 }
 
+/* Linha clicável genérica (ex.: menu Clientes, abre o detalhe) — sem
+   afetar .agendamento-item nos outros contextos, que não são clicáveis. */
+.item-clicavel { cursor: pointer; transition: border-color 0.15s; }
+.item-clicavel:hover { border-color: rgba(124, 92, 252, 0.4); }
+
 .agendamento-hora {
   color: var(--cyan);
   font-weight: 600;
@@ -1876,6 +1881,27 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 /* Modal "Trocar de plano" — mais largo que os outros modais de pagamento
    pra caber card com ícone/badges/preço lado a lado numa linha só. */
 .modal-card-trocar-plano { max-width: 640px; }
+
+/* Opções de forma de pagamento no modal "Confirmar pagamento" (Financeiro). */
+.forma-pagamento-opcoes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+.forma-pagamento-opcao {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid #232847;
+  border-radius: 8px;
+  cursor: pointer;
+  color: #f2f2f7;
+  font-size: 14px;
+}
+.forma-pagamento-opcao:has(input:checked) { border-color: var(--accent); background: rgba(124, 92, 252, 0.06); }
+.forma-pagamento-opcao input { width: auto; margin: 0; }
 
 /* Lista de planos no modal "Trocar de plano" */
 .plano-opcoes {
