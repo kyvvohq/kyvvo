@@ -1085,7 +1085,7 @@ function abrirModalReagendar(ag) {
 function abrirModalEncaixe(ag) {
   const hoje = formatarDataISO(new Date());
   abrirModal(
-    `<h3>Encaixe — ${ag.profissional}</h3>`,
+    `<h3>Encaixe${contaStatus && contaStatus.mostrar_profissional ? ` — ${ag.profissional}` : ''}</h3>`,
     `
       <div class="modal-erro" id="encaixe-erro"></div>
       <label for="encaixe-nome">Nome do cliente (opcional)</label>
@@ -1199,7 +1199,7 @@ function renderAgendamentoItem(ag) {
         <div>
           <div class="agendamento-hora">${formatarHora(ag.data_hora)} — ${ag.servico}</div>
           <div class="agendamento-detalhe">
-            ${ag.cliente || ag.cliente_telefone} · ${ag.profissional} · ${ag.duracao_minutos}min
+            ${ag.cliente || ag.cliente_telefone}${contaStatus && contaStatus.mostrar_profissional ? ` · ${ag.profissional}` : ''} · ${ag.duracao_minutos}min
             ${ag.encaixe ? '<span class="badge badge-encaixe">Encaixe</span>' : ''}
             ${cancelado ? '<span class="badge badge-cancelado">Cancelado</span>' : ''}
             ${concluido ? '<span class="badge badge-concluido">Concluído</span>' : ''}
@@ -2280,7 +2280,7 @@ function renderServicoItem(s, nomeProfissionalPreferencial) {
         <div class="agendamento-detalhe">Duração: ${s.duracao_minutos} min</div>
         <div class="agendamento-detalhe">Valor: ${formatarPreco(s.preco)}</div>
         ${s.descricao ? `<div class="agendamento-detalhe servico-descricao">${s.descricao}</div>` : ''}
-        ${nomeProfissionalPreferencial ? `<div class="agendamento-detalhe">Profissional preferencial: ${nomeProfissionalPreferencial}</div>` : ''}
+        ${nomeProfissionalPreferencial && contaStatus && contaStatus.mostrar_profissional ? `<div class="agendamento-detalhe">Profissional preferencial: ${nomeProfissionalPreferencial}</div>` : ''}
         ${desabilitado ? '<span class="badge badge-status-inativo">Desabilitado</span>' : ''}
       </div>
       <div class="servico-acoes">
@@ -2341,8 +2341,8 @@ function abrirModalServico(servico) {
         <input type="number" id="servico-preco" min="0" step="0.01" value="${editando && servico.preco != null ? servico.preco : ''}">
         <label for="servico-descricao">Descrição curta (opcional)</label>
         <textarea id="servico-descricao" rows="2" maxlength="280" placeholder="Ex: inclui lavagem e finalização">${editando && servico.descricao ? servico.descricao : ''}</textarea>
-        <label for="servico-profissional-preferencial">Profissional preferencial (opcional)</label>
-        <select id="servico-profissional-preferencial"><option value="">Carregando profissionais...</option></select>
+        <label for="servico-profissional-preferencial"${contaStatus && contaStatus.mostrar_profissional ? '' : ' hidden style="display:none"'}>Profissional preferencial (opcional)</label>
+        <select id="servico-profissional-preferencial"${contaStatus && contaStatus.mostrar_profissional ? '' : ' hidden style="display:none"'}><option value="">Carregando profissionais...</option></select>
         <div class="modal-acoes">
           <button type="button" class="btn-secundario" id="btn-cancelar-servico">Cancelar</button>
           <button type="submit" class="btn-primario" id="btn-salvar-servico">${editando ? 'Salvar' : 'Criar'}</button>
@@ -2752,8 +2752,8 @@ function abrirModalBloqueio() {
         <input type="date" id="bloqueio-data-fim" data-obrigatorio min="${hoje}" value="${hoje}">
         <label for="bloqueio-hora-fim">Hora de fim *</label>
         <input type="time" id="bloqueio-hora-fim" data-obrigatorio>
-        <label for="bloqueio-profissional">Profissional (opcional)</label>
-        <select id="bloqueio-profissional"><option value="">Toda a agenda</option></select>
+        <label for="bloqueio-profissional"${contaStatus && contaStatus.mostrar_profissional ? '' : ' hidden style="display:none"'}>Profissional (opcional)</label>
+        <select id="bloqueio-profissional"${contaStatus && contaStatus.mostrar_profissional ? '' : ' hidden style="display:none"'}><option value="">Toda a agenda</option></select>
         <label for="bloqueio-motivo">Motivo (opcional)</label>
         <input type="text" id="bloqueio-motivo" placeholder="Ex: Férias, Feriado, Compromisso pessoal">
         <div class="modal-acoes">
@@ -2877,7 +2877,7 @@ function renderAgendamentoGradeCard(ag) {
           <div class="grade-ag-servico">${ag.servico}</div>
           <div class="grade-ag-cliente">${ag.cliente || ag.cliente_telefone}</div>
           <div class="grade-ag-meta">
-            ${formatarHora(ag.data_hora)} · ${ag.duracao_minutos}min · ${formatarPreco(ag.preco)} · ${ag.profissional}
+            ${formatarHora(ag.data_hora)} · ${ag.duracao_minutos}min · ${formatarPreco(ag.preco)}${contaStatus && contaStatus.mostrar_profissional ? ` · ${ag.profissional}` : ''}
             ${ag.encaixe ? '<span class="badge badge-encaixe">Encaixe</span>' : ''}
             ${cancelado ? '<span class="badge badge-cancelado">Cancelado</span>' : ''}
             ${concluido ? '<span class="badge badge-concluido">Concluído</span>' : ''}
