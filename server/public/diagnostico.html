@@ -410,13 +410,20 @@ function renderResult() {
     mensagensDor.push({ icon: '✨', text: 'Seu negócio já tem uma boa base. A Kyvvo pode elevar ainda mais sua organização e experiência do cliente.' });
   }
 
-  // Plano sugerido
+  // Plano sugerido — 3 faixas de orçamento (mesma pergunta do quiz) mapeadas
+  // pros planos reais do catálogo atual (US67/eixo de valor), sempre "número
+  // próprio" (mais barato em cada nível de tecnologia) já que o quiz não
+  // pergunta se a pessoa já tem WhatsApp Business configurado ou prefere um
+  // número pronto da Kyvvo.
   const investimento = parseInt(answers['investimento']) || 1;
-  let plano = 'Starter (R$ 147/mês)';
-  let planoDesc = 'Acesso ao portal web + bot de agendamento via WhatsApp.';
-  if (investimento >= 2) {
-    plano = 'Profissional (R$ 247/mês)';
-    planoDesc = 'Portal web + bot WhatsApp + 500 disparos ativos/mês para campanhas e lembretes.';
+  let plano = 'Essencial (R$ 79,90/mês)';
+  let planoDesc = 'Bot de agendamento via WhatsApp com seu próprio número — a cliente escolhe o serviço e o horário por listas e botões.';
+  if (investimento === 2) {
+    plano = 'Smart (R$ 149,90/mês)';
+    planoDesc = 'IA conversacional no WhatsApp com seu próprio número — a cliente escreve como fala e o bot resolve.';
+  } else if (investimento >= 3) {
+    plano = 'Smart Plus (R$ 179,90/mês)';
+    planoDesc = 'IA conversacional + número já pronto na API oficial da Meta, sem configuração nenhuma.';
   }
 
   const div = document.createElement('div');
