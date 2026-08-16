@@ -1310,6 +1310,7 @@ async function start() {
 
   fastify.post('/api/auth/register', async (request, reply) => {
     const {
+      nome_empresa: nomeEmpresa,
       nome_responsavel: nomeResponsavel,
       email,
       senha,
@@ -1321,9 +1322,13 @@ async function start() {
       plano_slug: planoSlugBruto,
     } = request.body || {};
 
+    const nomeEmpresaLimpo = (nomeEmpresa || '').trim();
     const nomeLimpo = (nomeResponsavel || '').trim();
     const emailLimpo = (email || '').toLowerCase().trim();
 
+    if (nomeEmpresaLimpo.length < 2) {
+      return reply.code(400).send({ error: 'Informe o nome da empresa.' });
+    }
     if (nomeLimpo.length < 2) {
       return reply.code(400).send({ error: 'Informe o nome do responsável.' });
     }
@@ -1421,16 +1426,18 @@ async function start() {
       await client.query('BEGIN');
 
       // Trial começa imediatamente, antes mesmo da validação do token (CA04).
-      // `nome` (nome comercial exibido em "Minha Empresa") nasce igual ao
-      // nome do responsável — o formulário de cadastro não coleta mais um
-      // nome de empresa separado (substituído pelo Segmento, CA01/US34); o
-      // tenant pode ajustá-lo depois em Minha Empresa (US33).
+      // `nome` (nome comercial exibido em "Minha Empresa" e usado pelo bot/IA
+      // em toda comunicação com o cliente final) volta a ser coletado no
+      // próprio cadastro (nome_empresa), separado do nome do responsável —
+      // antes os dois eram o mesmo valor, misturando pessoa física com nome
+      // do negócio nas mensagens do WhatsApp. O tenant pode ajustá-lo depois
+      // em Minha Empresa (US33).
       const trialExpira = new Date(Date.now() + TRIAL_DIAS * 24 * 60 * 60 * 1000);
       const { rows: tenantRows } = await client.query(
         `INSERT INTO tenants (nome, telefone, whatsapp, segmento, segmento_id, plano, status, trial_expires_at, onboarding_pendente)
          VALUES ($1, $2, $3, $4, $5, $6, 'trial', $7, $8)
          RETURNING id`,
-        [nomeLimpo, telefone, whatsapp, segmentoSlug, segmentoId, planoChave || 'trial', trialExpira.toISOString(), onboardingPendente]
+        [nomeEmpresaLimpo, telefone, whatsapp, segmentoSlug, segmentoId, planoChave || 'trial', trialExpira.toISOString(), onboardingPendente]
       );
       const tenantId = tenantRows[0].id;
 
