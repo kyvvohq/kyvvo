@@ -2141,7 +2141,13 @@ textarea:focus { outline: none; border-color: var(--accent); }
 /* ---------- US20 — Cadastro self-service e validação de token ---------- */
 
 /* O card de cadastro tem 5 campos: um pouco mais largo que o de login. */
-.card-cadastro { max-width: 420px; }
+/* 540px (não os 420px padrão) — largura mínima pra "Li e aceito os Termos
+   de Uso e a Política de Privacidade do Kyvvo." e "Quero receber novidades
+   e promoções do Kyvvo por e-mail ou WhatsApp." caberem numa linha só sem
+   quebrar (em telas estreitas, o card ainda encolhe via width:100% do
+   .card base e o texto volta a quebrar normalmente — sem scroll horizontal
+   de qualquer forma, com o fix de .checkbox-label span acima). */
+.card-cadastro { max-width: 540px; }
 
 /* US52 — tela de bloqueio pós-trial (bloqueio.html): mais larga que o card
    padrão (380px) pra caber o grid de endereço do formulário de pagamento
@@ -2313,6 +2319,17 @@ input.invalid, select.invalid {
   width: auto;
   margin-top: 3px;
   flex-shrink: 0;
+}
+
+/* O texto (misturado com <a> de Termos/Privacidade) precisa estar num único
+   <span> — texto solto direto dentro do <label> flex vira um "item flex"
+   separado por trecho (um antes de cada <a>, um depois), e itens flex em
+   linha não quebram uns nos outros: a linha toda crescia além da largura do
+   card e estourava em scroll horizontal. Com tudo dentro de um span só, ele
+   vira um único item flex e volta a se comportar como texto normal. */
+.checkbox-label span {
+  flex: 1;
+  min-width: 0;
 }
 
 .checkbox-label a {
