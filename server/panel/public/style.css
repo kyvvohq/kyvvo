@@ -1873,26 +1873,123 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   margin-top: 8px;
 }
 
+/* Modal "Trocar de plano" — mais largo que os outros modais de pagamento
+   pra caber card com ícone/badges/preço lado a lado numa linha só. */
+.modal-card-trocar-plano { max-width: 640px; }
+
 /* Lista de planos no modal "Trocar de plano" */
 .plano-opcoes {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-top: 12px;
+  gap: 10px;
+  margin-top: 16px;
 }
 .plano-opcao {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 14px;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 16px 18px;
   border: 1px solid #232847;
-  border-radius: 8px;
+  border-radius: 12px;
   cursor: pointer;
 }
-.plano-opcao:has(input:disabled) { cursor: default; opacity: 0.6; }
-.plano-opcao-atual { border-color: var(--accent-light); }
-.plano-opcao-nome { flex: 1; color: #f2f2f7; font-weight: 600; }
-.plano-opcao-preco { color: #a1a5c4; font-size: 13px; }
+.plano-opcao:has(input:not(:disabled)):hover { border-color: rgba(124, 92, 252, 0.4); }
+.plano-opcao:has(input:disabled) { cursor: default; }
+.plano-opcao:has(input:checked) { border-color: var(--accent); background: rgba(124, 92, 252, 0.06); }
+
+/* Radio nativo com aparência custom (anel roxo + miolo preenchido quando
+   marcado) em vez do radio padrão do navegador. */
+.plano-opcao input[type="radio"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  margin: 2px 0 0;
+  padding: 0;
+  border: 2px solid #3a3f66;
+  border-radius: 50%;
+  flex-shrink: 0;
+  cursor: pointer;
+  position: relative;
+}
+.plano-opcao input[type="radio"]:checked { border-color: var(--accent); }
+.plano-opcao input[type="radio"]:checked::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  background: var(--accent);
+  border-radius: 50%;
+}
+.plano-opcao input[type="radio"]:disabled { cursor: default; opacity: 0.5; }
+
+.plano-opcao-icone {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  font-size: 20px;
+  background: rgba(124, 92, 252, 0.15);
+}
+.plano-opcao-icone-2 { background: rgba(0, 212, 255, 0.12); }
+.plano-opcao-icone-3 { background: rgba(0, 212, 255, 0.12); }
+
+.plano-opcao-corpo { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.plano-opcao-nome { color: #f2f2f7; font-weight: 700; font-size: 16px; }
+.plano-opcao-desc { color: #a1a5c4; font-size: 13px; line-height: 1.4; }
+.plano-opcao-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+.plano-opcao-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  background: #1c2140;
+  border: 1px solid #2a2f52;
+  border-radius: 999px;
+  color: #a1a5c4;
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.plano-opcao-preco { flex-shrink: 0; text-align: right; }
+.plano-opcao-preco-valor { display: block; color: #f2f2f7; font-weight: 800; font-size: 18px; }
+.plano-opcao-preco-valor small { font-weight: 500; font-size: 12px; color: #a1a5c4; }
+.plano-opcao-preco-nota { display: block; color: #6f7396; font-size: 11px; margin-top: 2px; }
+
+/* Caixa de reforço abaixo da lista, explicando de novo a regra de cobrança
+   (redundante de propósito com o texto no topo do modal — a mensagem mais
+   importante antes de confirmar). */
+.plano-troca-aviso {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 14px 16px;
+  background: rgba(124, 92, 252, 0.08);
+  border: 1px solid rgba(124, 92, 252, 0.25);
+  border-radius: 12px;
+}
+.plano-troca-aviso-icone {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: rgba(124, 92, 252, 0.15);
+  font-size: 15px;
+}
+.plano-troca-aviso-texto { display: flex; flex-direction: column; gap: 2px; }
+.plano-troca-aviso-texto strong { color: #f2f2f7; font-size: 13.5px; }
+.plano-troca-aviso-desc { color: #a1a5c4; font-size: 12.5px; line-height: 1.5; }
+
+@media (max-width: 640px) {
+  .plano-opcao { flex-wrap: wrap; }
+  .plano-opcao-preco { text-align: left; margin-left: 34px; }
+}
 
 /* US73 — contador de caracteres dos campos de copy de diferencial dos
    planos (headline/frase de benefício) no admin. */
