@@ -97,6 +97,13 @@ async function verificarStatusConta() {
   document.querySelectorAll('[data-somente-admin]').forEach((el) => {
     el.hidden = status.role === 'operador';
   });
+
+  // Menu Profissionais é exclusivo do plano Kyvvo Custom (chave 'custom' na
+  // tabela planos) — só faz sentido pra quem tem múltiplos profissionais
+  // atendendo, recurso do plano mais alto.
+  document.querySelectorAll('[data-somente-plano-custom]').forEach((el) => {
+    el.hidden = status.plano !== 'custom';
+  });
 }
 
 // Mensagem + rótulo/destino do botão de ação de cada tipo de aviso. `critico:
