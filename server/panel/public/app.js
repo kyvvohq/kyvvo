@@ -767,15 +767,29 @@ function abrirModalNovoAgendamento(prefill) {
       disponiveis.map((s) => `<option value="${s.id}">${s.nome} (${s.duracao_minutos}min)</option>`).join('');
   });
 
-  // Popula profissionais (GET /api/profissionais).
+  // Popula profissionais (GET /api/profissionais). Fora do plano Custom o
+  // tenant tem 1 único profissional (garantido pelo backend) — nesse caso o
+  // campo some do formulário: escolher entre uma única opção não é uma
+  // decisão real do usuário. Só reaparece quando há 2+ (plano Custom).
+  const labelProfissional = document.querySelector('label[for="novo-ag-profissional"]');
+  const selectProfissional = document.getElementById('novo-ag-profissional');
   api('/api/profissionais').then((resultado) => {
-    const select = document.getElementById('novo-ag-profissional');
     if (!resultado || !resultado.profissionais) {
-      select.innerHTML = '<option value="">Erro ao carregar profissionais</option>';
+      selectProfissional.innerHTML = '<option value="">Erro ao carregar profissionais</option>';
       return;
     }
-    select.innerHTML = '<option value="">Selecione...</option>' +
-      resultado.profissionais.map((p) => `<option value="${p.id}">${p.nome}</option>`).join('');
+    const profissionais = resultado.profissionais;
+    selectProfissional.innerHTML = '<option value="">Selecione...</option>' +
+      profissionais.map((p) => `<option value="${p.id}">${p.nome}</option>`).join('');
+    if (profissionais.length <= 1) {
+      labelProfissional.hidden = true;
+      selectProfissional.hidden = true;
+      selectProfissional.removeAttribute('data-obrigatorio');
+      if (profissionais.length === 1) {
+        selectProfissional.value = profissionais[0].id;
+        selectProfissional.dispatchEvent(new Event('change'));
+      }
+    }
   });
 
   // Profissional preferencial (PR4/US17): escolher um serviço que tenha um

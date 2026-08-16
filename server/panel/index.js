@@ -458,6 +458,41 @@ async function calcularDisponibilidadeIA(tenant) {
   return resultado;
 }
 
+// Garante que o tenant tenha ao menos 1 profissional. Tenants fora do plano
+// Custom nunca acessam o menu Profissionais (data-somente-plano-custom em
+// painel.html) — sem isso eles não teriam como criar o profissional exigido
+// por agendamentos.profissional_id (NOT NULL). Cria um profissional padrão
+// nomeado com o responsável pelo tenant (nome do admin em usuarios), já
+// vinculado a todos os serviços existentes, e devolve `unico: true` quando
+// esse é o único profissional do tenant — usado por quem chama pra decidir
+// se deve vincular novos serviços automaticamente e se deve pular a pergunta
+// "com quem?" no bot/IA (sem isso, ficam inagendáveis: profissionais_servicos
+// vazio, ou a IA pergunta um profissional que não faz diferença nenhuma).
+async function garantirProfissionalPadrao(tenantId) {
+  const { rows: existentes } = await pool.query(
+    'SELECT id, nome FROM profissionais WHERE tenant_id = $1 ORDER BY nome',
+    [tenantId]
+  );
+  if (existentes.length === 1) return { ...existentes[0], unico: true };
+  if (existentes.length > 1) return { ...existentes[0], unico: false };
+
+  const { rows: admin } = await pool.query(
+    `SELECT nome FROM usuarios WHERE tenant_id = $1 AND role = 'administrador' ORDER BY criado_em ASC LIMIT 1`,
+    [tenantId]
+  );
+  const nome = (admin[0] && admin[0].nome) || 'Atendimento';
+  const { rows: criado } = await pool.query(
+    'INSERT INTO profissionais (tenant_id, nome) VALUES ($1, $2) RETURNING id, nome',
+    [tenantId, nome]
+  );
+  await pool.query(
+    `INSERT INTO profissionais_servicos (profissional_id, servico_id)
+     SELECT $1, s.id FROM servicos s WHERE s.tenant_id = $2`,
+    [criado[0].id, tenantId]
+  );
+  return { ...criado[0], unico: true };
+}
+
 // US68/CA02 — monta o system prompt com o contexto real do tenant (serviços,
 // profissionais, disponibilidade) — a IA nunca inventa preço/horário porque
 // tudo que ela pode oferecer já vem pronto aqui.
@@ -467,6 +502,11 @@ async function montarContextoIA(tenant) {
     [tenant.id]
   );
   const disponibilidade = await calcularDisponibilidadeIA(tenant);
+  // Fora do plano Custom o tenant tem 1 único profissional (garantido por
+  // garantirProfissionalPadrao) — nesse caso o "com quem" nunca é uma decisão
+  // real do cliente, então a IA não deve perguntar nem mencionar nome de
+  // profissional (pedido explícito: não aparecer no bot fora do Custom).
+  const { unico: profissionalUnico } = await garantirProfissionalPadrao(tenant.id);
 
   const listaServicos = servicos.length
     ? servicos.map((s) => `- ${s.nome} (${s.duracao_minutos}min, R$ ${Number(s.preco).toFixed(2)})`).join('\n')
@@ -475,7 +515,8 @@ async function montarContextoIA(tenant) {
   // Cada slot lista o texto amigável E o ISO exato lado a lado — a IA nunca
   // reconstrói o ISO sozinha (já causou bug real: ano errado, "2024" em vez
   // do ano corrente, quando só o texto formatado era mostrado). Ela só copia
-  // o valor entre colchetes.
+  // o valor entre colchetes. Com 1 único profissional, a lista fica achatada
+  // (sem o prefixo "- Nome:") pra IA nem saber que existe uma escolha aqui.
   const listaDisponibilidade = disponibilidade.length
     ? disponibilidade.map((p) => {
         // Sem corte artificial aqui — o cálculo já limita a
@@ -487,7 +528,7 @@ async function montarContextoIA(tenant) {
           const texto = d.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
           return `${texto} [${s.dataHoraISO}]`;
         }).join(', ');
-        return `- ${p.profissional}: ${horarios}`;
+        return profissionalUnico ? `- ${horarios}` : `- ${p.profissional}: ${horarios}`;
       }).join('\n')
     : '(sem horários livres nos próximos dias)';
 
@@ -511,7 +552,9 @@ Responda SEMPRE e SOMENTE com um objeto JSON válido (sem texto antes/depois, se
 
 Regras:
 - Use intent "unknown" quando a mensagem não deixar clara a intenção — nesse caso "resposta" deve pedir o esclarecimento que falta.
-- Use intent "agendar"/"reagendar" SÓ quando já tiver serviço, profissional (ou "qualquer um") e data/hora confirmados pelo cliente na conversa — antes disso, pergunte o que falta usando intent "unknown".
+${profissionalUnico
+  ? '- Use intent "agendar"/"reagendar" SÓ quando já tiver serviço e data/hora confirmados pelo cliente na conversa — antes disso, pergunte o que falta usando intent "unknown". Este salão tem só 1 profissional: NUNCA pergunte "com quem" nem mencione nome de profissional, deixe "profissionalNome" sempre null.'
+  : '- Use intent "agendar"/"reagendar" SÓ quando já tiver serviço, profissional (ou "qualquer um") e data/hora confirmados pelo cliente na conversa — antes disso, pergunte o que falta usando intent "unknown".'}
 - "dataHoraISO" deve ser exatamente um dos valores entre colchetes [ ] listados acima em HORÁRIOS LIVRES — copie o texto entre colchetes literalmente, nunca monte ou invente um ISO novo.
 - Use intent "cancelar" quando o cliente quiser cancelar um agendamento existente (não precisa de dataHoraISO nesse caso).
 - Use intent "fallback_humano" quando o cliente pedir explicitamente para falar com uma pessoa, reclamar de forma que a IA não deva resolver sozinha, ou quando a conversa estiver claramente travada após tentativas de esclarecimento.
@@ -2055,6 +2098,18 @@ async function start() {
        RETURNING id, nome, duracao_minutos, preco, descricao, ativo, profissional_preferencial_id`,
       [tenantId, nome.trim(), duracaoMinutos, preco ?? null, descricao ? descricao.trim() : null, profissionalPreferencialId || null]
     );
+
+    // Tenant com um único profissional (fora do plano Custom) não tem como
+    // vincular manualmente pela tela Profissionais (menu oculto) — sem isso o
+    // serviço recém-criado ficaria inagendável pelo bot/IA.
+    const profissionalPadrao = await garantirProfissionalPadrao(tenantId);
+    if (profissionalPadrao.unico) {
+      await pool.query(
+        'INSERT INTO profissionais_servicos (profissional_id, servico_id) VALUES ($1, $2)',
+        [profissionalPadrao.id, rows[0].id]
+      );
+    }
+
     reply.code(201);
     return rows[0];
   });
@@ -2224,6 +2279,7 @@ async function start() {
   // serviços que cada um atende, usado na tela de gestão (US17/ST17.4).
   fastify.get('/api/profissionais', { preHandler: [fastify.authenticate] }, async (request) => {
     const { tenantId } = request.user;
+    await garantirProfissionalPadrao(tenantId);
     const { rows } = await pool.query(
       `SELECT p.id, p.nome,
               COALESCE(array_agg(ps.servico_id) FILTER (WHERE ps.servico_id IS NOT NULL), '{}') AS servicos
@@ -2421,13 +2477,13 @@ async function start() {
     const {
       cliente_nome: clienteNome,
       cliente_telefone: clienteTelefoneBruto,
-      profissional_id: profissionalId,
       servico_id: servicoId,
       data_hora: dataHora,
       encaixe,
       origem,
       observacoes,
     } = request.body || {};
+    let { profissional_id: profissionalId } = request.body || {};
 
     // Telefone é obrigatório: é o canal de comunicação com a cliente
     // (decisão de 2026-07-08, revertendo a US09/CA02 original). Normalizado
@@ -2435,10 +2491,17 @@ async function start() {
     // bot/IA já usam — senão o mesmo cliente vira registro duplicado.
     const clienteTelefone = normalizarTelefoneCliente(clienteTelefoneBruto);
 
-    if (!clienteTelefone || !profissionalId || !servicoId || !dataHora) {
+    if (!clienteTelefone || !servicoId || !dataHora) {
       return reply.code(400).send({
-        error: 'Campos "cliente_telefone", "profissional_id", "servico_id" e "data_hora" são obrigatórios',
+        error: 'Campos "cliente_telefone", "servico_id" e "data_hora" são obrigatórios',
       });
+    }
+
+    // Tenant com um único profissional não expõe o campo "Profissional" no
+    // formulário (portal esconde quando há só 1 opção) — resolve sozinho pro
+    // profissional padrão nesse caso.
+    if (!profissionalId) {
+      profissionalId = (await garantirProfissionalPadrao(tenantId)).id;
     }
 
     // Canal de origem (CA09). Como este endpoint é o do portal (autenticado), o
