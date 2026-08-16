@@ -359,6 +359,11 @@ async function registrarEventoTrialExpiradoUmaVez(tenantId) {
 // são processados por este bloco.
 
 const IA_INTENTS_VALIDOS = new Set(['agendar', 'reagendar', 'cancelar', 'consultar', 'unknown', 'fallback_humano']);
+// Mesma mensagem/critério do fluxo n8n (workflow v4, nó "Formatar lista de
+// serviços"): tenant sem serviço ativo ou sem confirmar o horário de
+// funcionamento (onboarding_horario_revisado) ainda não está pronto pra
+// atender — resposta fixa, não deixa a IA decidir o que dizer.
+const MENSAGEM_TENANT_NAO_PRONTO_IA = 'Estamos finalizando os últimos ajustes por aqui! 🛠️\n\nEm breve vamos te atender com muito carinho — tente novamente mais tarde.';
 const IA_HISTORICO_MENSAGENS = 10;
 const IA_DIAS_DISPONIBILIDADE = 7;
 const IA_SLOTS_POR_DIA_PROFISSIONAL = 3;
@@ -690,6 +695,24 @@ async function acionarFallbackHumanoIA(tenant, cliente, enviarResposta) {
 // API ou Evolution API) — quem decide qual usar é o roteador, conforme o
 // formato do webhook recebido; a lógica da IA em si é a mesma pros dois.
 async function processarMensagemIA({ tenant, telefone, mensagem, pushName, enviarResposta }) {
+  // Antes de qualquer coisa (nem resolve/cria o cliente ainda): tenant sem
+  // horário confirmado ou sem serviço ativo não está pronto pra atender de
+  // verdade — corta aqui em vez de deixar a IA seguir com dado incompleto/
+  // padrão (montarContextoIA só avisava "(nenhum serviço cadastrado ainda)"
+  // no prompt e a resposta ficava ao critério da IA, sem garantia nenhuma).
+  if (!tenant.onboarding_horario_revisado) {
+    await enviarResposta(telefone, MENSAGEM_TENANT_NAO_PRONTO_IA);
+    return;
+  }
+  const { rows: servicosAtivos } = await pool.query(
+    'SELECT 1 FROM servicos WHERE tenant_id = $1 AND ativo = true AND excluido_em IS NULL LIMIT 1',
+    [tenant.id]
+  );
+  if (servicosAtivos.length === 0) {
+    await enviarResposta(telefone, MENSAGEM_TENANT_NAO_PRONTO_IA);
+    return;
+  }
+
   let { rows: clienteRows } = await pool.query(
     'SELECT id, nome, status_conversa FROM clientes WHERE tenant_id = $1 AND telefone = $2 LIMIT 1',
     [tenant.id, telefone]
@@ -1140,7 +1163,8 @@ async function start() {
 
   const TENANT_CAMPOS_WEBHOOK = `id, nome, telefone, instancia_whatsapp, meta_phone_number_id, tecnologia,
                 dias_funcionamento, horario_abertura, horario_fechamento,
-                horario_almoco_ativo, horario_almoco_inicio, horario_almoco_fim`;
+                horario_almoco_ativo, horario_almoco_inicio, horario_almoco_fim,
+                onboarding_horario_revisado`;
 
   // US68.2 — handshake de verificação do webhook da Meta (App Dashboard →
   // WhatsApp → Configuração → Webhook, chamado uma vez ao salvar a URL e
