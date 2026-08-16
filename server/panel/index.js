@@ -113,6 +113,25 @@ function normalizarWhatsapp(bruto) {
   return digitos;
 }
 
+// Telefone de CLIENTE (clientes.telefone) — não confundir com
+// normalizarWhatsapp acima, que é pro WhatsApp do tenant e devolve sem DDI.
+// Aqui o canônico é COM DDI 55, igual ao que a Meta manda em msg.from
+// (bot n8n e IA Engine, ver /webhook/whatsapp). Sem essa normalização, o
+// mesmo cliente que já mandou mensagem pelo WhatsApp virava um registro
+// duplicado toda vez que alguém do salão criava um agendamento manual pelo
+// portal — a unique key (tenant_id, telefone) não pegava a duplicata porque
+// os dois formatos eram strings diferentes ("34999998888" vs
+// "5534999998888").
+function normalizarTelefoneCliente(bruto) {
+  if (!bruto) return null;
+  let digitos = String(bruto).replace(/\D/g, '');
+  if (digitos.length === 10 || digitos.length === 11) digitos = '55' + digitos;
+  if (digitos.length !== 12 && digitos.length !== 13) return null;
+  const ddd = parseInt(digitos.slice(2, 4), 10);
+  if (ddd < 11 || ddd > 99) return null;
+  return digitos;
+}
+
 const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) throw new Error('JWT_SECRET não configurado');
@@ -2104,8 +2123,12 @@ async function start() {
   // /api/agendamentos pra reconciliar um nome digitado errado por engano.
   fastify.get('/api/clientes/buscar-por-telefone', { preHandler: [fastify.authenticate] }, async (request) => {
     const { tenantId } = request.user;
-    const telefone = String(request.query.telefone || '').replace(/\D/g, '');
-    if (telefone.length < 10) return { cliente: null };
+    // Normalizado com DDI (mesmo formato canônico de clientes.telefone, ver
+    // normalizarTelefoneCliente) — o frontend manda só os dígitos digitados
+    // (sem 55), sem isso a busca nunca batia com um cliente que já tinha
+    // mandado mensagem pelo WhatsApp.
+    const telefone = normalizarTelefoneCliente(request.query.telefone);
+    if (!telefone) return { cliente: null };
     const { rows } = await pool.query(
       'SELECT id, nome, telefone FROM clientes WHERE tenant_id = $1 AND telefone = $2 LIMIT 1',
       [tenantId, telefone]
@@ -2386,8 +2409,10 @@ async function start() {
     } = request.body || {};
 
     // Telefone é obrigatório: é o canal de comunicação com a cliente
-    // (decisão de 2026-07-08, revertendo a US09/CA02 original).
-    const clienteTelefone = clienteTelefoneBruto ? clienteTelefoneBruto.trim() : '';
+    // (decisão de 2026-07-08, revertendo a US09/CA02 original). Normalizado
+    // com DDI (ver normalizarTelefoneCliente) pra bater com o formato que o
+    // bot/IA já usam — senão o mesmo cliente vira registro duplicado.
+    const clienteTelefone = normalizarTelefoneCliente(clienteTelefoneBruto);
 
     if (!clienteTelefone || !profissionalId || !servicoId || !dataHora) {
       return reply.code(400).send({
