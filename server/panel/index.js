@@ -873,16 +873,21 @@ async function processarMensagemIA({ tenant, telefone, mensagem, pushName, envia
   }
 
   let { rows: clienteRows } = await pool.query(
-    'SELECT id, nome, status_conversa, data_nascimento FROM clientes WHERE tenant_id = $1 AND telefone = $2 LIMIT 1',
+    'SELECT id, nome, status_conversa, data_nascimento, excluido_em FROM clientes WHERE tenant_id = $1 AND telefone = $2 LIMIT 1',
     [tenant.id, telefone]
   );
   let cliente = clienteRows[0];
   if (!cliente) {
     const { rows: criado } = await pool.query(
-      'INSERT INTO clientes (tenant_id, nome, telefone) VALUES ($1, $2, $3) RETURNING id, nome, status_conversa, data_nascimento',
+      'INSERT INTO clientes (tenant_id, nome, telefone) VALUES ($1, $2, $3) RETURNING id, nome, status_conversa, data_nascimento, excluido_em',
       [tenant.id, pushName || null, telefone]
     );
     cliente = criado[0];
+  } else if (cliente.excluido_em) {
+    // Cliente que tinha sido excluído (soft delete, menu Clientes) e volta a
+    // mandar mensagem reaparece na listagem — mesma lógica do ON CONFLICT em
+    // POST /api/agendamentos.
+    await pool.query('UPDATE clientes SET excluido_em = NULL WHERE id = $1', [cliente.id]);
   }
 
   // US68/CA06 — não processa via IA enquanto aguarda retomada humana.
@@ -2274,23 +2279,77 @@ async function start() {
     return { ok: true };
   });
 
-  // US63 — listagem simples de clientes (nome, telefone e quantos
-  // agendamentos confirmados já tiveram), pro atalho "Clientes" do
-  // dashboard. Clientes são criados automaticamente ao agendar (ON CONFLICT
-  // em POST /agendamentos) — não existe cadastro manual, então essa tela é
-  // só leitura, sem editar/excluir.
+  // Listagem de clientes (menu Clientes): nome, telefone, último atendimento
+  // (serviço + data) e o total geral de resultados (pra montar a paginação
+  // no frontend). Filtro por nome/telefone (ILIKE, substring), ordenação por
+  // nome ou telefone (ASC/DESC) e paginação (10/50/100 por página) — tudo
+  // resolvido aqui, não no frontend, pra não precisar carregar a base de
+  // clientes inteira a cada acesso.
+  const CLIENTES_TAMANHOS_VALIDOS = new Set([10, 50, 100]);
+  const CLIENTES_ORDENACAO_SQL = {
+    nome_asc: 'c.nome ASC NULLS LAST, c.telefone ASC',
+    nome_desc: 'c.nome DESC NULLS LAST, c.telefone ASC',
+    telefone_asc: 'c.telefone ASC',
+    telefone_desc: 'c.telefone DESC',
+  };
   fastify.get('/api/clientes', { preHandler: [fastify.authenticate] }, async (request) => {
     const { tenantId } = request.user;
+    const buscaNome = (request.query.busca_nome || '').trim();
+    const buscaTelefone = (request.query.busca_telefone || '').trim();
+    const ordenarPor = ['nome', 'telefone'].includes(request.query.ordenar_por) ? request.query.ordenar_por : 'nome';
+    const ordem = request.query.ordem === 'desc' ? 'desc' : 'asc';
+    const tamanho = CLIENTES_TAMANHOS_VALIDOS.has(Number(request.query.tamanho)) ? Number(request.query.tamanho) : 10;
+    const pagina = Math.max(1, parseInt(request.query.pagina, 10) || 1);
+    const offset = (pagina - 1) * tamanho;
+    const ordenacaoSQL = CLIENTES_ORDENACAO_SQL[`${ordenarPor}_${ordem}`];
+
     const { rows } = await pool.query(
-      `SELECT c.id, c.nome, c.telefone, COUNT(a.id) FILTER (WHERE a.status IN ('confirmado', 'concluido'))::int AS total_agendamentos
+      `SELECT c.id, c.nome, c.telefone,
+              ultimo.servico_nome AS ultimo_atendimento, ultimo.data_hora AS ultimo_atendimento_data,
+              count(*) OVER()::int AS total_geral
        FROM clientes c
-       LEFT JOIN agendamentos a ON a.cliente_id = c.id
-       WHERE c.tenant_id = $1
-       GROUP BY c.id, c.nome, c.telefone
-       ORDER BY c.nome NULLS LAST, c.telefone`,
-      [tenantId]
+       LEFT JOIN LATERAL (
+         SELECT s.nome AS servico_nome, a.data_hora
+         FROM agendamentos a
+         JOIN servicos s ON s.id = a.servico_id
+         WHERE a.cliente_id = c.id AND a.status IN ('confirmado', 'concluido')
+         ORDER BY a.data_hora DESC
+         LIMIT 1
+       ) ultimo ON true
+       WHERE c.tenant_id = $1 AND c.excluido_em IS NULL
+         AND ($2 = '' OR c.nome ILIKE '%' || $2 || '%')
+         AND ($3 = '' OR c.telefone ILIKE '%' || $3 || '%')
+       ORDER BY ${ordenacaoSQL}
+       LIMIT $4 OFFSET $5`,
+      [tenantId, buscaNome, buscaTelefone, tamanho, offset]
     );
-    return { clientes: rows };
+
+    const total = rows[0] ? rows[0].total_geral : 0;
+    return {
+      clientes: rows.map(({ total_geral, ...c }) => c),
+      total,
+      pagina,
+      tamanho,
+    };
+  });
+
+  // Exclusão de cliente (soft delete, ver 058_clientes_exclusao.sql) — hard
+  // delete cascatearia pra agendamentos/lancamentos_financeiros (perda real
+  // de histórico), então só marca excluido_em e some da listagem. Se o
+  // cliente voltar a interagir (nova mensagem/agendamento), o upsert por
+  // telefone (POST /api/agendamentos, processarMensagemIA) já limpa
+  // excluido_em de novo — ver comentário nesses pontos.
+  fastify.delete('/api/clientes/:id', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const { tenantId } = request.user;
+    const { id } = request.params;
+    const { rowCount } = await pool.query(
+      'UPDATE clientes SET excluido_em = now() WHERE id = $1 AND tenant_id = $2 AND excluido_em IS NULL',
+      [id, tenantId]
+    );
+    if (!rowCount) {
+      return reply.code(404).send({ error: 'Cliente não encontrado' });
+    }
+    return { ok: true };
   });
 
   // Busca cliente existente pelo telefone (chave única tenant_id+telefone,
@@ -2687,10 +2746,14 @@ async function start() {
     try {
       await client.query('BEGIN');
 
+      // excluido_em = null no conflito: cliente que tinha sido excluído
+      // (soft delete, menu Clientes) e volta a agendar reaparece na
+      // listagem de novo — "excluir" nunca deveria ser um banimento
+      // permanente, só limpeza de tela.
       const { rows: clienteRows } = await client.query(
         `INSERT INTO clientes (tenant_id, nome, telefone)
          VALUES ($1, $2, $3)
-         ON CONFLICT (tenant_id, telefone) DO UPDATE SET nome = COALESCE(EXCLUDED.nome, clientes.nome)
+         ON CONFLICT (tenant_id, telefone) DO UPDATE SET nome = COALESCE(EXCLUDED.nome, clientes.nome), excluido_em = NULL
          RETURNING id`,
         [tenantId, clienteNome || null, clienteTelefone]
       );
