@@ -413,6 +413,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .inicio-cabecalho h2 { font-size: 20px; }
 
+/* Subtítulo do cabeçalho (só Financeiro por enquanto) — logo abaixo do h2,
+   dentro do mesmo wrapper flex que o botão de ação. */
+.financeiro-subtitulo { color: #a1a5c4; font-size: 13px; margin-top: 2px; }
+
 /* Início reformulado em 5 seções — cada uma é um bloco com título pequeno
    em caixa alta (mesmo estilo de .financeiro-resumo-label) e um corpo
    próprio (cards, lista ou linha de oportunidade) por baixo. */
@@ -1025,10 +1029,32 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .subtabs-financeiro {
   display: flex;
   align-items: center;
+  justify-content: center;
   flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 16px;
 }
+
+/* Movimentações — pills de tipo (Todas/Receitas/Despesas) + busca na mesma
+   linha, reaproveitando .chip-status (menu Clientes). */
+.financeiro-filtros-linha {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.financeiro-filtro-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+.financeiro-filtros-linha input[type="text"] { width: auto; min-width: 200px; margin: 0; }
+
+/* Item de movimentação — hora/data à esquerda, título+detalhe no meio,
+   valor+status alinhados à direita (mesmo cartão .agendamento-item). */
+.financeiro-item .agendamento-linha-principal { align-items: flex-start; }
+.financeiro-item-hora { color: #a1a5c4; font-size: 13px; flex-shrink: 0; padding-top: 2px; min-width: 44px; }
+.financeiro-item-corpo { flex: 1; min-width: 0; }
+.financeiro-item-valor { text-align: right; flex-shrink: 0; }
+.financeiro-item-status { font-size: 12px; color: #a1a5c4; margin-top: 4px; white-space: nowrap; }
 
 .btn-detalhamento-financeiro { width: auto; margin: 4px 0 16px; }
 
@@ -1548,11 +1574,6 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .agendamento-cancelado { opacity: 0.55; }
 .agendamento-cancelado .agendamento-hora { text-decoration: line-through; }
-
-/* Marca "Agendamento" ao lado de cliente num lançamento financeiro
-   originado de agendamento (US64/CA "Cenário 8") — texto simples em vez de
-   .badge (que já é usado pro status logo acima, no mesmo título). */
-.badge-origem-agendamento { color: #6b7099; font-weight: 600; }
 
 /* Listagem de tenants (US26) */
 .badge-status { margin-left: 0; }
