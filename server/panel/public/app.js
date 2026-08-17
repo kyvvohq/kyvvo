@@ -994,6 +994,48 @@ function abrirModalConcluir(ag) {
   });
 }
 
+// ---------- Modal: marcar falta (no-show) ----------
+// Distinto de cancelar: falta é quando o cliente simplesmente não apareceu,
+// não uma decisão avisada com antecedência — sincronizarLancamentoFinanceiro
+// (backend) trata os dois igual pro financeiro (a receita prevista não
+// acontece de qualquer jeito), mas o status do agendamento fica separado
+// pra medir taxa de comparecimento e faturamento perdido por no-show no
+// menu Relatórios.
+function abrirModalMarcarFalta(ag) {
+  abrirModal(
+    '<h3>Marcar falta</h3>',
+    `
+      <p class="modal-texto">Confirmar que <strong>${ag.cliente || ag.cliente_telefone}</strong> não compareceu ao atendimento de ${ag.servico} — ${formatarDataCurta(ag.data_hora)} às ${formatarHora(ag.data_hora)}?</p>
+      <div class="modal-acoes">
+        <button class="btn-secundario" id="btn-voltar-falta">Voltar</button>
+        <button class="btn-primario" id="btn-confirmar-falta">Confirmar falta</button>
+      </div>
+    `
+  );
+
+  document.getElementById('btn-voltar-falta').addEventListener('click', fecharModal);
+  document.getElementById('btn-confirmar-falta').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-confirmar-falta');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    const resultado = await api(`/api/agendamentos/${ag.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'falta' }),
+    });
+
+    if (resultado && !resultado.error) {
+      fecharModal();
+      mostrarToast('Falta registrada.', 'sucesso');
+      render();
+    } else {
+      mostrarToast((resultado && resultado.error) || 'Erro ao registrar falta.', 'erro');
+      btn.disabled = false;
+      btn.textContent = 'Confirmar falta';
+    }
+  });
+}
+
 // ---------- Modal: cancelamento (ST08.4) ----------
 function abrirModalCancelar(ag) {
   abrirModal(
@@ -1217,7 +1259,10 @@ function renderAgendamentoItem(ag) {
   // US64 — concluído também não tem mais o que fazer (mesmo raciocínio do
   // cancelado): sem menu de ações, só o badge indicando o estado final.
   const concluido = ag.status === 'concluido';
-  const semAcoes = cancelado || concluido;
+  // Falta (no-show, migration 060) é estado final igual concluído/cancelado
+  // — nada mais a fazer com um agendamento já marcado como falta.
+  const falta = ag.status === 'falta';
+  const semAcoes = cancelado || concluido || falta;
   return `
     <div class="agendamento-item${cancelado ? ' agendamento-cancelado' : ''}" data-id="${ag.id}">
       <div class="agendamento-linha-principal" ${semAcoes ? '' : `data-acoes-toggle="${ag.id}"`}>
@@ -1228,6 +1273,7 @@ function renderAgendamentoItem(ag) {
             ${ag.encaixe ? '<span class="badge badge-encaixe">Encaixe</span>' : ''}
             ${cancelado ? '<span class="badge badge-cancelado">Cancelado</span>' : ''}
             ${concluido ? '<span class="badge badge-concluido">Concluído</span>' : ''}
+            ${falta ? '<span class="badge badge-falta">Falta</span>' : ''}
           </div>
         </div>
         ${semAcoes ? '' : '<button class="btn-acoes" aria-label="Ações">⋮</button>'}
@@ -1237,6 +1283,7 @@ function renderAgendamentoItem(ag) {
           <button data-acao="concluir" data-id="${ag.id}">Concluir</button>
           <button data-acao="reagendar" data-id="${ag.id}">Reagendar</button>
           <button data-acao="encaixar" data-id="${ag.id}">Encaixar</button>
+          <button data-acao="falta" data-id="${ag.id}">Marcar falta</button>
           <button data-acao="cancelar" data-id="${ag.id}" class="acao-perigo">Cancelar</button>
         </div>
       `}
@@ -1371,6 +1418,7 @@ conteudo.addEventListener('click', (e) => {
     if (acaoBtn.dataset.acao === 'cancelar') abrirModalCancelar(ag);
     if (acaoBtn.dataset.acao === 'reagendar') abrirModalReagendar(ag);
     if (acaoBtn.dataset.acao === 'encaixar') abrirModalEncaixe(ag);
+    if (acaoBtn.dataset.acao === 'falta') abrirModalMarcarFalta(ag);
   }
 
   // Menu de ações por linha de lançamento no Financeiro — todo lançamento
@@ -3306,7 +3354,8 @@ function renderModuloEmBreve() {
 function renderAgendamentoGradeCard(ag) {
   const cancelado = ag.status === 'cancelado';
   const concluido = ag.status === 'concluido';
-  const semAcoes = cancelado || concluido;
+  const falta = ag.status === 'falta';
+  const semAcoes = cancelado || concluido || falta;
   return `
     <div class="grade-ag-card${cancelado ? ' agendamento-cancelado' : ''}" data-id="${ag.id}">
       <div class="grade-ag-linha-principal" ${semAcoes ? '' : `data-acoes-toggle="${ag.id}"`}>
@@ -3318,6 +3367,7 @@ function renderAgendamentoGradeCard(ag) {
             ${ag.encaixe ? '<span class="badge badge-encaixe">Encaixe</span>' : ''}
             ${cancelado ? '<span class="badge badge-cancelado">Cancelado</span>' : ''}
             ${concluido ? '<span class="badge badge-concluido">Concluído</span>' : ''}
+            ${falta ? '<span class="badge badge-falta">Falta</span>' : ''}
           </div>
         </div>
         ${semAcoes ? '' : '<button class="btn-acoes" aria-label="Ações">⋮</button>'}
@@ -3327,6 +3377,7 @@ function renderAgendamentoGradeCard(ag) {
           <button data-acao="concluir" data-id="${ag.id}">Concluir</button>
           <button data-acao="reagendar" data-id="${ag.id}">Reagendar</button>
           <button data-acao="encaixar" data-id="${ag.id}">Encaixar</button>
+          <button data-acao="falta" data-id="${ag.id}">Marcar falta</button>
           <button data-acao="cancelar" data-id="${ag.id}" class="acao-perigo">Cancelar</button>
         </div>
       `}
