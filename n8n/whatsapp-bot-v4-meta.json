@@ -1,6 +1,6 @@
 [
   {
-    "updatedAt": "2026-08-17T03:07:55.000Z",
+    "updatedAt": "2026-08-17T11:43:52.000Z",
     "createdAt": "2026-07-22T02:09:15.687Z",
     "id": "PmsJHFqlEXpo0oB6",
     "name": "Kyvvo — Bot Agendamento v4 — Meta (paralelo, não ativar sem testar)",
@@ -615,7 +615,7 @@
           },
           "sendBody": true,
           "specifyBody": "json",
-          "jsonBody": "={{ (() => {\n  const base = { messaging_product: 'whatsapp', to: $json.remoteJid };\n  const tipo = $json.interativoTipo;\n  if (tipo === 'botoes') {\n    return JSON.stringify(Object.assign({}, base, { type: 'interactive', interactive: {\n      type: 'button',\n      body: { text: $json.responseText },\n      action: { buttons: ($json.interativoOpcoes || []).map((o) => ({ type: 'reply', reply: { id: o.id, title: o.title } })) }\n    }}));\n  }\n  if (tipo === 'lista') {\n    return JSON.stringify(Object.assign({}, base, { type: 'interactive', interactive: {\n      type: 'list',\n      body: { text: $json.responseText },\n      action: {\n        button: $json.interativoBotaoLista || 'Escolher',\n        sections: [{ title: $json.interativoTituloSecao || 'Opções', rows: ($json.interativoOpcoes || []).map((o) => ({ id: o.id, title: o.title, description: o.description })) }]\n      }\n    }}));\n  }\n  return JSON.stringify(Object.assign({}, base, { type: 'text', text: { body: $json.responseText } }));\n})() }}",
+          "jsonBody": "={{ $json.payloadJSON }}",
           "options": {}
         },
         "id": "node_send",
@@ -992,6 +992,19 @@
           1040,
           1968
         ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const item = $input.item.json;\nconst base = { messaging_product: 'whatsapp', to: item.remoteJid };\nconst tipo = item.interativoTipo;\nlet payload;\nif (tipo === 'botoes') {\n  payload = Object.assign({}, base, { type: 'interactive', interactive: {\n    type: 'button',\n    body: { text: item.responseText },\n    action: { buttons: (item.interativoOpcoes || []).map((o) => ({ type: 'reply', reply: { id: o.id, title: o.title } })) }\n  }});\n} else if (tipo === 'lista') {\n  payload = Object.assign({}, base, { type: 'interactive', interactive: {\n    type: 'list',\n    body: { text: item.responseText },\n    action: {\n      button: item.interativoBotaoLista || 'Escolher',\n      sections: [{ title: item.interativoTituloSecao || 'Opções', rows: (item.interativoOpcoes || []).map((o) => ({ id: o.id, title: o.title, description: o.description })) }]\n    }\n  }});\n} else {\n  payload = Object.assign({}, base, { type: 'text', text: { body: item.responseText } });\n}\n\nreturn Object.assign({}, item, { payloadJSON: JSON.stringify(payload) });"
+        },
+        "id": "Montar_payload_WhatsApp",
+        "name": "Montar payload WhatsApp",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2848,
+          208
+        ]
       }
     ],
     "connections": {
@@ -1271,7 +1284,7 @@
         "main": [
           [
             {
-              "node": "WhatsApp — Enviar resposta",
+              "node": "Montar payload WhatsApp",
               "type": "main",
               "index": 0
             }
@@ -1282,7 +1295,7 @@
         "main": [
           [
             {
-              "node": "WhatsApp — Enviar resposta",
+              "node": "Montar payload WhatsApp",
               "type": "main",
               "index": 0
             }
@@ -1293,7 +1306,7 @@
         "main": [
           [
             {
-              "node": "WhatsApp — Enviar resposta",
+              "node": "Montar payload WhatsApp",
               "type": "main",
               "index": 0
             },
@@ -1309,7 +1322,7 @@
         "main": [
           [
             {
-              "node": "WhatsApp — Enviar resposta",
+              "node": "Montar payload WhatsApp",
               "type": "main",
               "index": 0
             }
@@ -1320,7 +1333,7 @@
         "main": [
           [
             {
-              "node": "WhatsApp — Enviar resposta",
+              "node": "Montar payload WhatsApp",
               "type": "main",
               "index": 0
             }
@@ -1331,7 +1344,7 @@
         "main": [
           [
             {
-              "node": "WhatsApp — Enviar resposta",
+              "node": "Montar payload WhatsApp",
               "type": "main",
               "index": 0
             }
@@ -1342,7 +1355,7 @@
         "main": [
           [
             {
-              "node": "WhatsApp — Enviar resposta",
+              "node": "Montar payload WhatsApp",
               "type": "main",
               "index": 0
             }
@@ -1353,7 +1366,7 @@
         "main": [
           [
             {
-              "node": "WhatsApp — Enviar resposta",
+              "node": "Montar payload WhatsApp",
               "type": "main",
               "index": 0
             }
@@ -1364,7 +1377,7 @@
         "main": [
           [
             {
-              "node": "WhatsApp — Enviar resposta",
+              "node": "Montar payload WhatsApp",
               "type": "main",
               "index": 0
             }
@@ -1375,7 +1388,7 @@
         "main": [
           [
             {
-              "node": "WhatsApp — Enviar resposta",
+              "node": "Montar payload WhatsApp",
               "type": "main",
               "index": 0
             }
@@ -1488,7 +1501,7 @@
           ],
           [
             {
-              "node": "WhatsApp — Enviar resposta",
+              "node": "Montar payload WhatsApp",
               "type": "main",
               "index": 0
             }
@@ -1564,7 +1577,7 @@
         "main": [
           [
             {
-              "node": "WhatsApp — Enviar resposta",
+              "node": "Montar payload WhatsApp",
               "type": "main",
               "index": 0
             }
@@ -1593,7 +1606,7 @@
           ],
           [
             {
-              "node": "WhatsApp — Enviar resposta",
+              "node": "Montar payload WhatsApp",
               "type": "main",
               "index": 0
             }
@@ -1615,7 +1628,7 @@
         "main": [
           [
             {
-              "node": "WhatsApp — Enviar resposta",
+              "node": "Montar payload WhatsApp",
               "type": "main",
               "index": 0
             }
@@ -1666,7 +1679,7 @@
         "main": [
           [
             {
-              "node": "WhatsApp — Enviar resposta",
+              "node": "Montar payload WhatsApp",
               "type": "main",
               "index": 0
             }
@@ -1701,6 +1714,17 @@
             }
           ]
         ]
+      },
+      "Montar payload WhatsApp": {
+        "main": [
+          [
+            {
+              "node": "WhatsApp — Enviar resposta",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       }
     },
     "settings": {
@@ -1713,9 +1737,9 @@
     "meta": null,
     "nodeGroups": [],
     "pinData": {},
-    "versionId": "033f8274-fc45-479b-a0e2-28006bfb08b9",
-    "activeVersionId": "033f8274-fc45-479b-a0e2-28006bfb08b9",
-    "versionCounter": 8,
+    "versionId": "aa7dd49d-930e-4bb5-a000-b53508336a00",
+    "activeVersionId": "aa7dd49d-930e-4bb5-a000-b53508336a00",
+    "versionCounter": 9,
     "triggerCount": 2,
     "sourceWorkflowId": null,
     "tags": [],
