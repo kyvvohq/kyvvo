@@ -98,11 +98,13 @@ async function verificarStatusConta() {
     el.hidden = status.role === 'operador';
   });
 
-  // Menu Profissionais é exclusivo do plano Kyvvo Custom (chave 'custom' na
-  // tabela planos) — só faz sentido pra quem tem múltiplos profissionais
-  // atendendo, recurso do plano mais alto.
+  // Menu Profissionais e Equipe são exclusivos do plano Kyvvo Custom (chave
+  // 'custom' na tabela planos). Equipe também é somente-admin — `el.hidden ||`
+  // acumula em vez de sobrescrever, senão um admin em plano não-Custom via
+  // esse segundo loop reapareceria escondido pelo primeiro (dois gates
+  // independentes têm que combinar com E, nunca um substituir o outro).
   document.querySelectorAll('[data-somente-plano-custom]').forEach((el) => {
-    el.hidden = status.plano !== 'custom';
+    el.hidden = el.hidden || status.plano !== 'custom';
   });
 }
 
@@ -281,8 +283,13 @@ async function carregarConfiguracao() {
   if (dados) configuracao = dados;
 }
 
-const menuCadastrosToggle = document.getElementById('menu-cadastros-toggle');
-const menuCadastrosSubmenu = document.getElementById('menu-cadastros-submenu');
+// Cabeçalhos de grupo expansível da sidebar (Agenda, Configurações) —
+// genérico via data-submenu em vez de um par de consts fixo por grupo, pra
+// suportar quantos grupos a sidebar precisar sem repetir a mesma lógica.
+const gruposMenu = Array.from(document.querySelectorAll('.menu-item-grupo[data-submenu]')).map((toggle) => ({
+  toggle,
+  submenu: document.getElementById(toggle.dataset.submenu),
+}));
 
 // URL própria por seção do menu (favoritar/compartilhar/recarregar direto
 // numa seção, botão voltar funcionando entre elas — antes só /painel
@@ -331,21 +338,23 @@ function selecionarMenu(novoMenu, { atualizarUrl = true } = {}) {
   menuEl.querySelectorAll('.menu-item').forEach((i) => i.classList.remove('active'));
   const itemSidebar = menuEl.querySelector(`.menu-item[data-menu="${novoMenu}"]`);
   if (itemSidebar) itemSidebar.classList.add('active');
-  // Destaca o cabeçalho "Cadastros" quando Serviços/Profissionais (dentro
-  // do submenu) fica ativo — senão nada na sidebar aparece realçado
+  // Destaca o cabeçalho do grupo (Agenda/Configurações) quando um item de
+  // dentro do submenu fica ativo — senão nada na sidebar aparece realçado
   // enquanto uma dessas telas está aberta. Itens que vieram do user menu
-  // (perfil/empresa/pagamentos/configuracao/ajuda) não têm item correspondente
-  // na sidebar, então itemSidebar é null e isso vira um no-op — correto,
-  // nenhum item da sidebar deve ficar "active" nessas telas.
-  const dentroDeCadastros = itemSidebar?.closest('#menu-cadastros-submenu') != null;
-  menuCadastrosToggle.classList.toggle('tem-filho-ativo', dentroDeCadastros);
-  // Navegação direta por URL (ex.: carregar /servicos) pula o clique em
-  // "Cadastros" que normalmente abre o submenu — sem isso, o item ficava
-  // "active" escondido dentro de um submenu ainda fechado.
-  if (dentroDeCadastros) {
-    menuCadastrosSubmenu.classList.add('aberto');
-    menuCadastrosToggle.classList.add('expandido');
-  }
+  // (perfil/equipe/ajuda) não têm item correspondente na sidebar, então
+  // itemSidebar é null e isso vira um no-op — correto, nenhum item da
+  // sidebar deve ficar "active" nessas telas.
+  gruposMenu.forEach(({ toggle, submenu }) => {
+    const dentroDoGrupo = itemSidebar != null && submenu.contains(itemSidebar);
+    toggle.classList.toggle('tem-filho-ativo', dentroDoGrupo);
+    // Navegação direta por URL (ex.: carregar /bloqueios) pula o clique no
+    // cabeçalho do grupo que normalmente abre o submenu — sem isso, o item
+    // ficava "active" escondido dentro de um submenu ainda fechado.
+    if (dentroDoGrupo) {
+      submenu.classList.add('aberto');
+      toggle.classList.add('expandido');
+    }
+  });
   menuAtual = novoMenu;
   subtabsEl.style.display = menuAtual === 'agendamento' ? 'flex' : 'none';
   dataRef = new Date();
@@ -374,12 +383,14 @@ menuEl.querySelectorAll('.menu-item').forEach((item) => {
   item.addEventListener('click', () => ativarMenuItem(item));
 });
 
-// "Cadastros" é um cabeçalho de grupo, não um item de menu com tela própria
-// — por isso usa a classe .menu-item-grupo (fora do .menu-item genérico
-// acima) e só expande/recolhe o submenu, sem chamar ativarMenuItem.
-menuCadastrosToggle.addEventListener('click', () => {
-  menuCadastrosSubmenu.classList.toggle('aberto');
-  menuCadastrosToggle.classList.toggle('expandido');
+// Cabeçalhos de grupo (Agenda, Configurações) não são item de menu com tela
+// própria — por isso usam a classe .menu-item-grupo (fora do .menu-item
+// genérico acima) e só expandem/recolhem o submenu, sem chamar ativarMenuItem.
+gruposMenu.forEach(({ toggle, submenu }) => {
+  toggle.addEventListener('click', () => {
+    submenu.classList.toggle('aberto');
+    toggle.classList.toggle('expandido');
+  });
 });
 
 // Logo no cabeçalho (saiu da sidebar) — sempre volta pro Início, sem reload
@@ -471,6 +482,11 @@ async function carregarModulosNoMenu() {
   const resultado = await api('/api/tenant/modulos');
   if (!resultado || !Array.isArray(resultado.modulos)) return;
 
+  // Inserido antes da âncora (entre Clientes e Configurações), não no fim
+  // da sidebar — senão módulos como Financeiro/Relatórios apareceriam depois
+  // de Configurações. GET /api/tenant/modulos já ordena por nome, então
+  // Financeiro cai antes de Relatórios sozinho (F < R).
+  const ancora = document.getElementById('menu-modulos-anchor');
   resultado.modulos
     .filter((m) => m.key !== 'agenda_inteligente')
     .forEach((m) => {
@@ -479,7 +495,7 @@ async function carregarModulosNoMenu() {
       item.dataset.menu = `modulo:${m.key}`;
       item.textContent = m.nome;
       item.addEventListener('click', () => ativarMenuItem(item));
-      menuEl.appendChild(item);
+      ancora.parentNode.insertBefore(item, ancora);
     });
 }
 
