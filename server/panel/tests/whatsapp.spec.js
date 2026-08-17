@@ -25,8 +25,8 @@ async function entrarNoWhatsapp(page, { status, config = { appId: null, configId
     window.localStorage.setItem('kyvvo_nome', 'Ana');
   });
   await page.goto('/painel.html');
-  await page.click('#user-menu-toggle');
-  await page.click('.user-menu-item[data-menu="whatsapp"]');
+  await page.click('#menu-config-toggle');
+  await page.click('.menu-item[data-menu="whatsapp"]');
 }
 
 test.describe('WhatsApp — pedido de número pronto (US39.1)', () => {

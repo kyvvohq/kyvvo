@@ -181,7 +181,6 @@ test.describe('Clientes (US63)', () => {
       window.localStorage.setItem('kyvvo_nome', 'Ana');
     });
     await page.goto('/painel.html');
-    await page.click('#menu-cadastros-toggle');
     await page.click('.menu-item[data-menu="clientes"]');
   }
 

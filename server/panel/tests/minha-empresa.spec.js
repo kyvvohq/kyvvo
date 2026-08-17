@@ -39,8 +39,8 @@ async function entrarNoPainel(page, perfil = PERFIL_BASE) {
     window.localStorage.setItem('kyvvo_nome', 'Ana');
   });
   await page.goto('/painel.html');
-  await page.click('#user-menu-toggle');
-  await page.click('.user-menu-item[data-menu="empresa"]');
+  await page.click('#menu-config-toggle');
+  await page.click('.menu-item[data-menu="empresa"]');
 }
 
 test.describe('Minha Empresa (PR12)', () => {

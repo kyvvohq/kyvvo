@@ -39,12 +39,16 @@ test.describe('Menu dinâmico por módulo (ST10.3)', () => {
 
   test('itens fixos continuam sempre visíveis mesmo sem módulos extras', async ({ page }) => {
     await entrarNoPainel(page, [{ key: 'agenda_inteligente', nome: 'Agendamento', preco_mensal: null }]);
+    // Agenda vive dentro do submenu expansível "Agenda" — precisa abrir antes
+    // de checar visibilidade.
+    await page.click('#menu-agenda-toggle');
     await expect(page.locator('.menu-item[data-menu="agendamento"]')).toBeVisible();
-    // Perfil/Configuração (PR11) saíram da sidebar e viraram itens do user
-    // menu — abre o dropdown pra checar que continuam sempre presentes ali.
+    // Perfil (PR11) continua item do user menu; Configuração virou submenu de
+    // Configurações na sidebar.
     await page.click('#user-menu-toggle');
     await expect(page.locator('.user-menu-item[data-menu="perfil"]')).toBeVisible();
-    await expect(page.locator('.user-menu-item[data-menu="configuracao"]')).toBeVisible();
+    await page.click('#menu-config-toggle');
+    await expect(page.locator('.menu-item[data-menu="configuracao"]')).toBeVisible();
   });
 
   test('módulo não ativo não aparece no menu', async ({ page }) => {
