@@ -1686,7 +1686,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .tabela-tenants input[type="text"],
 .tabela-tenants input[type="number"],
-.tabela-tenants input[type="email"] {
+.tabela-tenants input[type="email"],
+.tabela-tenants input[type="date"] {
   width: 100%;
   min-width: 100px;
   padding: 6px 8px;
@@ -1781,6 +1782,28 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
    .tabela-tenants direto, que o admin depende do nowrap+scroll pra caber
    colunas com texto longo. */
 .tabela-equipe td:last-child { white-space: normal; }
+
+/* Menu Clientes: filtros por nome/telefone + seletor de tamanho de página,
+   acima da tabela. */
+.clientes-filtros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.clientes-filtros input[type="text"] { flex: 1; min-width: 160px; margin: 0; }
+.clientes-filtros select { width: auto; margin: 0; }
+
+/* Linha de cliente expansível (sem modal) — igual .tabela-equipe, também
+   escopado só pra tabela-clientes: precisa de white-space: normal na linha
+   de detalhe (form + histórico), que .tabela-tenants não tem por padrão. */
+.linha-expandida { background: #171c38; }
+.tabela-clientes .linha-cliente-detalhe { cursor: default; }
+.tabela-clientes .linha-cliente-detalhe td { white-space: normal; padding: 16px; background: #0d1022; }
+
+.cliente-detalhe-form { display: flex; flex-direction: column; gap: 2px; max-width: 420px; margin-bottom: 16px; }
+.cliente-detalhe-form label { margin-top: 10px; font-size: 12px; color: #a1a5c4; }
+.cliente-detalhe-form .modal-acoes { margin-top: 16px; }
 
 .th-ordenar {
   width: auto;
