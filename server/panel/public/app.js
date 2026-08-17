@@ -3064,7 +3064,7 @@ function renderInicioProximosCorpo() {
   return `
     <div class="inicio-atendimentos-lista">
       ${pagina.map((ag) => `
-        <div class="inicio-atendimento-item">
+        <div class="inicio-atendimento-item" data-id="${ag.id}">
           <div class="inicio-atendimento-info">
             <strong>${formatarHora(ag.data_hora)}</strong>
             <span>${ag.cliente || ag.cliente_telefone}</span>
