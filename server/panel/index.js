@@ -300,10 +300,14 @@ async function sincronizarLancamentoFinanceiro(client, {
 
   // 'reagendado' nunca é de fato setado por nenhum código hoje (reagendar só
   // muda data_hora no mesmo registro) — trata como 'confirmado' por
-  // segurança, caso isso mude no futuro.
+  // segurança, caso isso mude no futuro. 'falta' (no-show) mapeia pro mesmo
+  // 'cancelado' que uma cancelação de verdade — financeiramente o efeito é
+  // igual (a receita prevista não acontece) — mas o status do AGENDAMENTO em
+  // si continua 'falta', distinto de 'cancelado', pro Relatórios conseguir
+  // medir taxa de comparecimento e faturamento perdido por no-show à parte.
   const statusFinanceiro = statusAgendamento === 'concluido'
     ? 'realizado'
-    : statusAgendamento === 'cancelado'
+    : (statusAgendamento === 'cancelado' || statusAgendamento === 'falta')
       ? 'cancelado'
       : 'previsto';
 
@@ -1964,8 +1968,10 @@ async function start() {
       return reply.code(400).send({ error: 'Informe "status" e/ou "data_hora" para atualizar' });
     }
     // 'concluido' (US64) — converte a receita prevista do agendamento em
-    // realizada (CA "Cenário 5").
-    if (status !== undefined && !['confirmado', 'cancelado', 'reagendado', 'concluido'].includes(status)) {
+    // realizada (CA "Cenário 5"). 'falta' (no-show, migration 060) — cliente
+    // não compareceu; sincronizarLancamentoFinanceiro trata igual 'cancelado'
+    // pro financeiro, mas o status do agendamento fica distinto pro relatório.
+    if (status !== undefined && !['confirmado', 'cancelado', 'reagendado', 'concluido', 'falta'].includes(status)) {
       return reply.code(400).send({ error: 'status inválido' });
     }
     if (formaPagamento !== undefined && !['pix', 'cartao', 'dinheiro', 'outro'].includes(formaPagamento)) {
