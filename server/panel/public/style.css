@@ -1035,18 +1035,16 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   margin-bottom: 16px;
 }
 
-/* Movimentações — pills de tipo (Todas/Receitas/Despesas) + busca na mesma
-   linha, reaproveitando .chip-status (menu Clientes). */
-.financeiro-filtros-linha {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 16px;
+/* Movimentações — mesmo layout do menu Clientes: busca full-width numa
+   linha (.financeiro-filtros, reaproveita o padrão de .clientes-filtros) e
+   pills de tipo (Todas/Receitas/Despesas) lado a lado em colunas iguais
+   logo abaixo (.financeiro-filtro-pills, mesma grid de .clientes-status-pills). */
+.financeiro-filtros { margin-bottom: 12px; }
+.financeiro-filtro-pills { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 20px; }
+
+@media (max-width: 640px) {
+  .financeiro-filtro-pills { grid-template-columns: 1fr; }
 }
-.financeiro-filtro-pills { display: flex; flex-wrap: wrap; gap: 8px; }
-.financeiro-filtros-linha input[type="text"] { width: auto; min-width: 200px; margin: 0; }
 
 /* Item de movimentação — hora/data à esquerda, título+detalhe no meio,
    valor+status alinhados à direita (mesmo cartão .agendamento-item). */

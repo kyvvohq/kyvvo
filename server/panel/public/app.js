@@ -1593,6 +1593,15 @@ function statusLancamento(l) {
   return { emoji: '🟢', texto: 'Recebido' };
 }
 
+// l.data vem do driver pg como Date (coluna tipo `date`), que serializa em
+// JSON como ISO completo ("...T00:00:00.000Z"), não "YYYY-MM-DD" puro —
+// .slice(0, 10) normaliza os dois formatos antes de montar a data local ao
+// meio-dia (evita virada de dia por fuso, mesmo padrão de formatarDataCurtaISO).
+// Compartilhada entre o item da lista e o filtro de busca (lancamentosFiltrados).
+function dataLancamentoLabel(l) {
+  return new Date(l.data.slice(0, 10) + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' });
+}
+
 function renderLancamentoItem(l) {
   const classeTipo = l.tipo === 'entrada' ? 'financeiro-entrada' : 'financeiro-saida';
   const origemAgendamento = l.origem === 'agendamento';
@@ -1601,12 +1610,7 @@ function renderLancamentoItem(l) {
   // atendimento em vez da data (só existe pra lançamento de agendamento,
   // via a.data_hora; manual não tem hora, mostra a data mesmo). Nas abas
   // Semana/Mês (múltiplos dias na mesma lista) sempre mostra a data.
-  // l.data vem do driver pg como Date (coluna tipo `date`), que serializa em
-  // JSON como ISO completo ("...T00:00:00.000Z"), não "YYYY-MM-DD" puro —
-  // .slice(0, 10) normaliza os dois formatos antes de montar a data local ao
-  // meio-dia (evita virada de dia por fuso, mesmo padrão de formatarDataCurtaISO).
-  const dataLabel = new Date(l.data.slice(0, 10) + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' });
-  const horaOuData = (abaFinanceiroAtiva === 'dia' && origemAgendamento && l.data_hora) ? formatarHora(l.data_hora) : dataLabel;
+  const horaOuData = (abaFinanceiroAtiva === 'dia' && origemAgendamento && l.data_hora) ? formatarHora(l.data_hora) : dataLancamentoLabel(l);
 
   // CA "Cenário 8" — lançamento de agendamento identifica cliente/serviço/
   // data do atendimento e mostra a origem explicitamente, em vez de só um
@@ -1797,14 +1801,15 @@ const FINANCEIRO_FILTRO_TIPO_PILLS = [
 ];
 
 // Filtra a lista já carregada do período ativo por tipo (pill) + busca livre
-// (serviço/descrição/cliente) — nunca refaz a chamada à API, só reaplica em
-// cima de lancamentosAtuais.
+// por data, nome do cliente, descrição do lançamento (serviço ou descrição
+// manual) ou valor — nunca refaz a chamada à API, só reaplica em cima de
+// lancamentosAtuais.
 function lancamentosFiltrados() {
   const busca = financeiroFiltroBusca.trim().toLowerCase();
   return lancamentosAtuais.filter((l) => {
     if (financeiroFiltroTipo !== 'todas' && l.tipo !== financeiroFiltroTipo) return false;
     if (!busca) return true;
-    const alvo = `${l.servico || ''} ${l.descricao || ''} ${l.cliente || ''}`.toLowerCase();
+    const alvo = `${dataLancamentoLabel(l)} ${l.cliente || ''} ${l.servico || ''} ${l.descricao || ''} ${formatarPreco(l.valor)}`.toLowerCase();
     return alvo.includes(busca);
   });
 }
@@ -1860,14 +1865,16 @@ async function renderFinanceiro() {
     if (semanas.length) html += renderGraficoSemanasFinanceiro(semanas);
   }
 
+  // Mesmo layout do menu Clientes: busca full-width numa linha, pills de
+  // filtro logo abaixo numa grid de colunas iguais (lado a lado).
   const filtrados = lancamentosFiltrados();
   html += `
     <h3 class="inicio-secao-titulo">Movimentações</h3>
-    <div class="financeiro-filtros-linha">
-      <div class="financeiro-filtro-pills">
-        ${FINANCEIRO_FILTRO_TIPO_PILLS.map(([valor, label]) => `<button type="button" class="chip-status${financeiroFiltroTipo === valor ? ' chip-status-ativo' : ''}" data-financeiro-filtro-tipo="${valor}">${label}</button>`).join('')}
-      </div>
-      <input type="text" id="financeiro-filtro-busca" placeholder="🔎 Buscar" value="${financeiroFiltroBusca}">
+    <div class="financeiro-filtros">
+      <input type="text" id="financeiro-filtro-busca" placeholder="🔎 Buscar por data, cliente, descrição ou valor" value="${financeiroFiltroBusca}">
+    </div>
+    <div class="financeiro-filtro-pills">
+      ${FINANCEIRO_FILTRO_TIPO_PILLS.map(([valor, label]) => `<button type="button" class="chip-status${financeiroFiltroTipo === valor ? ' chip-status-ativo' : ''}" data-financeiro-filtro-tipo="${valor}">${label}</button>`).join('')}
     </div>
   `;
 
