@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 205 64" role="img" aria-label="Kyvvo">
+  <title>Kyvvo</title>
+  <defs>
+    <linearGradient id="kyvvo-underline" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#7c5cfc"/>
+      <stop offset="100%" stop-color="#00d4ff"/>
+    </linearGradient>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Syne:wght@800&display=swap');
+      .kyvvo-wordmark { font-family: 'Syne', Arial, Helvetica, sans-serif; font-weight: 800; font-size: 40px; letter-spacing: -1px; }
+    </style>
+  </defs>
+  <text class="kyvvo-wordmark" x="8" y="46">
+    <tspan fill="#f2f2f7">ky</tspan><tspan fill="#a688ff">vv</tspan><tspan fill="#f2f2f7">o</tspan>
+  </text>
+  <!-- Sublinhado em gradiente só sob o "vv" (mesmo efeito de .logo-vv::after
+       no CSS do painel/landing). Posição medida via getBBox() do tspan "vv"
+       renderizado com a fonte Syne 800 real (Chrome, font-size 40,
+       letter-spacing -1px) — não é mais uma estimativa. -->
+  <rect x="80" y="51" width="74" height="4" rx="2" fill="url(#kyvvo-underline)"/>
+</svg>
