@@ -1054,61 +1054,6 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .financeiro-item-valor { text-align: right; flex-shrink: 0; }
 .financeiro-item-status { font-size: 12px; color: #a1a5c4; margin-top: 4px; white-space: nowrap; }
 
-.btn-detalhamento-financeiro { width: auto; margin: 4px 0 16px; }
-
-/* US71/CA02 — gráfico de barras (realizado x previsto) por semana do mês,
-   sem biblioteca de gráficos: barras são só divs com height em %. */
-.financeiro-grafico {
-  display: flex;
-  align-items: flex-end;
-  gap: 16px;
-  height: 140px;
-  padding: 16px 8px 0;
-  margin-bottom: 20px;
-  background: #12162a;
-  border: 1px solid #232847;
-  border-radius: 10px;
-}
-
-.financeiro-grafico-coluna {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  height: 100%;
-}
-
-.financeiro-grafico-barras {
-  flex: 1;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  gap: 4px;
-  width: 100%;
-}
-
-.financeiro-grafico-barra { width: 14px; border-radius: 3px 3px 0 0; min-height: 2px; cursor: default; }
-.financeiro-grafico-barra-realizado { background: #4ade80; }
-.financeiro-grafico-barra-previsto { background: var(--cyan); }
-.financeiro-grafico-label { font-size: 11px; color: #a1a5c4; margin-top: 6px; }
-
-/* PR4 — tooltip customizado do gráfico (substitui o title nativo do
-   navegador), posicionado perto do cursor via JS (app.js). */
-.financeiro-grafico-tooltip {
-  display: none;
-  position: fixed;
-  z-index: 1000;
-  background: #1c2038;
-  border: 1px solid #232847;
-  border-radius: 6px;
-  padding: 6px 10px;
-  font-size: 12px;
-  color: #f2f2f7;
-  pointer-events: none;
-  white-space: nowrap;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
 /* US70 — faixa de 4 cards financeiros na tela inicial, reaproveita o visual
    de .financeiro-resumo-card mas em 4 colunas e clicável (navega pro
    Financeiro). */

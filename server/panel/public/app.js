@@ -1488,74 +1488,6 @@ function labelIntervaloSemanaFinanceiro(inicio) {
   return `${diaIni}–${diaFim} ${MESES_ABREV_FINANCEIRO[fim.getMonth()].toUpperCase()} ${fim.getFullYear()}`;
 }
 
-// US71/CA02 — agrupa os lançamentos de receita (entrada, não-cancelado) do
-// mês em até 5 faixas de 7 dias (S1..S5) pro gráfico de barras. S5 (dias
-// 29-31) só aparece se tiver algum valor — a maioria dos meses não usa essa
-// faixa.
-function agruparPorSemanaDoMes(lancamentos) {
-  const semanas = Array.from({ length: 5 }, () => ({ previsto: 0, realizado: 0 }));
-  lancamentos.forEach((l) => {
-    if (l.tipo !== 'entrada' || l.status === 'cancelado') return;
-    const dia = Number(l.data.slice(8, 10));
-    const idx = Math.min(Math.floor((dia - 1) / 7), 4);
-    if (l.status === 'previsto') semanas[idx].previsto += Number(l.valor);
-    if (l.status === 'realizado') semanas[idx].realizado += Number(l.valor);
-  });
-  return semanas
-    .map((s, i) => ({ label: `S${i + 1}`, ...s }))
-    .filter((s, i) => i < 4 || s.previsto > 0 || s.realizado > 0);
-}
-
-function renderGraficoSemanasFinanceiro(semanas) {
-  const max = Math.max(1, ...semanas.flatMap((s) => [s.previsto, s.realizado]));
-  return `
-    <div class="financeiro-grafico" data-testid="grafico-semanas">
-      ${semanas.map((s) => `
-        <div class="financeiro-grafico-coluna">
-          <div class="financeiro-grafico-barras">
-            <div class="financeiro-grafico-barra financeiro-grafico-barra-realizado" style="height:${Math.round((s.realizado / max) * 100)}%" data-tooltip="Realizado ${s.label}: ${formatarPreco(s.realizado)}"></div>
-            <div class="financeiro-grafico-barra financeiro-grafico-barra-previsto" style="height:${Math.round((s.previsto / max) * 100)}%" data-tooltip="Previsto ${s.label}: ${formatarPreco(s.previsto)}"></div>
-          </div>
-          <div class="financeiro-grafico-label">${s.label}</div>
-        </div>
-      `).join('')}
-    </div>
-  `;
-}
-
-// PR4 — tooltip customizado do gráfico do Financeiro, no lugar do atributo
-// title nativo do navegador (sem controle de estilo/posição/delay). Um único
-// elemento reaproveitado entre hovers, seguindo o cursor.
-let elTooltipGrafico = null;
-function mostrarTooltipGrafico(texto, x, y) {
-  if (!elTooltipGrafico) {
-    elTooltipGrafico = document.createElement('div');
-    elTooltipGrafico.className = 'financeiro-grafico-tooltip';
-    document.body.appendChild(elTooltipGrafico);
-  }
-  elTooltipGrafico.textContent = texto;
-  elTooltipGrafico.style.left = `${x + 14}px`;
-  elTooltipGrafico.style.top = `${y + 14}px`;
-  elTooltipGrafico.style.display = 'block';
-}
-function ocultarTooltipGrafico() {
-  if (elTooltipGrafico) elTooltipGrafico.style.display = 'none';
-}
-conteudo.addEventListener('mouseover', (e) => {
-  const barra = e.target.closest('.financeiro-grafico-barra');
-  if (barra) mostrarTooltipGrafico(barra.dataset.tooltip, e.clientX, e.clientY);
-});
-conteudo.addEventListener('mousemove', (e) => {
-  if (!elTooltipGrafico || elTooltipGrafico.style.display !== 'block') return;
-  if (e.target.closest('.financeiro-grafico-barra')) {
-    elTooltipGrafico.style.left = `${e.clientX + 14}px`;
-    elTooltipGrafico.style.top = `${e.clientY + 14}px`;
-  }
-});
-conteudo.addEventListener('mouseout', (e) => {
-  if (e.target.closest('.financeiro-grafico-barra')) ocultarTooltipGrafico();
-});
-
 // US71/CA05 — abre o Financeiro já na aba/período desejado. Pensada pra ser
 // chamada pelos cards do resumo financeiro na tela inicial (US70): quando as
 // duas USs estiverem juntas na main, o clique de cada card troca
@@ -1859,11 +1791,6 @@ async function renderFinanceiro() {
       </div>
     </div>
   `;
-
-  if (periodo === 'mes') {
-    const semanas = agruparPorSemanaDoMes(data.lancamentos);
-    if (semanas.length) html += renderGraficoSemanasFinanceiro(semanas);
-  }
 
   // Mesmo layout do menu Clientes: busca full-width numa linha, pills de
   // filtro logo abaixo numa grid de colunas iguais (lado a lado).
