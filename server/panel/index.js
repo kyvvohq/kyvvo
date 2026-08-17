@@ -390,6 +390,14 @@ const IA_INTENTS_VALIDOS = new Set(['agendar', 'reagendar', 'cancelar', 'consult
 // atender — resposta fixa, não deixa a IA decidir o que dizer.
 const MENSAGEM_TENANT_NAO_PRONTO_IA = 'Estamos finalizando os últimos ajustes por aqui! 🛠️\n\nEm breve vamos te atender com muito carinho — tente novamente mais tarde.';
 const IA_HISTORICO_MENSAGENS = 10;
+// Depois desse intervalo sem nenhuma mensagem (de qualquer papel), a
+// próxima mensagem do cliente conta como abertura de conversa nova pra fins
+// de saudação — cliente que já conversou há dias e manda "oi" de novo
+// também merece ser cumprimentado pelo nome, não só quem nunca falou com o
+// salão (bug real: historico.length sozinho nunca zera pra quem já tem
+// histórico salvo, então a saudação com nome só disparava na primeiríssima
+// mensagem da vida do cliente).
+const IA_GAP_NOVA_CONVERSA_MS = 2 * 60 * 60 * 1000;
 const IA_DIAS_DISPONIBILIDADE = 7;
 const IA_SLOTS_POR_DIA_PROFISSIONAL = 3;
 const IA_DURACAO_PADRAO_MINUTOS = 30;
@@ -893,14 +901,21 @@ async function processarMensagemIA({ tenant, telefone, mensagem, pushName, envia
   // US68/CA06 — não processa via IA enquanto aguarda retomada humana.
   if (cliente.status_conversa === 'aguardando_humano') return;
 
+  // Calculado ANTES de salvar a mensagem atual — senão a mensagem atual
+  // viraria "a última", e o intervalo seria sempre zero.
+  const { rows: ultimaMensagemRows } = await pool.query(
+    'SELECT criado_em FROM conversas_ia WHERE tenant_id = $1 AND cliente_id = $2 ORDER BY criado_em DESC LIMIT 1',
+    [tenant.id, cliente.id]
+  );
+  const gapDesdeUltimaMensagemMs = ultimaMensagemRows[0]
+    ? Date.now() - new Date(ultimaMensagemRows[0].criado_em).getTime()
+    : Infinity;
+  const primeiraMensagem = gapDesdeUltimaMensagemMs > IA_GAP_NOVA_CONVERSA_MS;
+
   await salvarMensagemIA(tenant.id, cliente.id, 'user', mensagem);
 
-  // Busca o histórico ANTES de montar o prompt — precisa saber se essa é a
-  // 1ª mensagem da conversa (só o próprio turno que acabou de ser salvo
-  // acima, historico.length <= 1) pra instruir a IA a cumprimentar pelo
-  // nome só na abertura, não em toda resposta.
   const historico = await buscarHistoricoIA(tenant.id, cliente.id);
-  const system = await montarContextoIA(tenant, cliente, historico.length <= 1);
+  const system = await montarContextoIA(tenant, cliente, primeiraMensagem);
   const { texto: respostaBruta, tokensEntrada, tokensSaida } = await anthropicService.chamarClaude({ system, mensagens: [...historico, { role: 'user', content: mensagem }] });
   const { intent, params, resposta } = parsearIntentIA(respostaBruta);
 
