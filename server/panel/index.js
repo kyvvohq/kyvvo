@@ -4364,12 +4364,15 @@ async function start() {
 
       return {
         mes,
+        mes_anterior: mesAnterior,
         kpis: {
-          faturamento: { valor: faturamentoAtual, variacao_pct: variacaoFaturamento },
-          recebido: { valor: recebidoAtual, variacao_pct: variacaoPct(recebidoAtual, recebidoAnterior) },
-          atendimentos: { valor: ag.total, variacao_pct: variacaoPct(ag.total, ag.total_anterior) },
-          clientes: { valor: cl.atual, variacao_pct: variacaoPct(cl.atual, cl.anterior) },
-          ticket_medio: { valor: ticketMedioAtual, variacao_pct: variacaoPct(ticketMedioAtual, ticketMedioAnterior) },
+          // `anterior` (valor absoluto do mês anterior, não só o %) alimenta
+          // a linha de comparação da Seção 2 ("Agosto: R$ X / Julho: R$ Y").
+          faturamento: { valor: faturamentoAtual, anterior: faturamentoAnterior, variacao_pct: variacaoFaturamento },
+          recebido: { valor: recebidoAtual, anterior: recebidoAnterior, variacao_pct: variacaoPct(recebidoAtual, recebidoAnterior) },
+          atendimentos: { valor: ag.total, anterior: ag.total_anterior, variacao_pct: variacaoPct(ag.total, ag.total_anterior) },
+          clientes: { valor: cl.atual, anterior: cl.anterior, variacao_pct: variacaoPct(cl.atual, cl.anterior) },
+          ticket_medio: { valor: ticketMedioAtual, anterior: ticketMedioAnterior, variacao_pct: variacaoPct(ticketMedioAtual, ticketMedioAnterior) },
         },
         faturamento_diario: faturamentoDiario,
         agenda: {

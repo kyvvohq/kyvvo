@@ -1022,6 +1022,78 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .financeiro-saida { color: #ff6b6b; }
 .financeiro-previsto { color: var(--cyan); }
 
+/* Menu Relatórios — dashboard mensal em grid multi-coluna (pedido explícito
+   do Bruno: nada de pilha vertical). 5 KPIs reaproveitando o cartão do
+   Financeiro (.financeiro-resumo-card), só com 5 colunas em vez de 4. */
+.relatorios-kpis {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+  margin-bottom: 20px;
+}
+@media (max-width: 900px) {
+  .relatorios-kpis { grid-template-columns: repeat(2, 1fr); }
+}
+.relatorios-kpi-variacao { font-size: 12px; margin-top: 4px; }
+
+/* Duas seções lado a lado (Faturamento + Desempenho da agenda na Seção 2+3;
+   Serviços + Clientes na Seção 4+5, PR seguinte) — colapsa pra 1 coluna
+   antes de 960px, breakpoint novo (nenhuma outra tela precisa dele hoje). */
+.relatorios-grid-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+@media (max-width: 960px) {
+  .relatorios-grid-2col { grid-template-columns: 1fr; }
+}
+
+.relatorios-secao {
+  background: #12162a;
+  border: 1px solid #232847;
+  border-radius: 10px;
+  padding: 16px;
+}
+.relatorios-secao .inicio-secao-titulo { margin-bottom: 12px; }
+
+/* Gráfico de tendência diária (SVG puro, sem lib) — a viewBox fixa (600x140)
+   estica pra largura do container via preserveAspectRatio="none", altura
+   controlada aqui. */
+.relatorios-grafico-diario { margin-bottom: 8px; }
+.relatorios-svg-linha { width: 100%; height: 140px; display: block; }
+.relatorios-grafico-eixo {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #a1a5c4;
+  margin-top: 4px;
+}
+
+.relatorios-comparacao-mensal { font-size: 13px; color: #a1a5c4; margin: 8px 0 0; }
+
+.relatorios-status-lista { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.relatorios-status-linha {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+}
+
+.relatorios-barra-bloco { margin-bottom: 8px; }
+.relatorios-barra-label { font-size: 12px; color: #a1a5c4; margin-bottom: 6px; }
+.relatorios-barra-valor { font-size: 12px; color: #a1a5c4; margin-top: 4px; }
+
+/* Aviso de horários perdidos (cancelamentos+faltas) — mesmo tom âmbar do
+   badge de falta, chama atenção sem ser um erro de verdade. */
+.relatorios-aviso {
+  font-size: 13px;
+  color: #f0b354;
+  background: rgba(240, 179, 84, 0.1);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin: 8px 0 0;
+}
+
 /* US71 — abas Mês/Semana/Dia da página /financeiro. Mesmo visual de .tab/
    .subtabs (agenda), mas num container próprio renderizado dentro de
    #conteudo — .subtabs é fixo/global e só aparece com o menu "agendamento"
