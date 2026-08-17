@@ -2488,7 +2488,7 @@ async function render() {
   // grade de horários e, principalmente, pras colunas da Semana caberem sem
   // scroll horizontal — as demais telas (Perfil, Fatura, Serviços...)
   // continuam nos 720px padrão, estreitos de propósito pra formulário.
-  conteudo.classList.toggle('conteudo-largo', menuAtual === 'inicio' || menuAtual === 'agendamento' || menuAtual === 'clientes');
+  conteudo.classList.toggle('conteudo-largo', menuAtual === 'inicio' || menuAtual === 'agendamento' || menuAtual === 'clientes' || menuAtual === 'modulo:dashboards');
 
   if (menuAtual === 'inicio') return renderInicio();
   if (menuAtual === 'configuracao') return renderConfiguracao();
@@ -2505,6 +2505,7 @@ async function render() {
   if (menuAtual === 'clientes') return renderClientes();
   if (menuAtual === 'bloqueios') return renderBloqueios();
   if (menuAtual === 'modulo:financeiro') return renderFinanceiro();
+  if (menuAtual === 'modulo:dashboards') return renderRelatorios();
   if (menuAtual.startsWith('modulo:')) return renderModuloEmBreve();
 
   if (abaAtual === 'dia') return renderDia();
@@ -3344,6 +3345,172 @@ function abrirModalExcluirBloqueio(bloqueio) {
 
 function renderModuloEmBreve() {
   conteudo.innerHTML = '<div class="vazio">🚧 Em breve — este módulo ainda está em desenvolvimento.</div>';
+}
+
+// ---------- Relatórios (menu "Relatórios", modulo_key='dashboards') ----------
+// Dashboard mensal de negócio — GET /api/relatorios/resumo devolve tudo de
+// uma vez (KPIs, gráfico diário, agenda, serviços, clientes, financeiro,
+// insights); o frontend só formata e distribui num grid multi-coluna (não
+// uma pilha vertical — pedido explícito do Bruno, com uma imagem de
+// dashboard como referência de estrutura, não de paleta).
+let mesRelatorioRef = new Date();
+let relatoriosDados = null;
+
+function referenciaRelatorioAtiva() {
+  return formatarDataISO(mesRelatorioRef).slice(0, 7);
+}
+
+function navPeriodoRelatoriosHtml() {
+  const mesLabel = `${mesRelatorioRef.toLocaleDateString('pt-BR', { month: 'long', timeZone: 'America/Sao_Paulo' }).toUpperCase()} ${mesRelatorioRef.getFullYear()}`;
+  return `
+    <div class="nav-periodo">
+      <button data-nav-relatorios="-1" aria-label="Mês anterior">←</button>
+      <strong>${mesLabel}</strong>
+      <button data-nav-relatorios="1" aria-label="Próximo mês">→</button>
+    </div>
+  `;
+}
+
+function bindNavPeriodoRelatorios() {
+  conteudo.querySelector('[data-nav-relatorios="-1"]').addEventListener('click', () => {
+    mesRelatorioRef.setMonth(mesRelatorioRef.getMonth() - 1);
+    renderRelatorios();
+  });
+  conteudo.querySelector('[data-nav-relatorios="1"]').addEventListener('click', () => {
+    mesRelatorioRef.setMonth(mesRelatorioRef.getMonth() + 1);
+    renderRelatorios();
+  });
+}
+
+// Seta + porcentagem coloridas (verde/vermelho, reaproveitando .financeiro-
+// entrada/.financeiro-saida) — "—" quando não há mês anterior pra comparar
+// (variacao_pct null: tenant novo, sem dado no mês anterior).
+function relatoriosVariacaoHtml(pct) {
+  if (pct == null) return '<div class="relatorios-kpi-variacao vazio-inline">sem comparação</div>';
+  const seta = pct >= 0 ? '↑' : '↓';
+  const classe = pct >= 0 ? 'financeiro-entrada' : 'financeiro-saida';
+  return `<div class="relatorios-kpi-variacao ${classe}">${seta} ${Math.abs(pct).toFixed(1)}%</div>`;
+}
+
+function relatoriosKpiCard(label, valor, variacaoPct, formato) {
+  const valorHtml = valor == null
+    ? '—'
+    : (formato === 'moeda' ? formatarPreco(valor) : Number(valor).toLocaleString('pt-BR'));
+  return `
+    <div class="financeiro-resumo-card">
+      <div class="financeiro-resumo-label">${label}</div>
+      <div class="financeiro-previsto">${valorHtml}</div>
+      ${relatoriosVariacaoHtml(variacaoPct)}
+    </div>
+  `;
+}
+
+// Gráfico de tendência diária de faturamento — SVG puro (sem lib), uma
+// polyline com um ponto por dia do mês (faturamento_diario já vem do
+// backend com todos os dias preenchidos, zeros incluídos).
+function renderGraficoFaturamentoDiario(faturamentoDiario) {
+  const max = Math.max(1, ...faturamentoDiario.map((d) => d.valor));
+  const totalDias = faturamentoDiario.length;
+  const largura = 600;
+  const altura = 140;
+  const pontos = faturamentoDiario.map((d, i) => {
+    const x = totalDias > 1 ? (i / (totalDias - 1)) * largura : 0;
+    const y = altura - (d.valor / max) * (altura - 12) - 4;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  // Rótulos só em alguns dias (1, 5, 10, 15, 20, 25 e o último), pra não
+  // poluir o eixo — mesmo espírito do mockup original.
+  const diasRotulados = [...new Set([1, 5, 10, 15, 20, 25, totalDias].filter((d) => d <= totalDias))];
+  return `
+    <div class="relatorios-grafico-diario">
+      <svg viewBox="0 0 ${largura} ${altura}" preserveAspectRatio="none" class="relatorios-svg-linha">
+        <polyline points="${pontos}" fill="none" stroke="var(--accent)" stroke-width="2" />
+      </svg>
+      <div class="relatorios-grafico-eixo">
+        ${diasRotulados.map((d) => `<span>${d}</span>`).join('')}
+      </div>
+    </div>
+  `;
+}
+
+// "Agosto 2026: R$ 750,00 / Julho 2026: R$ 700,00 / ↓ 42,3%" numa linha só.
+function relatoriosComparacaoMensalHtml(kpiFaturamento) {
+  const mesAnteriorRef = new Date(mesRelatorioRef);
+  mesAnteriorRef.setMonth(mesAnteriorRef.getMonth() - 1);
+  const labelAtual = mesRelatorioRef.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'America/Sao_Paulo' });
+  const labelAnterior = mesAnteriorRef.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'America/Sao_Paulo' });
+  const variacaoHtml = kpiFaturamento.variacao_pct == null
+    ? ''
+    : ` · <span class="${kpiFaturamento.variacao_pct >= 0 ? 'financeiro-entrada' : 'financeiro-saida'}">${kpiFaturamento.variacao_pct >= 0 ? '↑' : '↓'} ${Math.abs(kpiFaturamento.variacao_pct).toFixed(1)}%</span>`;
+  return `<p class="relatorios-comparacao-mensal">${labelAtual}: <strong>${formatarPreco(kpiFaturamento.valor)}</strong> · ${labelAnterior}: ${formatarPreco(kpiFaturamento.anterior)}${variacaoHtml}</p>`;
+}
+
+const RELATORIOS_STATUS_AGENDA = [
+  ['realizados', '🟢', 'Realizados'],
+  ['agendados', '🔵', 'Agendados'],
+  ['cancelados', '🟡', 'Cancelados'],
+  ['faltas', '🔴', 'Faltas'],
+];
+
+function renderDesempenhoAgenda(agenda) {
+  const perdidos = agenda.cancelados + agenda.faltas;
+  return `
+    <div class="relatorios-status-lista">
+      ${RELATORIOS_STATUS_AGENDA.map(([chave, emoji, label]) => `
+        <div class="relatorios-status-linha">
+          <span>${emoji} ${label}</span>
+          <strong>${agenda[chave]}</strong>
+        </div>
+      `).join('')}
+    </div>
+    <div class="relatorios-barra-bloco">
+      <div class="relatorios-barra-label">Ocupação da agenda</div>
+      ${agenda.ocupacao_pct == null
+        ? '<div class="vazio-inline">Sem dados suficientes pra calcular (cadastre profissionais e horário de funcionamento).</div>'
+        : `
+          <div class="onboarding-progresso-barra"><div class="onboarding-progresso-preenchido" style="width:${Math.round(agenda.ocupacao_pct)}%"></div></div>
+          <div class="relatorios-barra-valor">${Math.round(agenda.ocupacao_pct)}%</div>
+        `}
+    </div>
+    ${agenda.taxa_comparecimento_pct != null ? `<p class="relatorios-comparacao-mensal">Taxa de comparecimento: <strong>${Math.round(agenda.taxa_comparecimento_pct)}%</strong></p>` : ''}
+    ${perdidos > 0 ? `<p class="relatorios-aviso">Você teve ${perdidos} horário${perdidos === 1 ? '' : 's'} perdido${perdidos === 1 ? '' : 's'} este mês.</p>` : ''}
+  `;
+}
+
+async function renderRelatorios() {
+  conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
+  const data = await api(`/api/relatorios/resumo?mes=${referenciaRelatorioAtiva()}`);
+  if (!data) return;
+  relatoriosDados = data;
+
+  let html = `
+    <div class="inicio-cabecalho">
+      <h2>Relatórios</h2>
+    </div>
+  ` + navPeriodoRelatoriosHtml() + `
+    <div class="relatorios-kpis">
+      ${relatoriosKpiCard('Faturamento', data.kpis.faturamento.valor, data.kpis.faturamento.variacao_pct, 'moeda')}
+      ${relatoriosKpiCard('Recebido', data.kpis.recebido.valor, data.kpis.recebido.variacao_pct, 'moeda')}
+      ${relatoriosKpiCard('Atendimentos', data.kpis.atendimentos.valor, data.kpis.atendimentos.variacao_pct, 'numero')}
+      ${relatoriosKpiCard('Clientes', data.kpis.clientes.valor, data.kpis.clientes.variacao_pct, 'numero')}
+      ${relatoriosKpiCard('Ticket médio', data.kpis.ticket_medio.valor, data.kpis.ticket_medio.variacao_pct, 'moeda')}
+    </div>
+
+    <div class="relatorios-grid-2col">
+      <div class="relatorios-secao">
+        <h3 class="inicio-secao-titulo">Faturamento</h3>
+        ${renderGraficoFaturamentoDiario(data.faturamento_diario)}
+        ${relatoriosComparacaoMensalHtml(data.kpis.faturamento)}
+      </div>
+      <div class="relatorios-secao">
+        <h3 class="inicio-secao-titulo">Desempenho da agenda — ${data.agenda.atendimentos_total} atendimento${data.agenda.atendimentos_total === 1 ? '' : 's'}</h3>
+        ${renderDesempenhoAgenda(data.agenda)}
+      </div>
+    </div>
+  `;
+
+  conteudo.innerHTML = html;
+  bindNavPeriodoRelatorios();
 }
 
 // Card de um agendamento dentro de uma linha da grade de horários (Dia e,
