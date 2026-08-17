@@ -1094,6 +1094,51 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   margin: 8px 0 0;
 }
 
+/* Seções 6/7 (Resultado financeiro, Insights) — largura cheia, fora do grid
+   de 2 colunas, cada uma na sua própria linha. */
+.relatorios-secao-larga { margin-bottom: 20px; }
+.relatorios-secao-larga:last-child { margin-bottom: 0; }
+
+.relatorios-financeiro-linhas { display: flex; flex-direction: column; gap: 8px; }
+.relatorios-financeiro-linha { display: flex; justify-content: space-between; font-size: 15px; }
+.relatorios-financeiro-divisor { border-top: 1px solid #232847; margin: 4px 0; }
+.relatorios-financeiro-resultado { font-size: 17px; }
+
+/* Mini-gráfico Receitas × Despesas (Seção 6) — mesmo padrão "divs com
+   height:X%" já usado no gráfico do Financeiro (removido nesta sessão), só
+   que com 2 barras fixas em vez de agrupado por semana. */
+.relatorios-mini-grafico {
+  display: flex;
+  align-items: flex-end;
+  gap: 24px;
+  height: 90px;
+  padding: 8px 8px 0;
+  margin-top: 16px;
+}
+.relatorios-mini-barra-coluna { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; }
+.relatorios-mini-barra { width: 40%; border-radius: 3px 3px 0 0; min-height: 2px; align-self: stretch; margin: 0 auto; }
+.relatorios-mini-barra-entrada { background: #4ade80; }
+.relatorios-mini-barra-saida { background: #ff6b6b; }
+.relatorios-mini-barra-label { font-size: 11px; color: #a1a5c4; margin-top: 6px; }
+
+/* Seção "Insights da Kyvvo" — card com destaque na cor de marca, pra ficar
+   visualmente diferente das seções de dado puro (é a seção de "o que fazer
+   com isso", não só números). */
+.relatorios-insights {
+  border-color: rgba(124, 92, 252, 0.4);
+  background: linear-gradient(135deg, rgba(124, 92, 252, 0.08), rgba(0, 212, 255, 0.04));
+}
+.relatorios-insight-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 0;
+  border-top: 1px solid rgba(124, 92, 252, 0.15);
+  font-size: 14px;
+}
+.relatorios-insight-item:first-child { border-top: none; padding-top: 0; }
+.relatorios-insight-icone { flex-shrink: 0; }
+
 /* US71 — abas Mês/Semana/Dia da página /financeiro. Mesmo visual de .tab/
    .subtabs (agenda), mas num container próprio renderizado dentro de
    #conteudo — .subtabs é fixo/global e só aparece com o menu "agendamento"

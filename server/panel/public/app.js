@@ -3477,6 +3477,88 @@ function renderDesempenhoAgenda(agenda) {
   `;
 }
 
+function renderTabelaServicosRelatorio(servicos) {
+  if (!servicos.length) return '<div class="vazio">Nenhum atendimento registrado neste mês.</div>';
+  return `
+    <div class="tabela-wrapper">
+      <table class="tabela-tenants">
+        <thead><tr><th>Serviço</th><th>Atendimentos</th><th>Faturamento</th></tr></thead>
+        <tbody>
+          ${servicos.map((s) => `<tr><td>${s.nome}</td><td>${s.atendimentos}</td><td>${formatarPreco(s.faturamento)}</td></tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderSecaoClientesRelatorio(clientes, ticketMedio) {
+  return `
+    <p class="relatorios-comparacao-mensal"><strong>${clientes.total}</strong> cliente${clientes.total === 1 ? '' : 's'} atendido${clientes.total === 1 ? '' : 's'}</p>
+    <div class="relatorios-status-lista">
+      <div class="relatorios-status-linha"><span>Novos clientes</span><strong>${clientes.novos}</strong></div>
+      <div class="relatorios-status-linha"><span>Clientes recorrentes</span><strong>${clientes.recorrentes}</strong></div>
+    </div>
+    <div class="relatorios-barra-bloco">
+      <div class="relatorios-barra-label">Taxa de retorno</div>
+      ${clientes.taxa_retorno_pct == null
+        ? '<div class="vazio-inline">Sem dados suficientes.</div>'
+        : `
+          <div class="onboarding-progresso-barra"><div class="onboarding-progresso-preenchido" style="width:${Math.round(clientes.taxa_retorno_pct)}%"></div></div>
+          <div class="relatorios-barra-valor">${Math.round(clientes.taxa_retorno_pct)}%</div>
+        `}
+    </div>
+    <p class="relatorios-comparacao-mensal">Ticket médio: <strong>${clientes.total > 0 ? formatarPreco(ticketMedio) : '—'}</strong></p>
+    ${clientes.sem_retorno_60d > 0 ? `<p class="relatorios-aviso">${clientes.sem_retorno_60d} cliente${clientes.sem_retorno_60d === 1 ? '' : 's'} ${clientes.sem_retorno_60d === 1 ? 'está' : 'estão'} há mais de 60 dias sem agendar.</p>` : ''}
+  `;
+}
+
+// Resumo financeiro do mês — mesma fórmula já confirmada no Financeiro
+// (Resultado = Faturamento − Despesas), só que aqui é texto corrido em vez
+// dos 4 cards, seguindo o mockup: "não duplicaria toda a tela de
+// Financeiro". Mini-gráfico de 2 barras (Receitas × Despesas) fecha a seção.
+function renderSecaoFinanceiroRelatorio(financeiro) {
+  const resultadoPositivo = financeiro.resultado >= 0;
+  const maxBarra = Math.max(1, financeiro.faturamento, financeiro.despesas);
+  return `
+    <div class="relatorios-financeiro-linhas">
+      <div class="relatorios-financeiro-linha"><span>Receita</span><strong class="financeiro-entrada">${formatarPreco(financeiro.faturamento)}</strong></div>
+      <div class="relatorios-financeiro-linha"><span>Despesas</span><strong class="financeiro-saida">− ${formatarPreco(financeiro.despesas)}</strong></div>
+      <div class="relatorios-financeiro-divisor"></div>
+      <div class="relatorios-financeiro-linha relatorios-financeiro-resultado"><span>Resultado</span><strong class="${resultadoPositivo ? 'financeiro-entrada' : 'financeiro-saida'}">${formatarPreco(financeiro.resultado)}</strong></div>
+    </div>
+    ${financeiro.margem_pct != null ? `<p class="relatorios-comparacao-mensal">Margem: <strong>${financeiro.margem_pct.toFixed(1)}%</strong></p>` : ''}
+    <div class="relatorios-mini-grafico">
+      <div class="relatorios-mini-barra-coluna">
+        <div class="relatorios-mini-barra relatorios-mini-barra-entrada" style="height:${Math.round((financeiro.faturamento / maxBarra) * 100)}%"></div>
+        <div class="relatorios-mini-barra-label">Receitas</div>
+      </div>
+      <div class="relatorios-mini-barra-coluna">
+        <div class="relatorios-mini-barra relatorios-mini-barra-saida" style="height:${Math.round((financeiro.despesas / maxBarra) * 100)}%"></div>
+        <div class="relatorios-mini-barra-label">Despesas</div>
+      </div>
+    </div>
+  `;
+}
+
+// Insights — regra determinística no backend (nunca IA/LLM), o frontend só
+// mapeia tipo → emoji e imprime o texto já pronto.
+const RELATORIOS_INSIGHT_ICONE = {
+  faturamento: '📈',
+  perdas: '⚠️',
+  clientes_inativos: '💜',
+  ocupacao_semanal: '💡',
+};
+
+function renderInsightsRelatorio(insights) {
+  if (!insights.length) return '<div class="vazio-inline">Sem observações pra este mês.</div>';
+  return insights.map((i) => `
+    <div class="relatorios-insight-item">
+      <span class="relatorios-insight-icone">${RELATORIOS_INSIGHT_ICONE[i.tipo] || '✨'}</span>
+      <span>${i.texto}</span>
+    </div>
+  `).join('');
+}
+
 async function renderRelatorios() {
   conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
   const data = await api(`/api/relatorios/resumo?mes=${referenciaRelatorioAtiva()}`);
@@ -3506,6 +3588,27 @@ async function renderRelatorios() {
         <h3 class="inicio-secao-titulo">Desempenho da agenda — ${data.agenda.atendimentos_total} atendimento${data.agenda.atendimentos_total === 1 ? '' : 's'}</h3>
         ${renderDesempenhoAgenda(data.agenda)}
       </div>
+    </div>
+
+    <div class="relatorios-grid-2col">
+      <div class="relatorios-secao">
+        <h3 class="inicio-secao-titulo">Faturamento por serviço</h3>
+        ${renderTabelaServicosRelatorio(data.servicos)}
+      </div>
+      <div class="relatorios-secao">
+        <h3 class="inicio-secao-titulo">Clientes</h3>
+        ${renderSecaoClientesRelatorio(data.clientes, data.kpis.ticket_medio.valor)}
+      </div>
+    </div>
+
+    <div class="relatorios-secao relatorios-secao-larga">
+      <h3 class="inicio-secao-titulo">Resultado financeiro</h3>
+      ${renderSecaoFinanceiroRelatorio(data.financeiro)}
+    </div>
+
+    <div class="relatorios-secao relatorios-secao-larga relatorios-insights">
+      <h3 class="inicio-secao-titulo">✨ Insights da Kyvvo</h3>
+      ${renderInsightsRelatorio(data.insights)}
     </div>
   `;
 
