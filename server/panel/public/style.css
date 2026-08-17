@@ -466,6 +466,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .inicio-paginacao .btn-secundario { width: auto; margin: 0; }
 .inicio-paginacao .btn-secundario:disabled { opacity: 0.4; cursor: default; }
+.inicio-paginacao select { width: auto; margin: 0; }
 
 .inicio-oportunidade-item {
   background: #12162a;
@@ -1794,9 +1795,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .clientes-filtros input[type="text"] { flex: 1; min-width: 220px; margin: 0; }
 .clientes-filtros select { width: auto; margin: 0; }
 
-/* Pills de filtro por status (Todos/Ativos/Novos/Inativos) — mesmo visual de
-   .chip-modulo, com um estado ativo/selecionado a mais. */
-.clientes-status-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+/* Pills de filtro por status (Todos/Ativos/Novos/Inativos) — lado a lado em
+   4 colunas iguais (mesma largura), mesmo visual de .chip-modulo com um
+   estado ativo/selecionado a mais. */
+.clientes-status-pills { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 20px; }
 .chip-status {
   font-size: 12px;
   font-weight: 600;
@@ -1806,9 +1808,14 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   border: 1px solid #232847;
   color: #a1a5c4;
   cursor: pointer;
+  text-align: center;
 }
 .chip-status:hover { border-color: var(--accent); color: #fff; }
 .chip-status-ativo { background: rgba(124, 92, 252, 0.15); border-color: var(--accent); color: var(--accent-light); }
+
+@media (max-width: 640px) {
+  .clientes-status-pills { grid-template-columns: repeat(2, 1fr); }
+}
 
 /* Tabela do menu Clientes — nome + telefone empilhados na mesma célula
    (coluna "Cliente" única, ver mockup) e linha inteira clicável (abre o
