@@ -8,6 +8,22 @@ async function entrarNoPainel(page, { bloqueios = [], profissionais = [] } = {})
   await page.route('**/api/configuracao', (route) =>
     route.fulfill({ json: { dias_funcionamento: [1, 2, 3, 4, 5, 6], formato_hora: '24h', segmento: 'salao_beleza' } })
   );
+  // mostrar_profissional reflete a mesma regra do backend real (profissionais
+  // > 1) — sem isso o campo "Profissional (opcional)" do modal de bloqueio
+  // fica sempre escondido nos testes (contaStatus fica null sem esse mock).
+  await page.route('**/api/tenant/status', (route) =>
+    route.fulfill({
+      json: {
+        role: 'administrador',
+        plano: 'professional',
+        status: 'ativo',
+        email_verified: true,
+        onboarding_dispensado: true,
+        configuracao: { sem_servicos: false, sem_profissionais: false, whatsapp_desconectado: false, horario_nao_confirmado: false },
+        mostrar_profissional: profissionais.length > 1,
+      },
+    })
+  );
   await page.route('**/api/agendamentos**', (route) =>
     route.fulfill({ json: { view: 'dia', data: '2026-07-09', agendamentos: [] } })
   );
@@ -28,7 +44,7 @@ async function entrarNoPainel(page, { bloqueios = [], profissionais = [] } = {})
 }
 
 async function abrirTelaBloqueios(page) {
-  await page.click('#menu-cadastros-toggle');
+  await page.click('#menu-agenda-toggle');
   await page.click('.menu-item[data-menu="bloqueios"]');
 }
 
@@ -85,7 +101,10 @@ test.describe('Bloqueios de agenda — CRUD (US61)', () => {
   });
 
   test('cria um bloqueio para um profissional específico', async ({ page }) => {
-    await entrarNoPainel(page, { bloqueios: [], profissionais: [{ id: 'p1', nome: 'Bruna' }] });
+    // 2 profissionais: com só 1, o campo "Profissional (opcional)" some do
+    // modal (não é mais uma escolha real) — só faz sentido testar a seleção
+    // explícita com 2+, mesma regra do backend (mostrar_profissional).
+    await entrarNoPainel(page, { bloqueios: [], profissionais: [{ id: 'p1', nome: 'Bruna' }, { id: 'p2', nome: 'Carla' }] });
     let corpoEnviado = null;
     await page.route('**/api/bloqueios', (route) => {
       if (route.request().method() !== 'POST') return route.fallback();
@@ -182,9 +201,9 @@ test.describe('Bloqueios de agenda — CRUD (US61)', () => {
     expect(chamou).toBe(false);
   });
 
-  test('o cabeçalho "Cadastros" fica destacado quando Bloqueios está ativo', async ({ page }) => {
+  test('o cabeçalho "Agenda" fica destacado quando Bloqueios está ativo', async ({ page }) => {
     await entrarNoPainel(page, { bloqueios: [] });
     await abrirTelaBloqueios(page);
-    await expect(page.locator('#menu-cadastros-toggle')).toHaveClass(/tem-filho-ativo/);
+    await expect(page.locator('#menu-agenda-toggle')).toHaveClass(/tem-filho-ativo/);
   });
 });

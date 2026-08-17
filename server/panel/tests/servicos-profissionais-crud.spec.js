@@ -9,6 +9,23 @@ async function entrarNoPainel(page, { servicos = [], profissionais = [] } = {}) 
   await page.route('**/api/configuracao', (route) =>
     route.fulfill({ json: { dias_funcionamento: [1, 2, 3, 4, 5, 6], formato_hora: '24h', segmento: 'salao_beleza' } })
   );
+  // plano 'custom' fixo pra manter o menu Profissionais visível/clicável
+  // nestes testes (data-somente-plano-custom); mostrar_profissional segue a
+  // mesma regra do backend real (profissionais > 1) — sem isso os campos
+  // "Profissional preferencial" ficam sempre escondidos (contaStatus null).
+  await page.route('**/api/tenant/status', (route) =>
+    route.fulfill({
+      json: {
+        role: 'administrador',
+        plano: 'custom',
+        status: 'ativo',
+        email_verified: true,
+        onboarding_dispensado: true,
+        configuracao: { sem_servicos: false, sem_profissionais: false, whatsapp_desconectado: false, horario_nao_confirmado: false },
+        mostrar_profissional: profissionais.length > 1,
+      },
+    })
+  );
   await page.route('**/api/agendamentos**', (route) =>
     route.fulfill({ json: { view: 'dia', data: '2026-07-09', agendamentos: [] } })
   );
@@ -30,7 +47,6 @@ async function entrarNoPainel(page, { servicos = [], profissionais = [] } = {}) 
 test.describe('Serviços — CRUD (US17/PR4)', () => {
   test('lista os serviços cadastrados com labels e botões sempre visíveis', async ({ page }) => {
     await entrarNoPainel(page, { servicos: [{ id: 's1', nome: 'Corte', duracao_minutos: 30, preco: 50, ativo: true }] });
-    await page.click('#menu-cadastros-toggle');
     await page.click('.menu-item[data-menu="servicos"]');
     const item = page.locator('.servico-item');
     await expect(item).toContainText('Serviço: Corte');
@@ -47,24 +63,23 @@ test.describe('Serviços — CRUD (US17/PR4)', () => {
     await entrarNoPainel(page, {
       servicos: [{ id: 's1', nome: 'Corte', duracao_minutos: 30, preco: 50, ativo: true, descricao: 'Inclui lavagem e finalização' }],
     });
-    await page.click('#menu-cadastros-toggle');
     await page.click('.menu-item[data-menu="servicos"]');
     await expect(page.locator('.servico-item')).toContainText('Inclui lavagem e finalização');
   });
 
   test('serviço com profissional preferencial mostra o nome dele no card', async ({ page }) => {
+    // 2 profissionais: com só 1, "Profissional preferencial" some do card
+    // (não é mais uma escolha real) — mesma regra de mostrar_profissional.
     await entrarNoPainel(page, {
       servicos: [{ id: 's1', nome: 'Corte', duracao_minutos: 30, preco: 50, ativo: true, profissional_preferencial_id: 'p1' }],
-      profissionais: [{ id: 'p1', nome: 'Bruna', servicos: ['s1'] }],
+      profissionais: [{ id: 'p1', nome: 'Bruna', servicos: ['s1'] }, { id: 'p2', nome: 'Ana', servicos: [] }],
     });
-    await page.click('#menu-cadastros-toggle');
     await page.click('.menu-item[data-menu="servicos"]');
     await expect(page.locator('.servico-item')).toContainText('Profissional preferencial: Bruna');
   });
 
   test('serviço desabilitado mostra o badge e o botão vira "Habilitar"', async ({ page }) => {
     await entrarNoPainel(page, { servicos: [{ id: 's1', nome: 'Corte', duracao_minutos: 30, preco: 50, ativo: false }] });
-    await page.click('#menu-cadastros-toggle');
     await page.click('.menu-item[data-menu="servicos"]');
     const item = page.locator('.servico-item');
     await expect(item).toHaveClass(/servico-desabilitado/);
@@ -74,13 +89,14 @@ test.describe('Serviços — CRUD (US17/PR4)', () => {
 
   test('sem serviços cadastrados, mostra mensagem vazia', async ({ page }) => {
     await entrarNoPainel(page, { servicos: [] });
-    await page.click('#menu-cadastros-toggle');
     await page.click('.menu-item[data-menu="servicos"]');
     await expect(page.locator('.vazio')).toContainText('Nenhum serviço cadastrado');
   });
 
   test('cria um novo serviço com profissional preferencial', async ({ page }) => {
-    await entrarNoPainel(page, { servicos: [], profissionais: [{ id: 'p1', nome: 'Bruna', servicos: [] }] });
+    // 2 profissionais: com só 1 o campo "Profissional preferencial" some do
+    // formulário (data-somente hidden), impossível de selectOption nele.
+    await entrarNoPainel(page, { servicos: [], profissionais: [{ id: 'p1', nome: 'Bruna', servicos: [] }, { id: 'p2', nome: 'Ana', servicos: [] }] });
     let corpoEnviado = null;
     await page.route('**/api/servicos', (route) => {
       if (route.request().method() !== 'POST') return route.fallback();
@@ -88,7 +104,6 @@ test.describe('Serviços — CRUD (US17/PR4)', () => {
       return route.fulfill({ status: 201, json: { id: 'novo', ativo: true, ...corpoEnviado } });
     });
 
-    await page.click('#menu-cadastros-toggle');
     await page.click('.menu-item[data-menu="servicos"]');
     await page.click('#btn-novo-servico');
     await page.fill('#servico-nome', 'Escova');
@@ -113,7 +128,6 @@ test.describe('Serviços — CRUD (US17/PR4)', () => {
       servicos: [{ id: 's1', nome: 'Corte', duracao_minutos: 30, preco: 50, ativo: true, descricao: 'Inclui lavagem', profissional_preferencial_id: 'p1' }],
       profissionais: [{ id: 'p1', nome: 'Bruna', servicos: ['s1'] }],
     });
-    await page.click('#menu-cadastros-toggle');
     await page.click('.menu-item[data-menu="servicos"]');
     await page.click('[data-acao-servico="editar"]');
 
@@ -132,7 +146,6 @@ test.describe('Serviços — CRUD (US17/PR4)', () => {
       return route.fulfill({ json: { id: 's1', nome: 'Corte', duracao_minutos: 30, preco: 50, ativo: false } });
     });
 
-    await page.click('#menu-cadastros-toggle');
     await page.click('.menu-item[data-menu="servicos"]');
     await page.click('[data-acao-servico="desabilitar"]');
 
@@ -148,7 +161,6 @@ test.describe('Serviços — CRUD (US17/PR4)', () => {
       return route.fulfill({ json: { ok: true } });
     });
 
-    await page.click('#menu-cadastros-toggle');
     await page.click('.menu-item[data-menu="servicos"]');
     await page.click('[data-acao-servico="excluir"]');
 
@@ -167,7 +179,6 @@ test.describe('Serviços — CRUD (US17/PR4)', () => {
       return route.fulfill({ json: { ok: true } });
     });
 
-    await page.click('#menu-cadastros-toggle');
     await page.click('.menu-item[data-menu="servicos"]');
     await page.click('[data-acao-servico="excluir"]');
     await page.click('#btn-voltar-excluir-servico');
@@ -207,7 +218,6 @@ test.describe('Profissionais — CRUD (US17)', () => {
     await entrarNoPainel(page, {
       profissionais: [{ id: 'p1', nome: 'Bruna', servicos: ['s1', 's2'] }],
     });
-    await page.click('#menu-cadastros-toggle');
     await page.click('.menu-item[data-menu="profissionais"]');
     const item = page.locator('.agendamento-item');
     await expect(item).toContainText('Bruna');
@@ -227,7 +237,6 @@ test.describe('Profissionais — CRUD (US17)', () => {
       return route.fulfill({ status: 201, json: { id: 'novo', ...corpoEnviado } });
     });
 
-    await page.click('#menu-cadastros-toggle');
     await page.click('.menu-item[data-menu="profissionais"]');
     await page.click('#btn-novo-profissional');
     await page.fill('#profissional-nome', 'Carla');
@@ -245,31 +254,10 @@ test.describe('Profissionais — CRUD (US17)', () => {
       return route.fulfill({ json: { servicos: [] } });
     });
 
-    await page.click('#menu-cadastros-toggle');
     await page.click('.menu-item[data-menu="profissionais"]');
     await page.click('#btn-novo-profissional');
     await page.click('#btn-salvar-profissional');
 
     await expect(page.locator('#profissional-nome')).toHaveClass(/campo-invalido/);
-  });
-});
-
-test.describe('Menu "Cadastros" expansível (PR10)', () => {
-  test('submenu começa fechado e expande ao clicar no cabeçalho', async ({ page }) => {
-    await entrarNoPainel(page);
-    await expect(page.locator('#menu-cadastros-submenu')).not.toHaveClass(/aberto/);
-    await expect(page.locator('.menu-item[data-menu="servicos"]')).toBeHidden();
-
-    await page.click('#menu-cadastros-toggle');
-    await expect(page.locator('#menu-cadastros-submenu')).toHaveClass(/aberto/);
-    await expect(page.locator('.menu-item[data-menu="servicos"]')).toBeVisible();
-  });
-
-  test('o cabeçalho "Cadastros" fica destacado quando Serviços está ativo', async ({ page }) => {
-    await entrarNoPainel(page, { servicos: [] });
-    await page.click('#menu-cadastros-toggle');
-    await page.click('.menu-item[data-menu="servicos"]');
-
-    await expect(page.locator('#menu-cadastros-toggle')).toHaveClass(/tem-filho-ativo/);
   });
 });

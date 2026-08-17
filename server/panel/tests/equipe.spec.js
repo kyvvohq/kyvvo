@@ -22,6 +22,9 @@ async function entrarNoPainel(page, { role = 'administrador', membros = [], conv
         dias_restantes: null,
         pagamento_pendente: false,
         role,
+        // Equipe agora também é somente-plano-custom (além de somente-admin)
+        // — sem isso ficaria escondida pra administrador também.
+        plano: 'custom',
         configuracao: { sem_servicos: false, sem_profissionais: false, whatsapp_desconectado: false },
       },
     })
@@ -46,21 +49,25 @@ test.describe('Restrição de menu por perfil (US62)', () => {
     await entrarNoPainel(page, { role: 'administrador' });
     await page.click('#user-menu-toggle');
     await expect(page.locator('.user-menu-item[data-menu="equipe"]')).toBeVisible();
-    await expect(page.locator('.user-menu-item[data-menu="empresa"]')).toBeVisible();
-    await expect(page.locator('.user-menu-item[data-menu="pagamentos"]')).toBeVisible();
-    await expect(page.locator('.user-menu-item[data-menu="configuracao"]')).toBeVisible();
+    // Minha Empresa/Cobrança/Preferências saíram do user menu e viraram
+    // submenu de Configurações, na sidebar.
+    await page.click('#menu-config-toggle');
+    await expect(page.locator('.menu-item[data-menu="empresa"]')).toBeVisible();
+    await expect(page.locator('.menu-item[data-menu="pagamentos"]')).toBeVisible();
+    await expect(page.locator('.menu-item[data-menu="configuracao"]')).toBeVisible();
   });
 
   test('operador não vê itens restritos ao administrador', async ({ page }) => {
     await entrarNoPainel(page, { role: 'operador' });
     await page.click('#user-menu-toggle');
     await expect(page.locator('.user-menu-item[data-menu="equipe"]')).toBeHidden();
-    await expect(page.locator('.user-menu-item[data-menu="empresa"]')).toBeHidden();
-    await expect(page.locator('.user-menu-item[data-menu="pagamentos"]')).toBeHidden();
-    await expect(page.locator('.user-menu-item[data-menu="configuracao"]')).toBeHidden();
+    await page.click('#menu-config-toggle');
+    await expect(page.locator('.menu-item[data-menu="empresa"]')).toBeHidden();
+    await expect(page.locator('.menu-item[data-menu="pagamentos"]')).toBeHidden();
+    await expect(page.locator('.menu-item[data-menu="configuracao"]')).toBeHidden();
     // Itens operacionais continuam disponíveis.
     await expect(page.locator('.user-menu-item[data-menu="perfil"]')).toBeVisible();
-    await expect(page.locator('.user-menu-item[data-menu="whatsapp"]')).toBeVisible();
+    await expect(page.locator('.menu-item[data-menu="whatsapp"]')).toBeVisible();
   });
 });
 

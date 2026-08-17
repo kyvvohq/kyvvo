@@ -18,8 +18,8 @@ async function entrarNaConfiguracao(page, configuracaoInicial) {
     window.localStorage.setItem('kyvvo_nome', 'Ana');
   });
   await page.goto('/painel.html');
-  await page.click('#user-menu-toggle');
-  await page.click('.user-menu-item[data-menu="configuracao"]');
+  await page.click('#menu-config-toggle');
+  await page.click('.menu-item[data-menu="configuracao"]');
   await expect(page.locator('#config-horario-abertura')).toBeVisible();
 }
 

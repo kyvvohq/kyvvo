@@ -3,9 +3,10 @@ const { test, expect } = require('@playwright/test');
 // Cobre o user menu (avatar + dropdown, PR11): substitui os itens "Meu
 // Perfil"/"Fatura"/"Configuração" da sidebar e o botão "Sair" solto por um
 // avatar com iniciais + nome do responsável + nome do negócio (truncado em
-// 30 caracteres) + seta, que abre um dropdown com Meu Perfil/Minha Empresa/
-// Cobrança/Preferências/Ajuda/divisor/Sair. As chamadas de API são mockadas
-// via page.route — sem dependência de Postgres real.
+// 30 caracteres) + seta, que abre um dropdown com Meu Perfil/Equipe/Ajuda/
+// divisor/Sair (Minha Empresa/WhatsApp/Cobrança/Preferências viraram submenu
+// de Configurações na sidebar). As chamadas de API são mockadas via
+// page.route — sem dependência de Postgres real.
 
 async function entrarNoPainel(page, perfil = {}) {
   await page.route('**/api/configuracao', (route) =>
@@ -66,11 +67,11 @@ test.describe('User menu — dropdown (PR11)', () => {
     await expect(page.locator('#user-menu-dropdown')).toBeHidden();
   });
 
-  test('lista Meu Perfil, Minha Empresa, Equipe, WhatsApp, Cobrança, Preferências e Ajuda, com divisor antes do Sair', async ({ page }) => {
+  test('lista Meu Perfil, Equipe e Ajuda, com divisor antes do Sair', async ({ page }) => {
     await entrarNoPainel(page);
     await page.click('#user-menu-toggle');
     const itens = await page.locator('.user-menu-item').allTextContents();
-    expect(itens).toEqual(['Meu Perfil', 'Minha Empresa', 'Equipe', 'WhatsApp', 'Cobrança', 'Preferências', 'Ajuda']);
+    expect(itens).toEqual(['Meu Perfil', 'Equipe', 'Ajuda']);
     await expect(page.locator('.user-menu-divisor')).toBeVisible();
     await expect(page.locator('#btn-sair')).toContainText('Sair');
   });
@@ -82,10 +83,10 @@ test.describe('User menu — dropdown (PR11)', () => {
     await expect(page.locator('#conteudo')).toContainText('Em breve');
   });
 
-  test('"Minha Empresa" abre a tela de dados do negócio (PR12)', async ({ page }) => {
+  test('"Meu negócio" abre a tela de dados do negócio (PR12)', async ({ page }) => {
     await entrarNoPainel(page);
-    await page.click('#user-menu-toggle');
-    await page.click('.user-menu-item[data-menu="empresa"]');
+    await page.click('#menu-config-toggle');
+    await page.click('.menu-item[data-menu="empresa"]');
     await expect(page.locator('#form-empresa')).toBeVisible();
     await expect(page.locator('#nome_segmento')).toHaveValue('Salão da Ana');
   });
