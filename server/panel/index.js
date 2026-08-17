@@ -2301,26 +2301,38 @@ async function start() {
   // resolvido aqui, não no frontend, pra não precisar carregar a base de
   // clientes inteira a cada acesso.
   const CLIENTES_TAMANHOS_VALIDOS = new Set([10, 50, 100]);
-  const CLIENTES_ORDENACAO_SQL = {
-    nome_asc: 'c.nome ASC NULLS LAST, c.telefone ASC',
-    nome_desc: 'c.nome DESC NULLS LAST, c.telefone ASC',
-    telefone_asc: 'c.telefone ASC',
-    telefone_desc: 'c.telefone DESC',
-  };
+  const CLIENTES_STATUS_VALIDOS = new Set(['todos', 'ativo', 'novo', 'inativo']);
+  // Status derivado (não é uma coluna) — mesmo limiar de 30 dias já usado
+  // pra "clientes sem retorno" no dashboard Início (GET /api/inicio/resumo),
+  // reaproveitado aqui em vez de inventar outro número:
+  // novo = cadastrado nos últimos 30 dias; inativo = mais antigo que isso E
+  // sem nenhum atendimento confirmado/concluído nos últimos 30 dias; o resto
+  // é ativo.
+  const CLIENTE_STATUS_SQL = `CASE
+    WHEN c.criado_em >= now() - interval '30 days' THEN 'novo'
+    WHEN NOT EXISTS (
+      SELECT 1 FROM agendamentos a2
+      WHERE a2.cliente_id = c.id AND a2.status IN ('confirmado', 'concluido')
+        AND a2.data_hora >= now() - interval '30 days'
+    ) THEN 'inativo'
+    ELSE 'ativo'
+  END`;
   fastify.get('/api/clientes', { preHandler: [fastify.authenticate] }, async (request) => {
     const { tenantId } = request.user;
-    const buscaNome = (request.query.busca_nome || '').trim();
-    const buscaTelefone = (request.query.busca_telefone || '').trim();
-    const ordenarPor = ['nome', 'telefone'].includes(request.query.ordenar_por) ? request.query.ordenar_por : 'nome';
+    const busca = (request.query.busca || '').trim();
+    const status = CLIENTES_STATUS_VALIDOS.has(request.query.status) ? request.query.status : 'todos';
     const ordem = request.query.ordem === 'desc' ? 'desc' : 'asc';
     const tamanho = CLIENTES_TAMANHOS_VALIDOS.has(Number(request.query.tamanho)) ? Number(request.query.tamanho) : 10;
     const pagina = Math.max(1, parseInt(request.query.pagina, 10) || 1);
     const offset = (pagina - 1) * tamanho;
-    const ordenacaoSQL = CLIENTES_ORDENACAO_SQL[`${ordenarPor}_${ordem}`];
+    const ordenacaoSQL = ordem === 'desc' ? 'c.nome DESC NULLS LAST, c.telefone ASC' : 'c.nome ASC NULLS LAST, c.telefone ASC';
 
     const { rows } = await pool.query(
       `SELECT c.id, c.nome, c.telefone,
               ultimo.servico_nome AS ultimo_atendimento, ultimo.data_hora AS ultimo_atendimento_data,
+              proximo.servico_nome AS proximo_atendimento, proximo.data_hora AS proximo_atendimento_data,
+              COALESCE(gasto.total, 0) AS total_gasto,
+              ${CLIENTE_STATUS_SQL} AS status,
               count(*) OVER()::int AS total_geral
        FROM clientes c
        LEFT JOIN LATERAL (
@@ -2331,12 +2343,36 @@ async function start() {
          ORDER BY a.data_hora DESC
          LIMIT 1
        ) ultimo ON true
+       LEFT JOIN LATERAL (
+         SELECT s.nome AS servico_nome, a.data_hora
+         FROM agendamentos a
+         JOIN servicos s ON s.id = a.servico_id
+         WHERE a.cliente_id = c.id AND a.status = 'confirmado' AND a.data_hora >= now()
+         ORDER BY a.data_hora ASC
+         LIMIT 1
+       ) proximo ON true
+       LEFT JOIN LATERAL (
+         SELECT sum(l.valor) AS total
+         FROM lancamentos_financeiros l
+         JOIN agendamentos a ON a.id = l.agendamento_id
+         WHERE a.cliente_id = c.id AND l.status = 'realizado'
+       ) gasto ON true
        WHERE c.tenant_id = $1 AND c.excluido_em IS NULL
-         AND ($2 = '' OR c.nome ILIKE '%' || $2 || '%')
-         AND ($3 = '' OR c.telefone ILIKE '%' || $3 || '%')
+         AND ($2 = '' OR c.nome ILIKE '%' || $2 || '%' OR c.telefone ILIKE '%' || $2 || '%' OR c.email ILIKE '%' || $2 || '%')
+         AND ($3 = 'todos' OR ${CLIENTE_STATUS_SQL} = $3)
        ORDER BY ${ordenacaoSQL}
        LIMIT $4 OFFSET $5`,
-      [tenantId, buscaNome, buscaTelefone, tamanho, offset]
+      [tenantId, busca, status, tamanho, offset]
+    );
+
+    const { rows: kpiRows } = await pool.query(
+      `SELECT
+         count(*)::int AS total,
+         count(*) FILTER (WHERE criado_em >= date_trunc('month', now()))::int AS novos_mes,
+         count(*) FILTER (WHERE ${CLIENTE_STATUS_SQL} = 'inativo')::int AS para_retornar
+       FROM clientes c
+       WHERE c.tenant_id = $1 AND c.excluido_em IS NULL`,
+      [tenantId]
     );
 
     const total = rows[0] ? rows[0].total_geral : 0;
@@ -2345,7 +2381,38 @@ async function start() {
       total,
       pagina,
       tamanho,
+      kpis: kpiRows[0],
     };
+  });
+
+  // Cadastro manual de cliente (menu Clientes, botão "+ Novo cliente") — até
+  // aqui um registro em `clientes` só nascia via upsert por telefone (bot/IA
+  // ou POST /api/agendamentos). Upsert por telefone aqui também: reengajar um
+  // telefone já cadastrado (inclusive um soft-deletado, ver excluido_em)
+  // atualiza os dados em vez de colidir com a unique key (tenant_id, telefone).
+  fastify.post('/api/clientes', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const { tenantId } = request.user;
+    const { nome, telefone: telefoneBruto, email } = request.body || {};
+
+    if (!nome || !nome.trim()) {
+      return reply.code(400).send({ error: 'Nome não pode ficar em branco.' });
+    }
+    const telefone = normalizarTelefoneCliente(telefoneBruto);
+    if (!telefone) {
+      return reply.code(400).send({ error: 'Telefone inválido.' });
+    }
+
+    const { rows } = await pool.query(
+      `INSERT INTO clientes (tenant_id, nome, telefone, email)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (tenant_id, telefone) DO UPDATE SET
+         nome = EXCLUDED.nome,
+         email = COALESCE(EXCLUDED.email, clientes.email),
+         excluido_em = NULL
+       RETURNING id, nome, telefone, email`,
+      [tenantId, nome.trim(), telefone, (email || '').trim() || null]
+    );
+    return { cliente: rows[0] };
   });
 
   // Exclusão de cliente (soft delete, ver 058_clientes_exclusao.sql) — hard
@@ -2387,23 +2454,34 @@ async function start() {
     return { cliente: rows[0] || null };
   });
 
-  // Detalhe do cliente (menu Clientes): dados básicos + histórico de
-  // atendimentos (data, serviço, valor, forma de pagamento). Só agendamentos
-  // 'confirmado'/'concluido' contam como atendimento — mesmo critério já
-  // usado em GET /api/clientes pro total_agendamentos, cancelado não é
-  // histórico de atendimento de verdade.
+  // Detalhe do cliente (menu Clientes): dados básicos + próximo agendamento
+  // confirmado + histórico de atendimentos (data, serviço, valor, forma de
+  // pagamento). Só agendamentos 'confirmado'/'concluido' contam como
+  // atendimento — mesmo critério já usado em GET /api/clientes, cancelado
+  // não é histórico de atendimento de verdade.
   fastify.get('/api/clientes/:id', { preHandler: [fastify.authenticate] }, async (request, reply) => {
     const { tenantId } = request.user;
     const { id } = request.params;
 
     const { rows: clienteRows } = await pool.query(
-      'SELECT id, nome, telefone, data_nascimento FROM clientes WHERE id = $1 AND tenant_id = $2',
+      'SELECT id, nome, telefone, data_nascimento, email, observacoes FROM clientes WHERE id = $1 AND tenant_id = $2',
       [id, tenantId]
     );
     const cliente = clienteRows[0];
     if (!cliente) {
       return reply.code(404).send({ error: 'Cliente não encontrado' });
     }
+
+    const { rows: proximoRows } = await pool.query(
+      `SELECT a.data_hora, s.nome AS servico_nome, p.nome AS profissional_nome
+       FROM agendamentos a
+       JOIN servicos s ON s.id = a.servico_id
+       LEFT JOIN profissionais p ON p.id = a.profissional_id
+       WHERE a.cliente_id = $1 AND a.tenant_id = $2 AND a.status = 'confirmado' AND a.data_hora >= now()
+       ORDER BY a.data_hora ASC
+       LIMIT 1`,
+      [id, tenantId]
+    );
 
     const { rows: historico } = await pool.query(
       `SELECT a.id, a.data_hora, a.status, s.nome AS servico_nome,
@@ -2416,17 +2494,18 @@ async function start() {
       [id, tenantId]
     );
 
-    return { cliente, historico };
+    return { cliente, proximo_atendimento: proximoRows[0] || null, historico };
   });
 
-  // Edita nome/data de nascimento do cliente (US, tela de detalhe) — telefone
-  // não é editável aqui: é a chave que liga o cliente às mensagens recebidas
-  // no WhatsApp (unique tenant_id+telefone), mudar por engano quebraria esse
-  // vínculo silenciosamente.
+  // Edita nome/data de nascimento/email/observações do cliente (menu
+  // Clientes, tela de perfil) — telefone não é editável aqui: é a chave que
+  // liga o cliente às mensagens recebidas no WhatsApp (unique
+  // tenant_id+telefone), mudar por engano quebraria esse vínculo
+  // silenciosamente.
   fastify.patch('/api/clientes/:id', { preHandler: [fastify.authenticate] }, async (request, reply) => {
     const { tenantId } = request.user;
     const { id } = request.params;
-    const { nome, data_nascimento: dataNascimento } = request.body || {};
+    const { nome, data_nascimento: dataNascimento, email, observacoes } = request.body || {};
 
     if (nome !== undefined && !nome.trim()) {
       return reply.code(400).send({ error: 'Nome não pode ficar em branco.' });
@@ -2438,10 +2517,17 @@ async function start() {
     const { rows } = await pool.query(
       `UPDATE clientes SET
          nome = COALESCE($3, nome),
-         data_nascimento = CASE WHEN $4::boolean THEN $5::date ELSE data_nascimento END
+         data_nascimento = CASE WHEN $4::boolean THEN $5::date ELSE data_nascimento END,
+         email = CASE WHEN $6::boolean THEN $7 ELSE email END,
+         observacoes = CASE WHEN $8::boolean THEN $9 ELSE observacoes END
        WHERE id = $1 AND tenant_id = $2
-       RETURNING id, nome, telefone, data_nascimento`,
-      [id, tenantId, nome ?? null, dataNascimento !== undefined, dataNascimento ?? null]
+       RETURNING id, nome, telefone, data_nascimento, email, observacoes`,
+      [
+        id, tenantId, nome ?? null,
+        dataNascimento !== undefined, dataNascimento ?? null,
+        email !== undefined, (email || '').trim() || null,
+        observacoes !== undefined, observacoes ?? null,
+      ]
     );
     if (!rows[0]) {
       return reply.code(404).send({ error: 'Cliente não encontrado' });
