@@ -1252,6 +1252,27 @@ conteudo.addEventListener('click', (e) => {
     return;
   }
 
+  // "Conversa" na lista de Próximos atendimentos do Início — abre o
+  // WhatsApp direto com o número do cliente (telefone já normalizado com
+  // DDI 55, formato que o wa.me espera).
+  const conversaInicioBtn = e.target.closest('[data-acao-inicio-conversa]');
+  if (conversaInicioBtn) {
+    const telefone = conversaInicioBtn.dataset.acaoInicioConversa;
+    if (telefone) window.open(`https://wa.me/${telefone}`, '_blank');
+    return;
+  }
+
+  // Paginação (3 por página) da lista de Próximos atendimentos do Início —
+  // reusa a lista já carregada em memória, sem precisar rebuscar a API.
+  const paginaInicioBtn = e.target.closest('[data-inicio-pagina]');
+  if (paginaInicioBtn) {
+    if (paginaInicioBtn.dataset.inicioPagina === 'anterior') inicioPaginaAtendimentos--;
+    else inicioPaginaAtendimentos++;
+    const corpo = document.getElementById('inicio-secao-proximos-corpo');
+    if (corpo) corpo.innerHTML = renderInicioProximosCorpo();
+    return;
+  }
+
   // US71 — abas Mês/Semana/Dia do Financeiro.
   const tabFinanceiro = e.target.closest('[data-financeiro-aba]');
   if (tabFinanceiro) {
@@ -3021,154 +3042,142 @@ function mostrarModalOnboarding(status) {
   }
 }
 
-// ---------- Início (dashboard) ----------
-// Reaproveita GET /api/agendamentos?view=dia (mesmo endpoint da aba Dia) e
-// renderAgendamentoItem (mesmo card com o menu de ações Reagendar/Encaixar/
-// Cancelar já ligado via delegação em `conteudo`) — não precisa de endpoint
-// nem de componente novo, só filtra pros agendamentos que ainda vão
-// acontecer hoje.
-// US63 — pendências mostradas no dashboard (trial, cobrança, configuração
-// incompleta). Reusa os mesmos campos de GET /api/tenant/status já expostos
-// pros avisos globais (US59); aqui é um resumo específico do dashboard, não
-// o painel de avisos. `status` pode vir null (chamada falhou/não mockada) —
-// degradação graciosa: dashboard funciona normalmente, só sem a seção.
-function construirPendenciasInicio(status) {
-  if (!status) return [];
-  const pendencias = [];
-  if (status.pagamento_pendente) {
-    pendencias.push({
-      id: 'pagamento_pendente',
-      mensagem: 'Pagamento pendente — regularize para evitar a suspensão do acesso.',
-      acaoLabel: 'Ir para Cobrança',
-      acaoMenu: 'pagamentos',
-    });
+// ---------- Início (dashboard, 5 seções) ----------
+// Pendências de configuração (sem serviço, sem WhatsApp etc.) e o aviso de
+// trial já aparecem globalmente (#avisos-painel/#trial-banner, US59,
+// disparados em verificarStatusConta() pra toda tela) — não duplica mais
+// isso aqui dentro do conteúdo do Início.
+let inicioProximosAtuais = [];
+let inicioPaginaAtendimentos = 0;
+const INICIO_ATENDIMENTOS_POR_PAGINA = 3;
+
+function renderInicioProximosCorpo() {
+  const totalPaginas = Math.max(1, Math.ceil(inicioProximosAtuais.length / INICIO_ATENDIMENTOS_POR_PAGINA));
+  if (inicioPaginaAtendimentos >= totalPaginas) inicioPaginaAtendimentos = totalPaginas - 1;
+  const inicioIdx = inicioPaginaAtendimentos * INICIO_ATENDIMENTOS_POR_PAGINA;
+  const pagina = inicioProximosAtuais.slice(inicioIdx, inicioIdx + INICIO_ATENDIMENTOS_POR_PAGINA);
+
+  if (!pagina.length) {
+    return '<div class="vazio">Nenhum agendamento para o restante de hoje.</div>';
   }
-  if (status.status === 'trial' && status.dias_restantes != null) {
-    pendencias.push({
-      id: 'trial',
-      mensagem: status.dias_restantes === 1 ? 'Seu trial acaba amanhã.' : `Seu trial acaba em ${status.dias_restantes} dias.`,
-      acaoLabel: 'Escolher plano',
-      acaoMenu: 'pagamentos',
-    });
-  }
-  const configuracao = status.configuracao || {};
-  if (configuracao.sem_servicos) {
-    pendencias.push({
-      id: 'sem_servicos',
-      mensagem: 'Nenhum serviço cadastrado ainda.',
-      mensagemVazia: 'Cadastre seus serviços para começar a receber agendamentos.',
-      acaoLabel: 'Cadastrar serviços',
-      acaoMenu: 'servicos',
-    });
-  }
-  if (configuracao.sem_profissionais) {
-    pendencias.push({
-      id: 'sem_profissionais',
-      mensagem: 'Nenhum profissional cadastrado ainda.',
-      acaoLabel: 'Cadastrar profissionais',
-      acaoMenu: 'profissionais',
-    });
-  }
-  if (configuracao.whatsapp_desconectado) {
-    pendencias.push({
-      id: 'whatsapp_desconectado',
-      mensagem: 'WhatsApp ainda não conectado.',
-      acaoLabel: 'Conectar WhatsApp',
-      acaoMenu: 'whatsapp',
-    });
-  }
-  return pendencias;
+
+  return `
+    <div class="inicio-atendimentos-lista">
+      ${pagina.map((ag) => `
+        <div class="inicio-atendimento-item">
+          <div class="inicio-atendimento-info">
+            <strong>${formatarHora(ag.data_hora)}</strong>
+            <span>${ag.cliente || ag.cliente_telefone}</span>
+            <span class="inicio-atendimento-servico">${ag.servico}</span>
+          </div>
+          <div class="inicio-atendimento-acoes">
+            <button class="btn-secundario" data-cliente-id="${ag.cliente_id}">Cliente</button>
+            <button class="btn-secundario" data-acao-inicio-conversa="${ag.cliente_telefone}">Conversa</button>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+    ${totalPaginas > 1 ? `
+      <div class="inicio-paginacao">
+        <button class="btn-secundario" data-inicio-pagina="anterior" ${inicioPaginaAtendimentos === 0 ? 'disabled' : ''}>← Anterior</button>
+        <span>${inicioPaginaAtendimentos + 1} de ${totalPaginas}</span>
+        <button class="btn-secundario" data-inicio-pagina="proxima" ${inicioPaginaAtendimentos >= totalPaginas - 1 ? 'disabled' : ''}>Próximo →</button>
+      </div>
+    ` : ''}
+  `;
+}
+
+function inicioCard(label, valorHtml) {
+  return `
+    <div class="financeiro-resumo-card">
+      <div class="financeiro-resumo-label">${label}</div>
+      <div>${valorHtml}</div>
+    </div>
+  `;
 }
 
 async function renderInicio() {
   conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
   const iso = formatarDataISO(new Date());
-  const [data, status, modulosResultado, resumoFinanceiro] = await Promise.all([
+  const [data, resumo] = await Promise.all([
     api(`/api/agendamentos?view=dia&data=${iso}`),
-    api('/api/tenant/status').catch(() => null),
-    api('/api/tenant/modulos').catch(() => null),
-    api('/api/financeiro/resumo-dashboard').catch(() => null),
+    api('/api/inicio/resumo'),
   ]);
-  if (!data) return;
+  if (!data || !resumo) return;
 
   const agora = Date.now();
   const proximos = data.agendamentos.filter((ag) => ag.status !== 'cancelado' && new Date(ag.data_hora).getTime() >= agora);
   agendamentosAtuais = proximos;
-
-  const pendencias = construirPendenciasInicio(status);
-  const temFinanceiro = ((modulosResultado && modulosResultado.modulos) || []).some((m) => m.key === 'financeiro');
-  // US70/CA01-CA02 — resumo só aparece pra quem tem o módulo ativo E pode
-  // ver dinheiro (mesma restrição do endpoint: requireAdmin, US62); operador
-  // nunca chama a rota certo, mas também não faz sentido mostrar os cards
-  // vazios pra ele.
-  const podeVerFinanceiro = temFinanceiro && status && status.role !== 'operador' && !!resumoFinanceiro;
-
-  // CA "estado vazio orienta próxima ação" — se não há agendamento nenhum e
-  // existe uma pendência de configuração conhecida, a mensagem aponta a
-  // causa mais provável em vez de só dizer "não tem nada".
-  const primeiraComMensagemVazia = pendencias.find((p) => p.mensagemVazia);
-  const mensagemVazia = primeiraComMensagemVazia
-    ? primeiraComMensagemVazia.mensagemVazia
-    : 'Nenhum agendamento para o restante de hoje.';
+  inicioProximosAtuais = proximos;
+  inicioPaginaAtendimentos = 0;
 
   let html = `
     <div class="inicio-cabecalho">
-      <h2>Próximos agendamentos de hoje</h2>
+      <h2>Início</h2>
       <button class="btn-novo-agendamento" id="btn-inicio-novo-agendamento">+ Novo agendamento</button>
     </div>
-    <div class="inicio-atalhos">
-      <button class="btn-secundario" data-acao-atalho-inicio="servicos">Serviços</button>
-      <button class="btn-secundario" data-acao-atalho-inicio="clientes">Clientes</button>
-      ${temFinanceiro ? '<button class="btn-secundario" data-acao-atalho-inicio="modulo:financeiro">Financeiro</button>' : ''}
-    </div>
+
+    <section class="inicio-secao">
+      <h3 class="inicio-secao-titulo">Seu dia</h3>
+      <div class="inicio-cards" style="grid-template-columns:repeat(3,1fr)">
+        ${inicioCard('Atendimentos', resumo.atendimentos_hoje)}
+        ${inicioCard('Horários livres', resumo.horarios_livres_hoje)}
+        ${inicioCard('Previsto', `<span class="financeiro-previsto">${formatarPreco(resumo.previsto_hoje)}</span>`)}
+      </div>
+    </section>
+
+    <section class="inicio-secao">
+      <h3 class="inicio-secao-titulo">Próximos atendimentos</h3>
+      <div id="inicio-secao-proximos-corpo">${renderInicioProximosCorpo()}</div>
+    </section>
   `;
 
-  // US70/CA02-CA03 — faixa de 4 cards com o resumo financeiro do dia/mês;
-  // cada card navega pro Financeiro (a US71 ainda vai trazer o recorte por
-  // dia/semana lá dentro — por ora os 4 cards abrem a mesma visão mensal,
-  // que já inclui os lançamentos de hoje).
-  if (podeVerFinanceiro) {
+  // Atendimento agente Kyvvo — só existe pra tecnologia='ia' (o bot de menu
+  // no n8n não grava conversas_ia); o backend já devolve null nesse caso.
+  if (resumo.atendimento_ia) {
     html += `
-      <div class="inicio-financeiro-resumo" data-testid="cards-financeiro-resumo">
-        <div class="financeiro-resumo-card" data-testid="card-realizado-hoje" data-card-financeiro-nav="1" data-financeiro-periodo="dia" data-financeiro-referencia="${iso}">
-          <div class="financeiro-resumo-label">Realizado hoje</div>
-          <div class="financeiro-entrada">${formatarPreco(resumoFinanceiro.realizado_hoje)}</div>
+      <section class="inicio-secao">
+        <h3 class="inicio-secao-titulo">Atendimento agente Kyvvo</h3>
+        <div class="inicio-cards" style="grid-template-columns:repeat(4,1fr)">
+          ${inicioCard('Conversas hoje', resumo.atendimento_ia.conversas_hoje)}
+          ${inicioCard('Não concluíram', resumo.atendimento_ia.nao_concluiram_hoje)}
+          ${inicioCard('Concluídos', resumo.atendimento_ia.concluidos_hoje)}
+          ${inicioCard('Min. economizados', resumo.atendimento_ia.minutos_economizados_hoje)}
         </div>
-        <div class="financeiro-resumo-card" data-testid="card-previsto-hoje" data-card-financeiro-nav="1" data-financeiro-periodo="dia" data-financeiro-referencia="${iso}">
-          <div class="financeiro-resumo-label">Previsto hoje</div>
-          <div class="financeiro-previsto">${formatarPreco(resumoFinanceiro.previsto_hoje)}</div>
-        </div>
-        <div class="financeiro-resumo-card" data-testid="card-realizado-mes" data-card-financeiro-nav="1" data-financeiro-periodo="mes" data-financeiro-referencia="${iso.slice(0, 7)}">
-          <div class="financeiro-resumo-label">Realizado no mês</div>
-          <div class="financeiro-entrada">${formatarPreco(resumoFinanceiro.realizado_mes)}</div>
-        </div>
-        <div class="financeiro-resumo-card" data-testid="card-previsto-mes" data-card-financeiro-nav="1" data-financeiro-periodo="mes" data-financeiro-referencia="${iso.slice(0, 7)}">
-          <div class="financeiro-resumo-label">Previsto no mês</div>
-          <div class="financeiro-previsto">${formatarPreco(resumoFinanceiro.previsto_mes)}</div>
-        </div>
-      </div>
+      </section>
     `;
   }
 
-  if (pendencias.length) {
-    html += `
-      <div class="inicio-pendencias">
-        <h3>Pendências</h3>
-        <ul>
-          ${pendencias.map((p) => `
-            <li>
-              <span>${p.mensagem}</span>
-              <button class="btn-secundario" data-acao-atalho-inicio="${p.acaoMenu}">${p.acaoLabel}</button>
-            </li>
-          `).join('')}
-        </ul>
+  html += `
+    <section class="inicio-secao">
+      <h3 class="inicio-secao-titulo">Oportunidades</h3>
+      <div class="inicio-oportunidade-item">
+        <span>${resumo.oportunidades.clientes_sem_retorno} clientes sem retorno há mais de 30 dias</span>
+        <button class="btn-secundario" data-acao-atalho-inicio="clientes">Ver clientes</button>
       </div>
+      <div class="inicio-oportunidade-item">
+        <span>${resumo.oportunidades.horarios_livres_amanha} horários livres amanhã</span>
+        <button class="btn-secundario" data-acao-atalho-inicio="agendamento">Preencher agenda</button>
+      </div>
+    </section>
+  `;
+
+  // Financeiro — só pra quem tem o módulo ativo e pode ver dinheiro (mesma
+  // restrição do endpoint /api/inicio/resumo); o backend já devolve null
+  // nesse caso, então o resto da tela funciona normalmente sem essa seção.
+  if (resumo.financeiro) {
+    const variacao = resumo.financeiro.variacao_pct;
+    html += `
+      <section class="inicio-secao">
+        <h3 class="inicio-secao-titulo">Financeiro</h3>
+        <div class="inicio-financeiro-mes">
+          <span class="financeiro-entrada inicio-financeiro-mes-valor">${formatarPreco(resumo.financeiro.faturado_mes)}</span>
+          <span class="inicio-financeiro-mes-legenda">faturado este mês</span>
+          ${variacao != null ? `<span class="badge ${variacao >= 0 ? 'badge-variacao-positiva' : 'badge-variacao-negativa'}">${variacao >= 0 ? '+' : ''}${variacao.toFixed(0)}%</span>` : ''}
+        </div>
+      </section>
     `;
   }
-
-  html += proximos.length
-    ? proximos.map(renderAgendamentoItem).join('')
-    : `<div class="vazio">${mensagemVazia}</div>`;
 
   conteudo.innerHTML = html;
   document.getElementById('btn-inicio-novo-agendamento').addEventListener('click', () => abrirModalNovoAgendamento());

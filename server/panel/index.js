@@ -493,6 +493,56 @@ async function garantirProfissionalPadrao(tenantId) {
   return { ...criado[0], unico: true };
 }
 
+// Conta o total de horários livres de um dia, somando todos os profissionais
+// do tenant — usado pelo card "horários livres" do Início (dashboard). Mesmo
+// raciocínio de slot do calcularDisponibilidadeIA (grade de
+// IA_DURACAO_PADRAO_MINUTOS em minutos, checando expediente/almoço, conflito
+// com agendamento confirmado e bloqueio manual), mas pra 1 dia só, sem o
+// corte artificial de IA_SLOTS_POR_DIA_PROFISSIONAL (ali é só pra caber no
+// prompt da IA; aqui o número precisa ser o total real).
+async function contarHorariosLivresNoDia(tenant, dataISO) {
+  const { rows: profissionais } = await pool.query(
+    'SELECT id FROM profissionais WHERE tenant_id = $1',
+    [tenant.id]
+  );
+  if (!profissionais.length) return 0;
+
+  const { rows: agendamentosDia } = await pool.query(
+    `SELECT profissional_id, data_hora FROM agendamentos
+     WHERE tenant_id = $1 AND status = 'confirmado'
+       AND (data_hora AT TIME ZONE 'America/Sao_Paulo')::date = $2::date`,
+    [tenant.id, dataISO]
+  );
+  const ocupadosPorProfissional = new Map();
+  for (const ag of agendamentosDia) {
+    const lista = ocupadosPorProfissional.get(ag.profissional_id) || [];
+    lista.push(new Date(ag.data_hora).getTime());
+    ocupadosPorProfissional.set(ag.profissional_id, lista);
+  }
+
+  const aberturaMinutos = horarioParaMinutos(tenant.horario_abertura);
+  const fechamentoMinutos = horarioParaMinutos(tenant.horario_fechamento);
+  let total = 0;
+  for (const prof of profissionais) {
+    for (let minutos = aberturaMinutos; minutos < fechamentoMinutos; minutos += IA_DURACAO_PADRAO_MINUTOS) {
+      const hh = String(Math.floor(minutos / 60)).padStart(2, '0');
+      const mm = String(minutos % 60).padStart(2, '0');
+      const candidatoISO = `${dataISO}T${hh}:${mm}:00-03:00`;
+      const candidatoMs = new Date(candidatoISO).getTime();
+      if (candidatoMs <= Date.now()) continue;
+      const { valido } = dentroDoHorarioFuncionamento(tenant, candidatoISO, IA_DURACAO_PADRAO_MINUTOS);
+      if (!valido) continue;
+      const ocupados = ocupadosPorProfissional.get(prof.id) || [];
+      if (ocupados.some((ts) => Math.abs(ts - candidatoMs) < IA_DURACAO_PADRAO_MINUTOS * 60000)) continue;
+      // eslint-disable-next-line no-await-in-loop
+      const bloqueio = await buscarBloqueioConflitante(tenant.id, prof.id, candidatoISO, IA_DURACAO_PADRAO_MINUTOS);
+      if (bloqueio) continue;
+      total++;
+    }
+  }
+  return total;
+}
+
 // US68/CA02 — monta o system prompt com o contexto real do tenant (serviços,
 // profissionais, disponibilidade) — a IA nunca inventa preço/horário porque
 // tudo que ela pode oferecer já vem pronto aqui.
@@ -1789,7 +1839,7 @@ async function start() {
     if (view === 'dia') {
       const dataRef = data || dataAtualBrasilia();
       const { rows } = await pool.query(
-        `SELECT a.id, a.data_hora, a.status, a.encaixe, c.nome AS cliente, c.telefone AS cliente_telefone,
+        `SELECT a.id, a.data_hora, a.status, a.encaixe, a.cliente_id, c.nome AS cliente, c.telefone AS cliente_telefone,
                 a.profissional_id, p.nome AS profissional, a.servico_id, s.nome AS servico, s.duracao_minutos, s.preco
          FROM agendamentos a
          JOIN clientes c ON c.id = a.cliente_id
@@ -3520,6 +3570,128 @@ async function start() {
       };
     }
   );
+
+  // Início (dashboard) reformulado em 5 seções — um único endpoint agregando
+  // tudo (em vez de N chamadas), já que a tela renderiza tudo de uma vez.
+  // Seção "Atendimento agente Kyvvo" só existe pra tecnologia='ia' (bot de
+  // menu no n8n não grava conversas_ia); Seção "Financeiro" só pra quem tem
+  // o módulo financeiro ativo E é administrador (mesmo critério de
+  // /api/financeiro/resumo-dashboard, só que sem 403 — aqui o resto da tela
+  // continua funcionando pra quem não pode ver dinheiro, só essa seção some).
+  fastify.get('/api/inicio/resumo', { preHandler: [fastify.authenticate] }, async (request) => {
+    const { tenantId, role } = request.user;
+    const hoje = dataAtualBrasilia();
+    const amanha = new Date(new Date(`${hoje}T12:00:00-03:00`).getTime() + 86400000).toISOString().slice(0, 10);
+
+    const { rows: tenantRows } = await pool.query(
+      `SELECT id, tecnologia, dias_funcionamento, horario_abertura, horario_fechamento,
+              horario_almoco_ativo, horario_almoco_inicio, horario_almoco_fim
+       FROM tenants WHERE id = $1`,
+      [tenantId]
+    );
+    const tenant = tenantRows[0];
+
+    const [
+      { rows: atendimentosRows },
+      { rows: previstoRows },
+      horariosLivresHoje,
+      horariosLivresAmanha,
+      { rows: semRetornoRows },
+    ] = await Promise.all([
+      pool.query(
+        `SELECT count(*)::int AS total FROM agendamentos
+         WHERE tenant_id = $1 AND status != 'cancelado'
+           AND (data_hora AT TIME ZONE 'America/Sao_Paulo')::date = $2::date`,
+        [tenantId, hoje]
+      ),
+      pool.query(
+        `SELECT COALESCE(SUM(valor) FILTER (WHERE status = 'previsto' AND data = $2), 0) AS previsto
+         FROM lancamentos_financeiros WHERE tenant_id = $1 AND tipo = 'entrada'`,
+        [tenantId, hoje]
+      ),
+      contarHorariosLivresNoDia(tenant, hoje),
+      contarHorariosLivresNoDia(tenant, amanha),
+      // "Sem retorno" exige que o cliente já tenha tido pelo menos 1
+      // atendimento antes — cliente novo que nunca agendou não é "sem
+      // retorno" (nunca teve retorno nenhum pra medir).
+      pool.query(
+        `SELECT count(*)::int AS total FROM clientes c
+         WHERE c.tenant_id = $1
+           AND EXISTS (SELECT 1 FROM agendamentos a WHERE a.cliente_id = c.id AND a.status != 'cancelado')
+           AND (SELECT max(a.data_hora) FROM agendamentos a WHERE a.cliente_id = c.id AND a.status != 'cancelado') < now() - interval '30 days'`,
+        [tenantId]
+      ),
+    ]);
+
+    let atendimentoIa = null;
+    if (tenant.tecnologia === 'ia') {
+      const { rows } = await pool.query(
+        `WITH conversas AS (
+           SELECT DISTINCT cliente_id FROM conversas_ia
+           WHERE tenant_id = $1 AND role = 'user'
+             AND (criado_em AT TIME ZONE 'America/Sao_Paulo')::date = $2::date
+         ),
+         agendados AS (
+           SELECT DISTINCT cliente_id FROM agendamentos
+           WHERE tenant_id = $1 AND origem = 'whatsapp' AND status != 'cancelado'
+             AND (criado_em AT TIME ZONE 'America/Sao_Paulo')::date = $2::date
+         )
+         SELECT
+           (SELECT count(*) FROM conversas) AS conversas_hoje,
+           (SELECT count(*) FROM (SELECT cliente_id FROM conversas EXCEPT SELECT cliente_id FROM agendados) t) AS nao_concluiram_hoje,
+           (SELECT count(*) FROM agendamentos
+             WHERE tenant_id = $1 AND origem = 'whatsapp' AND status != 'cancelado'
+               AND (criado_em AT TIME ZONE 'America/Sao_Paulo')::date = $2::date) AS concluidos_hoje,
+           (SELECT COALESCE(SUM(s.duracao_minutos), 0) FROM agendamentos a JOIN servicos s ON s.id = a.servico_id
+             WHERE a.tenant_id = $1 AND a.origem = 'whatsapp' AND a.status != 'cancelado'
+               AND (a.criado_em AT TIME ZONE 'America/Sao_Paulo')::date = $2::date) AS minutos_economizados_hoje`,
+        [tenantId, hoje]
+      );
+      const r = rows[0];
+      atendimentoIa = {
+        conversas_hoje: Number(r.conversas_hoje),
+        nao_concluiram_hoje: Number(r.nao_concluiram_hoje),
+        concluidos_hoje: Number(r.concluidos_hoje),
+        minutos_economizados_hoje: Number(r.minutos_economizados_hoje),
+      };
+    }
+
+    let financeiro = null;
+    if (role === 'administrador') {
+      const { rows: moduloRows } = await pool.query(
+        "SELECT 1 FROM tenant_modulos WHERE tenant_id = $1 AND modulo_key = 'financeiro' AND ativo LIMIT 1",
+        [tenantId]
+      );
+      if (moduloRows.length) {
+        const { rows } = await pool.query(
+          `SELECT
+             COALESCE(SUM(valor) FILTER (WHERE status = 'realizado' AND to_char(data, 'YYYY-MM') = to_char($2::date, 'YYYY-MM')), 0) AS faturado_mes,
+             COALESCE(SUM(valor) FILTER (WHERE status = 'realizado' AND to_char(data, 'YYYY-MM') = to_char($2::date - interval '1 month', 'YYYY-MM')), 0) AS faturado_mes_anterior
+           FROM lancamentos_financeiros WHERE tenant_id = $1 AND tipo = 'entrada'`,
+          [tenantId, hoje]
+        );
+        const r = rows[0];
+        const faturadoMes = Number(r.faturado_mes);
+        const faturadoMesAnterior = Number(r.faturado_mes_anterior);
+        financeiro = {
+          faturado_mes: faturadoMes,
+          variacao_pct: faturadoMesAnterior > 0 ? ((faturadoMes - faturadoMesAnterior) / faturadoMesAnterior) * 100 : null,
+        };
+      }
+    }
+
+    return {
+      atendimentos_hoje: atendimentosRows[0].total,
+      horarios_livres_hoje: horariosLivresHoje,
+      previsto_hoje: Number(previstoRows[0].previsto),
+      oportunidades: {
+        clientes_sem_retorno: semRetornoRows[0].total,
+        horarios_livres_amanha: horariosLivresAmanha,
+      },
+      atendimento_ia: atendimentoIa,
+      financeiro,
+    };
+  });
 
   fastify.get(
     '/api/financeiro/lancamentos',

@@ -413,46 +413,92 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .inicio-cabecalho h2 { font-size: 20px; }
 
-/* Atalhos do dashboard (US63) — botões secundários lado a lado, mesmo
-   tamanho de fonte/altura dos botões de ação já usados no resto do painel. */
-.inicio-atalhos {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 20px;
+/* Início reformulado em 5 seções — cada uma é um bloco com título pequeno
+   em caixa alta (mesmo estilo de .financeiro-resumo-label) e um corpo
+   próprio (cards, lista ou linha de oportunidade) por baixo. */
+.inicio-secao { margin-bottom: 24px; }
+
+.inicio-secao-titulo {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #a1a5c4;
+  margin-bottom: 10px;
 }
 
-.inicio-atalhos .btn-secundario { width: auto; margin: 0; }
+/* Grid de cards reaproveitando .financeiro-resumo-card/.financeiro-resumo-label
+   (já usados no Financeiro) — número de colunas vem inline por seção (3 no
+   "Seu dia", 4 no "Atendimento agente Kyvvo"). */
+.inicio-cards { display: grid; gap: 10px; }
 
-/* Pendências do dashboard (US63) — resumo compacto (checklist), distinto
-   visualmente do painel de avisos global (#avisos-painel, US59): aqui é
-   contido dentro do card do dashboard, não um banner de largura total. */
-.inicio-pendencias {
+@media (max-width: 640px) {
+  .inicio-cards { grid-template-columns: repeat(2, 1fr) !important; }
+}
+
+.inicio-atendimentos-lista { display: flex; flex-direction: column; gap: 10px; }
+
+.inicio-atendimento-item {
   background: #12162a;
   border: 1px solid #232847;
-  border-radius: 12px;
-  padding: 16px 20px;
-  margin-bottom: 20px;
-}
-
-.inicio-pendencias h3 { font-size: 15px; margin-bottom: 10px; }
-
-.inicio-pendencias ul { list-style: none; }
-
-.inicio-pendencias li {
+  border-radius: 10px;
+  padding: 12px 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 8px 0;
-  border-top: 1px solid #232847;
-  font-size: 14px;
+  flex-wrap: wrap;
+}
+
+.inicio-atendimento-info { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 14px; color: #f2f2f7; }
+.inicio-atendimento-servico { color: #a1a5c4; }
+.inicio-atendimento-acoes { display: flex; gap: 8px; flex-shrink: 0; }
+.inicio-atendimento-acoes .btn-secundario { width: auto; margin: 0; }
+
+.inicio-paginacao {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 12px;
+  font-size: 13px;
   color: #a1a5c4;
 }
 
-.inicio-pendencias li:first-child { border-top: none; padding-top: 0; }
+.inicio-paginacao .btn-secundario { width: auto; margin: 0; }
+.inicio-paginacao .btn-secundario:disabled { opacity: 0.4; cursor: default; }
 
-.inicio-pendencias .btn-secundario { width: auto; margin: 0; flex-shrink: 0; }
+.inicio-oportunidade-item {
+  background: #12162a;
+  border: 1px solid #232847;
+  border-radius: 10px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.inicio-oportunidade-item .btn-secundario { width: auto; margin: 0; flex-shrink: 0; }
+
+.inicio-financeiro-mes {
+  background: #12162a;
+  border: 1px solid #232847;
+  border-radius: 10px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.inicio-financeiro-mes-valor { font-size: 22px; font-weight: 700; }
+.inicio-financeiro-mes-legenda { color: #a1a5c4; font-size: 14px; }
+
+.badge-variacao-positiva { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
+.badge-variacao-negativa { background: rgba(255, 107, 107, 0.15); color: #ff6b6b; }
 
 /* ---------- US56 — Onboarding guiado (tela "Primeiros passos") ---------- */
 .onboarding-cabecalho { margin-bottom: 20px; }
