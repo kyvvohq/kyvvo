@@ -616,6 +616,15 @@ function formatarDataCurta(dataHoraISO) {
   return new Date(dataHoraISO).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Sao_Paulo' });
 }
 
+// "DD/MM às HH:mm" — usado onde o ano não agrega (próximo atendimento na
+// tela de Clientes, sempre num horizonte curto o bastante pra não precisar
+// do ano pra desambiguar).
+function formatarDataHoraCurta(dataHoraISO) {
+  const d = new Date(dataHoraISO);
+  const dataStr = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' });
+  return `${dataStr} às ${formatarHora(dataHoraISO)}`;
+}
+
 // ---------- Toasts ----------
 function mostrarToast(mensagem, tipo = 'sucesso') {
   let container = document.getElementById('toast-container');
@@ -689,7 +698,7 @@ function validarObrigatorios(form) {
 }
 
 function abrirModalNovoAgendamento(prefill) {
-  const { data: dataPrefill, hora: horaPrefill } = prefill || {};
+  const { data: dataPrefill, hora: horaPrefill, telefone: telefonePrefill, nome: nomePrefill } = prefill || {};
   const hoje = formatarDataISO(new Date());
   abrirModal(
     '<h3>Novo agendamento</h3>',
@@ -698,11 +707,11 @@ function abrirModalNovoAgendamento(prefill) {
         <div class="modal-erro" id="novo-ag-erro"></div>
 
         <label for="novo-ag-telefone">Telefone *</label>
-        <input type="tel" id="novo-ag-telefone" data-obrigatorio placeholder="11999999999" autocomplete="off">
+        <input type="tel" id="novo-ag-telefone" data-obrigatorio placeholder="11999999999" autocomplete="off" value="${telefonePrefill || ''}">
         <div class="campo-aviso" id="novo-ag-cliente-aviso"></div>
 
         <label for="novo-ag-nome">Nome do cliente *</label>
-        <input type="text" id="novo-ag-nome" data-obrigatorio autocomplete="off">
+        <input type="text" id="novo-ag-nome" data-obrigatorio autocomplete="off" value="${nomePrefill || ''}">
 
         <label for="novo-ag-servico">Serviço *</label>
         <select id="novo-ag-servico" data-obrigatorio><option value="">Carregando serviços...</option></select>
@@ -1236,38 +1245,27 @@ function renderAgendamentoItem(ag) {
 }
 
 conteudo.addEventListener('click', (e) => {
-  // "Cliente" nos Próximos atendimentos do Início — abre o detalhe num
-  // modal (a lista do menu Clientes em si usa expansão inline, ver
-  // data-cliente-expandir abaixo).
+  // "Cliente" nos Próximos atendimentos do Início, e qualquer linha da
+  // tabela do menu Clientes — abrem o mesmo modal de perfil
+  // (abrirModalClienteDetalhe).
   const clienteItemEl = e.target.closest('[data-cliente-id]');
   if (clienteItemEl) {
     abrirModalClienteDetalhe(clienteItemEl.dataset.clienteId);
     return;
   }
-
-  // Menu Clientes — clicar numa linha expande/recolhe o detalhe (nome,
-  // telefone, data de nascimento, histórico) logo abaixo dela na própria
-  // tabela, sem modal. Ações dentro do detalhe (salvar/excluir) e o form de
-  // filtro/ordenação/paginação da tabela também são tratados aqui.
-  const linhaClienteEl = e.target.closest('[data-cliente-expandir]');
+  const linhaClienteEl = e.target.closest('[data-cliente-abrir]');
   if (linhaClienteEl) {
-    alternarExpansaoCliente(linhaClienteEl.dataset.clienteExpandir, linhaClienteEl);
+    abrirModalClienteDetalhe(linhaClienteEl.dataset.clienteAbrir);
     return;
   }
-  const salvarClienteBtn = e.target.closest('[data-cliente-salvar]');
-  if (salvarClienteBtn) {
-    salvarClienteDetalhe(salvarClienteBtn.dataset.clienteSalvar);
-    return;
-  }
-  const excluirClienteBtn = e.target.closest('[data-cliente-excluir]');
-  if (excluirClienteBtn) {
-    const cliente = clientesAtuais.find((c) => c.id === excluirClienteBtn.dataset.clienteExcluir);
-    if (cliente) abrirModalExcluirCliente(cliente);
-    return;
-  }
-  const ordenarClientesEl = e.target.closest('[data-clientes-ordenar]');
-  if (ordenarClientesEl) {
-    alternarOrdenacaoClientes(ordenarClientesEl.dataset.clientesOrdenar);
+
+  // Menu Clientes — pills de filtro por status (Todos/Ativos/Novos/Inativos).
+  const statusClienteBtn = e.target.closest('[data-clientes-status]');
+  if (statusClienteBtn) {
+    clientesFiltro.status = statusClienteBtn.dataset.clientesStatus;
+    clientesFiltro.pagina = 1;
+    clientesCampoFocado = null;
+    renderClientes();
     return;
   }
   const paginaClientesBtn = e.target.closest('[data-clientes-pagina]');
@@ -2679,43 +2677,72 @@ function formatarFormaPagamento(forma) {
   return rotulos[forma] || 'Não informado';
 }
 
-// Detalhe do cliente (menu Clientes): nome/data de nascimento editáveis
-// (telefone não — é a chave que liga o cliente às mensagens do WhatsApp) +
-// histórico de atendimentos (data, serviço, valor, forma de pagamento).
+// Perfil do cliente (menu Clientes: clicar numa linha da tabela; Início:
+// atalho "Cliente" nos Próximos atendimentos) — próximo agendamento, último
+// atendimento, histórico completo, observações livres, e um formulário de
+// edição (nome/e-mail/nascimento) + exclusão (telefone não é editável: é a
+// chave que liga o cliente às mensagens do WhatsApp).
 async function abrirModalClienteDetalhe(clienteId) {
   abrirModal('<h3>Cliente</h3>', '<div class="vazio">Carregando...</div>', 'modal-card-pagamento');
   const dados = await api(`/api/clientes/${clienteId}`);
   if (!dados) return;
-  const { cliente, historico } = dados;
+  const { cliente, proximo_atendimento: proximo, historico } = dados;
+  const ultimo = historico[0];
 
   const conteudo = `
+    <div class="cliente-perfil-telefone">${cliente.telefone}</div>
+    <div class="cliente-perfil-acoes-topo">
+      <button class="btn-secundario" id="btn-cliente-whatsapp" type="button">WhatsApp</button>
+      <button class="btn-primario" id="btn-cliente-novo-agendamento" type="button">Novo agendamento</button>
+    </div>
+
+    ${proximo ? `
+      <div class="cliente-perfil-secao">
+        <h4>Próximo agendamento</h4>
+        <p>${formatarDataHoraCurta(proximo.data_hora)} · ${proximo.servico_nome}${proximo.profissional_nome ? ` · ${proximo.profissional_nome}` : ''}</p>
+      </div>
+    ` : ''}
+
+    <div class="cliente-perfil-secao">
+      <h4>Último atendimento</h4>
+      <p>${ultimo ? `${formatarDataCurta(ultimo.data_hora)} · ${ultimo.servico_nome}${ultimo.valor != null ? ` · ${formatarPreco(Number(ultimo.valor))}` : ''}` : 'Nenhum atendimento registrado ainda.'}</p>
+    </div>
+
+    <div class="cliente-perfil-secao">
+      <h4>Histórico</h4>
+      ${historico.length
+        ? `<ul class="cliente-perfil-historico">${historico.map((h) => `<li>${formatarDataCurta(h.data_hora)} &nbsp; ${h.servico_nome}</li>`).join('')}</ul>`
+        : '<p class="vazio-inline">Nenhum atendimento registrado ainda.</p>'}
+    </div>
+
+    <div class="cliente-perfil-secao">
+      <h4>Observações</h4>
+      <textarea id="cliente-observacoes" rows="3" placeholder="Anotações livres sobre o cliente">${cliente.observacoes || ''}</textarea>
+    </div>
+
+    <h4 class="cliente-perfil-secao-titulo-editar">Editar cadastro</h4>
     <label for="cliente-nome">Nome</label>
     <input type="text" id="cliente-nome" value="${cliente.nome || ''}" placeholder="Nome do cliente">
-    <label for="cliente-telefone">Telefone</label>
-    <input type="text" id="cliente-telefone" value="${cliente.telefone}" disabled>
+    <label for="cliente-email">E-mail</label>
+    <input type="email" id="cliente-email" value="${cliente.email || ''}" placeholder="cliente@email.com">
     <label for="cliente-nascimento">Data de nascimento</label>
     <input type="date" id="cliente-nascimento" value="${cliente.data_nascimento || ''}">
     <div class="modal-erro" id="cliente-detalhe-erro"></div>
     <div class="modal-acoes">
-      <button class="btn-secundario" id="btn-fechar-cliente-detalhe">Fechar</button>
-      <button class="btn-primario" id="btn-salvar-cliente-detalhe">Salvar</button>
-    </div>
-
-    <h4 class="pagamento-historico-titulo">Histórico de atendimentos</h4>
-    <div class="tabela-wrapper">
-      <table class="tabela-tenants">
-        <thead><tr><th>Data</th><th>Serviço</th><th>Valor</th><th>Forma de pagamento</th></tr></thead>
-        <tbody>
-          ${historico.length
-            ? historico.map((h) => `<tr><td>${formatarDataCurta(h.data_hora)}</td><td>${h.servico_nome}</td><td>${h.valor != null ? formatarPreco(Number(h.valor)) : '—'}</td><td>${formatarFormaPagamento(h.forma_pagamento)}</td></tr>`).join('')
-            : '<tr><td colspan="4">Nenhum atendimento registrado ainda.</td></tr>'}
-        </tbody>
-      </table>
+      <button class="btn-secundario acao-perigo" id="btn-excluir-cliente-detalhe" type="button">Excluir</button>
+      <button class="btn-primario" id="btn-salvar-cliente-detalhe" type="button">Salvar</button>
     </div>
   `;
-  abrirModal(`<h3>${cliente.nome || 'Cliente'}</h3>`, conteudo, 'modal-card-pagamento');
+  abrirModal(`<h3>${cliente.nome || 'Cliente'}</h3>`, conteudo, 'modal-card-pagamento modal-cliente-perfil');
 
-  document.getElementById('btn-fechar-cliente-detalhe').addEventListener('click', fecharModal);
+  document.getElementById('btn-cliente-whatsapp').addEventListener('click', () => {
+    window.open(`https://wa.me/${cliente.telefone}`, '_blank');
+  });
+  document.getElementById('btn-cliente-novo-agendamento').addEventListener('click', () => {
+    fecharModal();
+    abrirModalNovoAgendamento({ telefone: cliente.telefone.replace(/^55/, ''), nome: cliente.nome });
+  });
+  document.getElementById('btn-excluir-cliente-detalhe').addEventListener('click', () => abrirModalExcluirCliente(cliente));
   document.getElementById('btn-salvar-cliente-detalhe').addEventListener('click', async () => {
     const nomeNovo = document.getElementById('cliente-nome').value.trim();
     if (!nomeNovo) {
@@ -2731,6 +2758,8 @@ async function abrirModalClienteDetalhe(clienteId) {
       body: JSON.stringify({
         nome: nomeNovo,
         data_nascimento: document.getElementById('cliente-nascimento').value || null,
+        email: document.getElementById('cliente-email').value.trim() || null,
+        observacoes: document.getElementById('cliente-observacoes').value || null,
       }),
     });
 
@@ -2746,131 +2775,61 @@ async function abrirModalClienteDetalhe(clienteId) {
   });
 }
 
-// ---------- Menu Clientes: tabela com filtro, ordenação, paginação e
-// expansão inline (sem modal) ----------
-let clientesAtuais = [];
-let clientesFiltro = { nome: '', telefone: '', ordenarPor: 'nome', ordem: 'asc', pagina: 1, tamanho: 10 };
-let clienteExpandidoId = null;
-let clientesFiltroDebounce;
-let clientesCampoFocado = null;
-
-function alternarOrdenacaoClientes(campo) {
-  if (clientesFiltro.ordenarPor === campo) {
-    clientesFiltro.ordem = clientesFiltro.ordem === 'asc' ? 'desc' : 'asc';
-  } else {
-    clientesFiltro.ordenarPor = campo;
-    clientesFiltro.ordem = 'asc';
-  }
-  clientesFiltro.pagina = 1;
-  clientesCampoFocado = null;
-  renderClientes();
-}
-
-function renderClienteLinha(c) {
-  return `
-    <tr class="linha-clicavel" data-cliente-expandir="${c.id}">
-      <td>${c.nome || 'Sem nome'}</td>
-      <td>${c.telefone}</td>
-      <td>${c.ultimo_atendimento || '—'}</td>
-      <td>${c.ultimo_atendimento_data ? formatarDataCurta(c.ultimo_atendimento_data) : '—'}</td>
-    </tr>
-  `;
-}
-
-function renderClienteDetalheConteudo(id, cliente, historico) {
-  return `
-    <div class="cliente-detalhe-form">
-      <label for="cliente-nome-${id}">Nome</label>
-      <input type="text" id="cliente-nome-${id}" value="${cliente.nome || ''}" placeholder="Nome do cliente">
-      <label for="cliente-telefone-${id}">Telefone</label>
-      <input type="text" id="cliente-telefone-${id}" value="${cliente.telefone}" disabled>
-      <label for="cliente-nascimento-${id}">Data de nascimento</label>
-      <input type="date" id="cliente-nascimento-${id}" value="${cliente.data_nascimento || ''}">
-      <div class="modal-erro" id="cliente-detalhe-erro-${id}"></div>
-      <div class="modal-acoes">
-        <button class="btn-secundario acao-perigo" data-cliente-excluir="${id}">Excluir</button>
-        <button class="btn-primario" data-cliente-salvar="${id}">Salvar</button>
-      </div>
-    </div>
-    <h4 class="pagamento-historico-titulo">Histórico de atendimentos</h4>
-    <div class="tabela-wrapper">
-      <table class="tabela-tenants">
-        <thead><tr><th>Data</th><th>Serviço</th><th>Valor</th><th>Forma de pagamento</th></tr></thead>
-        <tbody>
-          ${historico.length
-            ? historico.map((h) => `<tr><td>${formatarDataCurta(h.data_hora)}</td><td>${h.servico_nome}</td><td>${h.valor != null ? formatarPreco(Number(h.valor)) : '—'}</td><td>${formatarFormaPagamento(h.forma_pagamento)}</td></tr>`).join('')
-            : '<tr><td colspan="4">Nenhum atendimento registrado ainda.</td></tr>'}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
-
-// Expande/recolhe o detalhe do cliente logo abaixo da linha clicada, dentro
-// da própria tabela — carrega GET /api/clientes/:id só quando expande (não
-// pré-carrega todo mundo), e nunca refaz a busca da lista inteira só pra
-// abrir/fechar um detalhe.
-function fecharDetalheClienteAberto() {
-  if (!clienteExpandidoId) return;
-  const trDetalhe = document.querySelector(`tr.linha-cliente-detalhe[data-cliente-detalhe="${clienteExpandidoId}"]`);
-  if (trDetalhe) trDetalhe.remove();
-  const trResumo = document.querySelector(`tr[data-cliente-expandir="${clienteExpandidoId}"]`);
-  if (trResumo) trResumo.classList.remove('linha-expandida');
-  clienteExpandidoId = null;
-}
-
-async function alternarExpansaoCliente(id, trResumo) {
-  if (clienteExpandidoId === id) {
-    fecharDetalheClienteAberto();
-    return;
-  }
-  fecharDetalheClienteAberto();
-  clienteExpandidoId = id;
-  trResumo.classList.add('linha-expandida');
-  const trDetalhe = document.createElement('tr');
-  trDetalhe.className = 'linha-cliente-detalhe';
-  trDetalhe.dataset.clienteDetalhe = id;
-  trDetalhe.innerHTML = '<td colspan="4"><div class="vazio">Carregando...</div></td>';
-  trResumo.after(trDetalhe);
-
-  const dados = await api(`/api/clientes/${id}`);
-  if (clienteExpandidoId !== id) return; // fechou/trocou de linha enquanto carregava
-  if (!dados) {
-    trDetalhe.querySelector('td').innerHTML = '<div class="vazio">Erro ao carregar cliente.</div>';
-    return;
-  }
-  trDetalhe.querySelector('td').innerHTML = renderClienteDetalheConteudo(id, dados.cliente, dados.historico);
-}
-
-async function salvarClienteDetalhe(id) {
-  const nomeNovo = document.getElementById(`cliente-nome-${id}`).value.trim();
-  const erroEl = document.getElementById(`cliente-detalhe-erro-${id}`);
-  erroEl.textContent = '';
-  if (!nomeNovo) {
-    erroEl.textContent = 'Nome não pode ficar em branco.';
-    return;
-  }
-  const btn = document.querySelector(`[data-cliente-salvar="${id}"]`);
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span>';
-
-  const resultado = await api(`/api/clientes/${id}`, {
-    method: 'PATCH',
-    body: JSON.stringify({
-      nome: nomeNovo,
-      data_nascimento: document.getElementById(`cliente-nascimento-${id}`).value || null,
-    }),
+function abrirModalNovoCliente() {
+  abrirModal(
+    '<h3>Novo cliente</h3>',
+    `
+      <form id="form-novo-cliente" novalidate>
+        <div class="modal-erro" id="novo-cliente-erro"></div>
+        <label for="novo-cliente-nome">Nome *</label>
+        <input type="text" id="novo-cliente-nome" data-obrigatorio autocomplete="off">
+        <label for="novo-cliente-telefone">Telefone *</label>
+        <input type="tel" id="novo-cliente-telefone" data-obrigatorio placeholder="11999999999" autocomplete="off">
+        <label for="novo-cliente-email">E-mail</label>
+        <input type="email" id="novo-cliente-email" placeholder="cliente@email.com" autocomplete="off">
+        <div class="modal-acoes">
+          <button type="button" class="btn-secundario" id="btn-cancelar-novo-cliente">Cancelar</button>
+          <button type="submit" class="btn-primario" id="btn-salvar-novo-cliente">Salvar</button>
+        </div>
+      </form>
+    `,
+    'modal-card-pagamento'
+  );
+  document.getElementById('btn-cancelar-novo-cliente').addEventListener('click', fecharModal);
+  const form = document.getElementById('form-novo-cliente');
+  form.querySelectorAll('[data-obrigatorio]').forEach((campo) => {
+    campo.addEventListener('input', () => campo.classList.remove('campo-invalido'));
   });
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const primeiroInvalido = validarObrigatorios(form);
+    if (primeiroInvalido) {
+      primeiroInvalido.focus();
+      return;
+    }
+    const btn = document.getElementById('btn-salvar-novo-cliente');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
 
-  if (resultado && !resultado.error) {
-    mostrarToast('Cliente atualizado.', 'sucesso');
-    clienteExpandidoId = null;
-    renderClientes();
-  } else {
-    erroEl.textContent = (resultado && resultado.error) || 'Erro ao salvar cliente.';
-    btn.disabled = false;
-    btn.textContent = 'Salvar';
-  }
+    const resultado = await api('/api/clientes', {
+      method: 'POST',
+      body: JSON.stringify({
+        nome: document.getElementById('novo-cliente-nome').value.trim(),
+        telefone: document.getElementById('novo-cliente-telefone').value,
+        email: document.getElementById('novo-cliente-email').value.trim() || null,
+      }),
+    });
+
+    if (resultado && !resultado.error) {
+      fecharModal();
+      mostrarToast('Cliente cadastrado.', 'sucesso');
+      renderClientes();
+    } else {
+      document.getElementById('novo-cliente-erro').textContent = (resultado && resultado.error) || 'Erro ao cadastrar cliente.';
+      btn.disabled = false;
+      btn.textContent = 'Salvar';
+    }
+  });
 }
 
 function abrirModalExcluirCliente(cliente) {
@@ -2895,7 +2854,6 @@ function abrirModalExcluirCliente(cliente) {
     if (resultado && !resultado.error) {
       fecharModal();
       mostrarToast('Cliente excluído com sucesso.', 'sucesso');
-      clienteExpandidoId = null;
       renderClientes();
     } else {
       document.getElementById('excluir-cliente-erro').textContent = (resultado && resultado.error) || 'Erro ao excluir cliente.';
@@ -2905,19 +2863,42 @@ function abrirModalExcluirCliente(cliente) {
   });
 }
 
-function setaOrdenacaoClientes(campo) {
-  if (clientesFiltro.ordenarPor !== campo) return '';
-  return clientesFiltro.ordem === 'asc' ? ' ▲' : ' ▼';
+// ---------- Menu Clientes: cabeçalho + busca unificada + filtro por status +
+// indicadores + tabela paginada. Clicar numa linha abre o perfil completo em
+// modal (abrirModalClienteDetalhe, acima) — não há mais expansão inline. ----------
+let clientesAtuais = [];
+let clientesFiltro = { busca: '', status: 'todos', pagina: 1, tamanho: 10 };
+let clientesFiltroDebounce;
+let clientesCampoFocado = null;
+
+const CLIENTES_STATUS_PILLS = [
+  ['todos', 'Todos'],
+  ['ativo', 'Ativos'],
+  ['novo', 'Novos'],
+  ['inativo', 'Inativos'],
+];
+const CLIENTES_STATUS_LABEL = { ativo: 'Ativo', novo: 'Novo', inativo: 'Inativo' };
+
+function renderClienteLinha(c) {
+  return `
+    <tr class="linha-clicavel" data-cliente-abrir="${c.id}">
+      <td>
+        <div>${c.nome || 'Sem nome'}</div>
+        <div class="cliente-linha-telefone">${c.telefone}</div>
+      </td>
+      <td>${c.ultimo_atendimento_data ? formatarDataCurta(c.ultimo_atendimento_data) : '—'}</td>
+      <td>${c.proximo_atendimento_data ? formatarDataHoraCurta(c.proximo_atendimento_data) : '—'}</td>
+      <td>${formatarPreco(Number(c.total_gasto))}</td>
+      <td><span class="badge badge-cliente-${c.status}">${CLIENTES_STATUS_LABEL[c.status]}</span></td>
+    </tr>
+  `;
 }
 
 async function renderClientes() {
   conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
-  clienteExpandidoId = null;
   const query = new URLSearchParams({
-    busca_nome: clientesFiltro.nome,
-    busca_telefone: clientesFiltro.telefone,
-    ordenar_por: clientesFiltro.ordenarPor,
-    ordem: clientesFiltro.ordem,
+    busca: clientesFiltro.busca,
+    status: clientesFiltro.status,
     pagina: String(clientesFiltro.pagina),
     tamanho: String(clientesFiltro.tamanho),
   });
@@ -2929,15 +2910,28 @@ async function renderClientes() {
   if (clientesFiltro.pagina > totalPaginas) clientesFiltro.pagina = totalPaginas;
 
   let html = `
-    <div class="nav-periodo"><strong>Clientes</strong></div>
+    <div class="inicio-cabecalho">
+      <h2>Clientes</h2>
+      <button class="btn-novo-agendamento" id="btn-novo-cliente">+ Novo cliente</button>
+    </div>
+
     <div class="clientes-filtros">
-      <input type="text" id="clientes-filtro-nome" placeholder="Filtrar por nome" value="${clientesFiltro.nome}">
-      <input type="text" id="clientes-filtro-telefone" placeholder="Filtrar por telefone" value="${clientesFiltro.telefone}">
+      <input type="text" id="clientes-filtro-busca" placeholder="Buscar por nome, telefone ou e-mail" value="${clientesFiltro.busca}">
       <select id="clientes-tamanho">
         <option value="10" ${clientesFiltro.tamanho === 10 ? 'selected' : ''}>10 por página</option>
         <option value="50" ${clientesFiltro.tamanho === 50 ? 'selected' : ''}>50 por página</option>
         <option value="100" ${clientesFiltro.tamanho === 100 ? 'selected' : ''}>100 por página</option>
       </select>
+    </div>
+
+    <div class="clientes-status-pills">
+      ${CLIENTES_STATUS_PILLS.map(([valor, label]) => `<button type="button" class="chip-status${clientesFiltro.status === valor ? ' chip-status-ativo' : ''}" data-clientes-status="${valor}">${label}</button>`).join('')}
+    </div>
+
+    <div class="inicio-cards" style="grid-template-columns:repeat(3,1fr)">
+      ${inicioCard('Clientes', data.kpis.total.toLocaleString('pt-BR'))}
+      ${inicioCard('Novos este mês', data.kpis.novos_mes.toLocaleString('pt-BR'))}
+      ${inicioCard('Para retornar', data.kpis.para_retornar.toLocaleString('pt-BR'))}
     </div>
   `;
 
@@ -2949,10 +2943,11 @@ async function renderClientes() {
         <table class="tabela-tenants tabela-clientes">
           <thead>
             <tr>
-              <th><button type="button" class="th-ordenar${clientesFiltro.ordenarPor === 'nome' ? ' th-ordenar-ativo' : ''}" data-clientes-ordenar="nome">Nome${setaOrdenacaoClientes('nome')}</button></th>
-              <th><button type="button" class="th-ordenar${clientesFiltro.ordenarPor === 'telefone' ? ' th-ordenar-ativo' : ''}" data-clientes-ordenar="telefone">Telefone${setaOrdenacaoClientes('telefone')}</button></th>
+              <th>Cliente</th>
               <th>Último atendimento</th>
-              <th>Data do último atendimento</th>
+              <th>Próx. atendimento</th>
+              <th>Total gasto</th>
+              <th>Status</th>
             </tr>
           </thead>
           <tbody>
@@ -2969,9 +2964,10 @@ async function renderClientes() {
   }
 
   conteudo.innerHTML = html;
+  document.getElementById('btn-novo-cliente').addEventListener('click', abrirModalNovoCliente);
 
-  // O re-render (conteudo.innerHTML) recria os campos de filtro do zero —
-  // sem isso, o campo perde o foco/cursor no meio da digitação assim que o
+  // O re-render (conteudo.innerHTML) recria o campo de busca do zero — sem
+  // isso, o campo perde o foco/cursor no meio da digitação assim que o
   // debounce dispara. Restaura o foco (e a posição do cursor, no fim do
   // texto) no campo que estava sendo editado, se for o caso.
   if (clientesCampoFocado) {
@@ -2982,20 +2978,19 @@ async function renderClientes() {
     }
   }
 
-  // Filtro por nome/telefone com debounce (não busca a cada tecla) — volta
-  // pra página 1 sempre que o filtro muda, senão uma página 3 filtrada pode
-  // ficar vazia sem explicação nenhuma.
-  const filtrar = (campo, valor, idCampo) => {
+  // Busca com debounce (não busca a cada tecla) — volta pra página 1 sempre
+  // que o filtro muda, senão uma página 3 filtrada pode ficar vazia sem
+  // explicação nenhuma.
+  document.getElementById('clientes-filtro-busca').addEventListener('input', (e) => {
+    const valor = e.target.value;
     clearTimeout(clientesFiltroDebounce);
     clientesFiltroDebounce = setTimeout(() => {
-      clientesFiltro[campo] = valor;
+      clientesFiltro.busca = valor;
       clientesFiltro.pagina = 1;
-      clientesCampoFocado = idCampo;
+      clientesCampoFocado = 'clientes-filtro-busca';
       renderClientes();
     }, 400);
-  };
-  document.getElementById('clientes-filtro-nome').addEventListener('input', (e) => filtrar('nome', e.target.value, 'clientes-filtro-nome'));
-  document.getElementById('clientes-filtro-telefone').addEventListener('input', (e) => filtrar('telefone', e.target.value, 'clientes-filtro-telefone'));
+  });
   document.getElementById('clientes-tamanho').addEventListener('change', (e) => {
     clientesCampoFocado = null;
     clientesFiltro.tamanho = Number(e.target.value);

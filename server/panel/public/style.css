@@ -1783,27 +1783,54 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
    colunas com texto longo. */
 .tabela-equipe td:last-child { white-space: normal; }
 
-/* Menu Clientes: filtros por nome/telefone + seletor de tamanho de página,
-   acima da tabela. */
+/* Menu Clientes: busca unificada + seletor de tamanho de página, acima da
+   tabela. */
 .clientes-filtros {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
-.clientes-filtros input[type="text"] { flex: 1; min-width: 160px; margin: 0; }
+.clientes-filtros input[type="text"] { flex: 1; min-width: 220px; margin: 0; }
 .clientes-filtros select { width: auto; margin: 0; }
 
-/* Linha de cliente expansível (sem modal) — igual .tabela-equipe, também
-   escopado só pra tabela-clientes: precisa de white-space: normal na linha
-   de detalhe (form + histórico), que .tabela-tenants não tem por padrão. */
-.linha-expandida { background: #171c38; }
-.tabela-clientes .linha-cliente-detalhe { cursor: default; }
-.tabela-clientes .linha-cliente-detalhe td { white-space: normal; padding: 16px; background: #0d1022; }
+/* Pills de filtro por status (Todos/Ativos/Novos/Inativos) — mesmo visual de
+   .chip-modulo, com um estado ativo/selecionado a mais. */
+.clientes-status-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+.chip-status {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 14px;
+  border-radius: 100px;
+  background: transparent;
+  border: 1px solid #232847;
+  color: #a1a5c4;
+  cursor: pointer;
+}
+.chip-status:hover { border-color: var(--accent); color: #fff; }
+.chip-status-ativo { background: rgba(124, 92, 252, 0.15); border-color: var(--accent); color: var(--accent-light); }
 
-.cliente-detalhe-form { display: flex; flex-direction: column; gap: 2px; max-width: 420px; margin-bottom: 16px; }
-.cliente-detalhe-form label { margin-top: 10px; font-size: 12px; color: #a1a5c4; }
-.cliente-detalhe-form .modal-acoes { margin-top: 16px; }
+/* Tabela do menu Clientes — nome + telefone empilhados na mesma célula
+   (coluna "Cliente" única, ver mockup) e linha inteira clicável (abre o
+   perfil em modal, ver data-cliente-abrir/abrirModalClienteDetalhe). */
+.tabela-clientes td:first-child { white-space: normal; }
+.linha-clicavel { cursor: pointer; }
+.cliente-linha-telefone { font-size: 12px; color: #a1a5c4; margin-top: 2px; }
+.badge-cliente-ativo { background: rgba(0, 212, 255, 0.15); color: var(--cyan); }
+.badge-cliente-novo { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
+.badge-cliente-inativo { background: rgba(161, 165, 196, 0.15); color: #a1a5c4; }
+
+/* Perfil do cliente (modal, abrirModalClienteDetalhe) — seções separadas por
+   divisor sutil, igual ao mockup original. */
+.modal-cliente-perfil .cliente-perfil-telefone { color: #a1a5c4; margin-top: -6px; margin-bottom: 12px; }
+.modal-cliente-perfil .cliente-perfil-acoes-topo { display: flex; gap: 8px; margin-bottom: 16px; }
+.modal-cliente-perfil .cliente-perfil-acoes-topo button { margin: 0; }
+.cliente-perfil-secao { padding: 14px 0; border-top: 1px solid #232847; }
+.cliente-perfil-secao h4 { margin: 0 0 6px; font-size: 13px; color: #a1a5c4; }
+.cliente-perfil-secao p { margin: 0; }
+.cliente-perfil-secao textarea { width: 100%; }
+.cliente-perfil-historico { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.cliente-perfil-secao-titulo-editar { margin: 16px 0 4px; padding-top: 14px; border-top: 1px solid #232847; font-size: 13px; color: #a1a5c4; }
 
 .th-ordenar {
   width: auto;
