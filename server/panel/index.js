@@ -3929,9 +3929,13 @@ async function start() {
       // pro menu de ações da linha (PR4) reaproveitar abrirModalReagendar(ag),
       // que precisa desses dois campos pra consultar disponibilidade — sem
       // eles só dava pra reagendar recarregando o agendamento por outra rota.
+      // a.data_hora dá a hora real do atendimento (tela mostra "14:00" em vez
+      // da data na aba Dia, onde o dia já está óbvio pelo nav do período) —
+      // só existe pra lançamento de agendamento; manual (l.data é só data,
+      // sem hora) continua mostrando a data.
       const { rows } = await pool.query(
         `SELECT l.id, l.tipo, l.valor, l.descricao, l.data, l.status, l.agendamento_id,
-                c.nome AS cliente, s.nome AS servico,
+                c.nome AS cliente, s.nome AS servico, a.data_hora,
                 a.profissional_id, a.servico_id
          FROM lancamentos_financeiros l
          LEFT JOIN agendamentos a ON a.id = l.agendamento_id

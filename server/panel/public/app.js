@@ -1318,7 +1318,15 @@ conteudo.addEventListener('click', (e) => {
   const tabFinanceiro = e.target.closest('[data-financeiro-aba]');
   if (tabFinanceiro) {
     abaFinanceiroAtiva = tabFinanceiro.dataset.financeiroAba;
-    detalhamentoFinanceiroAberto = false;
+    renderFinanceiro();
+    return;
+  }
+
+  // Pills de filtro por tipo (Todas/Receitas/Despesas) nas Movimentações.
+  const tipoLancamentoBtn = e.target.closest('[data-financeiro-filtro-tipo]');
+  if (tipoLancamentoBtn) {
+    financeiroFiltroTipo = tipoLancamentoBtn.dataset.financeiroFiltroTipo;
+    financeiroCampoFocado = null;
     renderFinanceiro();
     return;
   }
@@ -1458,21 +1466,26 @@ let mesFinanceiroRef = new Date();
 let abaFinanceiroAtiva = 'dia';
 let semanaFinanceiroRef = new Date();
 let diaFinanceiroRef = new Date();
-// PR4 — colapso "ver/ocultar detalhamento" generalizado pras 3 abas (antes
-// só existia na Semana, daí o nome antigo detalhamentoSemanaAberto).
-let detalhamentoFinanceiroAberto = false;
 let lancamentosAtuais = [];
+// Movimentações: filtro por tipo (pills Todas/Receitas/Despesas) + busca
+// livre (descrição/serviço/cliente), sempre client-side em cima da lista já
+// carregada pro período ativo — sem endpoint próprio, a lista de um
+// dia/semana/mês nunca é grande o bastante pra justificar paginação server-side.
+let financeiroFiltroTipo = 'todas';
+let financeiroFiltroBusca = '';
+let financeiroFiltroDebounce;
+let financeiroCampoFocado = null;
 
 const MESES_ABREV_FINANCEIRO = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
-// "04–10 Ago 2026" — label de intervalo pra aba Semana; `inicio` já é a
+// "04–10 AGO 2026" — label de intervalo pra aba Semana; `inicio` já é a
 // segunda-feira da semana (ver inicioDaSemana()).
 function labelIntervaloSemanaFinanceiro(inicio) {
   const fim = new Date(inicio);
   fim.setDate(fim.getDate() + 6);
   const diaIni = String(inicio.getDate()).padStart(2, '0');
   const diaFim = String(fim.getDate()).padStart(2, '0');
-  return `${diaIni}–${diaFim} ${MESES_ABREV_FINANCEIRO[fim.getMonth()]} ${fim.getFullYear()}`;
+  return `${diaIni}–${diaFim} ${MESES_ABREV_FINANCEIRO[fim.getMonth()].toUpperCase()} ${fim.getFullYear()}`;
 }
 
 // US71/CA02 — agrupa os lançamentos de receita (entrada, não-cancelado) do
@@ -1554,7 +1567,6 @@ function abrirFinanceiroComFiltro(periodo, referencia) {
   } else if (abaFinanceiroAtiva === 'mes' && referencia) {
     mesFinanceiroRef = new Date(`${referencia}-01T12:00:00`);
   }
-  detalhamentoFinanceiroAberto = false;
   selecionarMenu('modulo:financeiro');
 }
 
@@ -1569,32 +1581,40 @@ function tabsFinanceiroHtml() {
   `;
 }
 
-// US64 — status do lançamento (previsto/realizado/cancelado) só existe pra
-// lançamentos vinculados a agendamento; manuais (US18) nascem 'realizado' e
-// não mostram badge — já é óbvio que é dinheiro que entrou/saiu de fato.
-const LANCAMENTO_STATUS_LABEL = { previsto: 'Previsto', realizado: 'Realizado', cancelado: 'Cancelado' };
-const LANCAMENTO_STATUS_BADGE = { previsto: 'badge-previsto', realizado: 'badge-realizado', cancelado: 'badge-cancelado' };
+// Indicador de status por círculo colorido — cobre todo lançamento (não só
+// os vinculados a agendamento como antes): despesa (saída) sempre aparece
+// como "Despesa" independente de status; entrada usa o status real
+// (previsto/recebido); cancelado (qualquer tipo) sobrepõe os dois, já que
+// deixou de valer pro resumo mas continua visível na lista pra conferência.
+function statusLancamento(l) {
+  if (l.status === 'cancelado') return { emoji: '⚪', texto: 'Cancelado' };
+  if (l.tipo === 'saida') return { emoji: '🔴', texto: 'Despesa' };
+  if (l.status === 'previsto') return { emoji: '🟡', texto: 'Previsto' };
+  return { emoji: '🟢', texto: 'Recebido' };
+}
 
 function renderLancamentoItem(l) {
-  const sinal = l.tipo === 'entrada' ? '+' : '−';
   const classeTipo = l.tipo === 'entrada' ? 'financeiro-entrada' : 'financeiro-saida';
+  const origemAgendamento = l.origem === 'agendamento';
+
+  // Na aba Dia o período já está óbvio pelo nav — mostra a hora real do
+  // atendimento em vez da data (só existe pra lançamento de agendamento,
+  // via a.data_hora; manual não tem hora, mostra a data mesmo). Nas abas
+  // Semana/Mês (múltiplos dias na mesma lista) sempre mostra a data.
   // l.data vem do driver pg como Date (coluna tipo `date`), que serializa em
   // JSON como ISO completo ("...T00:00:00.000Z"), não "YYYY-MM-DD" puro —
   // .slice(0, 10) normaliza os dois formatos antes de montar a data local ao
   // meio-dia (evita virada de dia por fuso, mesmo padrão de formatarDataCurtaISO).
   const dataLabel = new Date(l.data.slice(0, 10) + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' });
-  const origemAgendamento = l.origem === 'agendamento';
+  const horaOuData = (abaFinanceiroAtiva === 'dia' && origemAgendamento && l.data_hora) ? formatarHora(l.data_hora) : dataLabel;
 
   // CA "Cenário 8" — lançamento de agendamento identifica cliente/serviço/
   // data do atendimento e mostra a origem explicitamente, em vez de só um
   // texto livre de descrição como os manuais.
   const titulo = origemAgendamento ? l.servico : (l.descricao || (l.tipo === 'entrada' ? 'Entrada' : 'Saída'));
-  const detalhe = origemAgendamento
-    ? `${dataLabel} · ${l.cliente || 'Cliente'} · <span class="badge-origem-agendamento">Agendamento</span>`
-    : dataLabel;
-  const statusBadge = origemAgendamento && l.status !== 'realizado'
-    ? `<span class="badge ${LANCAMENTO_STATUS_BADGE[l.status] || ''}">${LANCAMENTO_STATUS_LABEL[l.status] || l.status}</span>`
-    : '';
+  const detalhe = origemAgendamento ? `${l.cliente || 'Cliente'} · Agendamento` : '';
+  const valorLabel = l.tipo === 'saida' ? `- ${formatarPreco(l.valor)}` : formatarPreco(l.valor);
+  const status = statusLancamento(l);
 
   // PR4 — menu sanduíche (Confirmar/Cancelar pagamento, Reagendar) só em
   // lançamento vinculado a agendamento ainda "previsto"; manual (sempre
@@ -1602,13 +1622,17 @@ function renderLancamentoItem(l) {
   const podeGerenciar = origemAgendamento && l.status === 'previsto';
 
   return `
-    <div class="agendamento-item" data-testid="lancamento-item">
+    <div class="agendamento-item financeiro-item" data-testid="lancamento-item">
       <div class="agendamento-linha-principal" ${podeGerenciar ? `data-acoes-toggle="lancamento-${l.id}"` : ''}>
-        <div>
-          <div class="agendamento-hora">${titulo}${statusBadge}</div>
-          <div class="agendamento-detalhe">${detalhe}</div>
+        <div class="financeiro-item-hora">${horaOuData}</div>
+        <div class="financeiro-item-corpo">
+          <div class="agendamento-hora">${titulo}</div>
+          ${detalhe ? `<div class="agendamento-detalhe">${detalhe}</div>` : ''}
         </div>
-        <div class="${classeTipo}">${sinal} ${formatarPreco(l.valor)}</div>
+        <div class="financeiro-item-valor">
+          <div class="${classeTipo}">${valorLabel}</div>
+          <div class="financeiro-item-status">${status.emoji} ${status.texto}</div>
+        </div>
         ${podeGerenciar ? '<button class="btn-acoes" aria-label="Ações">⋮</button>' : ''}
       </div>
       ${podeGerenciar ? `
@@ -1709,45 +1733,44 @@ function abrirModalCancelarPagamentoLancamento(l) {
   });
 }
 
-// PR4 — labels do card "Total {PERÍODO}" por aba.
-const LABEL_TOTAL_FINANCEIRO = { dia: 'TOTAL DIA', semana: 'TOTAL SEMANA', mes: 'TOTAL MÊS' };
-
 function referenciaFinanceiroAtiva() {
   if (abaFinanceiroAtiva === 'semana') return formatarDataISO(inicioDaSemana(semanaFinanceiroRef));
   if (abaFinanceiroAtiva === 'dia') return formatarDataISO(diaFinanceiroRef);
   return formatarDataISO(mesFinanceiroRef).slice(0, 7);
 }
 
+// Nav do período compacto — "← RÓTULO →", só setas (sem "Dia anterior"/"Mês
+// anterior" por extenso, texto vira aria-label pra acessibilidade).
 function navPeriodoFinanceiroHtml() {
   if (abaFinanceiroAtiva === 'semana') {
     const inicio = inicioDaSemana(semanaFinanceiroRef);
     return `
       <div class="nav-periodo">
-        <button data-nav="-1" data-testid="nav-semana-anterior">← Semana anterior</button>
+        <button data-nav="-1" aria-label="Semana anterior" data-testid="nav-semana-anterior">←</button>
         <strong>${labelIntervaloSemanaFinanceiro(inicio)}</strong>
-        <button data-nav="1" data-testid="nav-semana-proxima">Próxima semana →</button>
+        <button data-nav="1" aria-label="Próxima semana" data-testid="nav-semana-proxima">→</button>
       </div>
     `;
   }
   if (abaFinanceiroAtiva === 'dia') {
-    const dataLabel = diaFinanceiroRef.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Sao_Paulo' });
+    const dataLabel = `${String(diaFinanceiroRef.getDate()).padStart(2, '0')} ${MESES_ABREV_FINANCEIRO[diaFinanceiroRef.getMonth()].toUpperCase()} ${diaFinanceiroRef.getFullYear()}`;
     return `
       <div class="nav-periodo">
-        <button data-nav="-1" data-testid="nav-dia-anterior">← Dia anterior</button>
+        <button data-nav="-1" aria-label="Dia anterior" data-testid="nav-dia-anterior">←</button>
         <div class="nav-periodo-data">
           <strong>${dataLabel}</strong>
           <div class="nav-periodo-dia-semana">${nomeDiaSemana(diaFinanceiroRef)}</div>
         </div>
-        <button data-nav="1" data-testid="nav-dia-proximo">Próximo dia →</button>
+        <button data-nav="1" aria-label="Próximo dia" data-testid="nav-dia-proximo">→</button>
       </div>
     `;
   }
-  const mesLabel = mesFinanceiroRef.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'America/Sao_Paulo' });
+  const mesLabel = `${mesFinanceiroRef.toLocaleDateString('pt-BR', { month: 'long', timeZone: 'America/Sao_Paulo' }).toUpperCase()} ${mesFinanceiroRef.getFullYear()}`;
   return `
     <div class="nav-periodo">
-      <button data-nav="-1" data-testid="nav-mes-anterior">← Mês anterior</button>
+      <button data-nav="-1" aria-label="Mês anterior" data-testid="nav-mes-anterior">←</button>
       <strong>${mesLabel}</strong>
-      <button data-nav="1" data-testid="nav-mes-proximo">Próximo mês →</button>
+      <button data-nav="1" aria-label="Próximo mês" data-testid="nav-mes-proximo">→</button>
     </div>
   `;
 }
@@ -1767,11 +1790,30 @@ function bindNavPeriodoFinanceiro() {
   }
 }
 
+const FINANCEIRO_FILTRO_TIPO_PILLS = [
+  ['todas', 'Todas'],
+  ['entrada', 'Receitas'],
+  ['saida', 'Despesas'],
+];
+
+// Filtra a lista já carregada do período ativo por tipo (pill) + busca livre
+// (serviço/descrição/cliente) — nunca refaz a chamada à API, só reaplica em
+// cima de lancamentosAtuais.
+function lancamentosFiltrados() {
+  const busca = financeiroFiltroBusca.trim().toLowerCase();
+  return lancamentosAtuais.filter((l) => {
+    if (financeiroFiltroTipo !== 'todas' && l.tipo !== financeiroFiltroTipo) return false;
+    if (!busca) return true;
+    const alvo = `${l.servico || ''} ${l.descricao || ''} ${l.cliente || ''}`.toLowerCase();
+    return alvo.includes(busca);
+  });
+}
+
 // PR4 — as 3 abas (Dia/Semana/Mês) usam o mesmo endpoint unificado
-// (?periodo=dia|semana|mes&referencia=...), os mesmos 4 cards (Receita
-// prevista/Receita Realizada/Saídas/Total) e o mesmo colapso de
-// detalhamento — só nav do período, label do card Total e o gráfico (só
-// Mês) mudam por aba.
+// (?periodo=dia|semana|mes&referencia=...) e os mesmos 4 cards (Prevista/
+// Recebida/Despesas/Resultado) — só nav do período e o gráfico (só Mês)
+// mudam por aba. Movimentações (lista) sempre visível, com filtro por tipo
+// e busca — sem colapso "ver detalhamento" como antes.
 async function renderFinanceiro() {
   conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
   const periodo = abaFinanceiroAtiva;
@@ -1780,27 +1822,35 @@ async function renderFinanceiro() {
   if (!data) return;
 
   lancamentosAtuais = data.lancamentos;
-  // Decisão confirmada com o Bruno: Total = Previsto − Saídas (literal, não
-  // soma a Receita Realizada, que já aparece separada no card ao lado).
-  const total = data.resumo.previsto - data.resumo.saidas;
+  // Decisão confirmada com o Bruno: Resultado = Previsto − Saídas (literal,
+  // não soma a Receita Recebida, que já aparece separada no card ao lado).
+  const resultado = data.resumo.previsto - data.resumo.saidas;
 
-  let html = tabsFinanceiroHtml() + navPeriodoFinanceiroHtml() + `
+  let html = `
+    <div class="inicio-cabecalho">
+      <div>
+        <h2>Financeiro</h2>
+        <p class="financeiro-subtitulo">Acompanhe as finanças do seu salão.</p>
+      </div>
+      <button class="btn-novo-agendamento" id="btn-novo-lancamento">+ Novo lançamento</button>
+    </div>
+  ` + tabsFinanceiroHtml() + navPeriodoFinanceiroHtml() + `
     <div class="financeiro-resumo">
       <div class="financeiro-resumo-card" data-testid="card-previsto">
-        <div class="financeiro-resumo-label">Receita prevista</div>
+        <div class="financeiro-resumo-label">Prevista</div>
         <div class="financeiro-previsto">${formatarPreco(data.resumo.previsto)}</div>
       </div>
       <div class="financeiro-resumo-card" data-testid="card-realizado">
-        <div class="financeiro-resumo-label">Receita Realizada</div>
+        <div class="financeiro-resumo-label">Recebida</div>
         <div class="financeiro-entrada">${formatarPreco(data.resumo.realizado)}</div>
       </div>
       <div class="financeiro-resumo-card" data-testid="card-saidas">
-        <div class="financeiro-resumo-label">Saídas</div>
+        <div class="financeiro-resumo-label">Despesas</div>
         <div class="financeiro-saida">${formatarPreco(data.resumo.saidas)}</div>
       </div>
       <div class="financeiro-resumo-card" data-testid="card-total">
-        <div class="financeiro-resumo-label">${LABEL_TOTAL_FINANCEIRO[periodo]}</div>
-        <div class="${total >= 0 ? 'financeiro-entrada' : 'financeiro-saida'}">${formatarPreco(total)}</div>
+        <div class="financeiro-resumo-label">Resultado</div>
+        <div class="${resultado >= 0 ? 'financeiro-entrada' : 'financeiro-saida'}">${formatarPreco(resultado)}</div>
       </div>
     </div>
   `;
@@ -1810,26 +1860,45 @@ async function renderFinanceiro() {
     if (semanas.length) html += renderGraficoSemanasFinanceiro(semanas);
   }
 
-  html += `<button class="btn-novo-agendamento" id="btn-novo-lancamento" style="margin-bottom:16px">+ Novo lançamento</button>`;
+  const filtrados = lancamentosFiltrados();
+  html += `
+    <h3 class="inicio-secao-titulo">Movimentações</h3>
+    <div class="financeiro-filtros-linha">
+      <div class="financeiro-filtro-pills">
+        ${FINANCEIRO_FILTRO_TIPO_PILLS.map(([valor, label]) => `<button type="button" class="chip-status${financeiroFiltroTipo === valor ? ' chip-status-ativo' : ''}" data-financeiro-filtro-tipo="${valor}">${label}</button>`).join('')}
+      </div>
+      <input type="text" id="financeiro-filtro-busca" placeholder="🔎 Buscar" value="${financeiroFiltroBusca}">
+    </div>
+  `;
 
-  // Colapso só aparece se houver ao menos 1 lançamento no período.
-  if (data.lancamentos.length) {
-    html += `<button type="button" class="btn-secundario btn-detalhamento-financeiro" id="btn-toggle-detalhamento-financeiro">${detalhamentoFinanceiroAberto ? 'Ocultar detalhamento' : 'Ver detalhamento'}</button>`;
-    if (detalhamentoFinanceiroAberto) {
-      html += `<div data-testid="lista-lancamentos">${data.lancamentos.map(renderLancamentoItem).join('')}</div>`;
-    }
+  if (!data.lancamentos.length) {
+    html += '<div class="vazio">Nenhuma movimentação no período.</div>';
+  } else if (!filtrados.length) {
+    html += '<div class="vazio">Nenhuma movimentação encontrada.</div>';
+  } else {
+    html += `<div data-testid="lista-lancamentos">${filtrados.map(renderLancamentoItem).join('')}</div>`;
   }
 
   conteudo.innerHTML = html;
   bindNavPeriodoFinanceiro();
   document.getElementById('btn-novo-lancamento').addEventListener('click', abrirModalLancamento);
-  const btnToggleDetalhamento = document.getElementById('btn-toggle-detalhamento-financeiro');
-  if (btnToggleDetalhamento) {
-    btnToggleDetalhamento.addEventListener('click', () => {
-      detalhamentoFinanceiroAberto = !detalhamentoFinanceiroAberto;
-      renderFinanceiro();
-    });
+
+  if (financeiroCampoFocado) {
+    const campoEl = document.getElementById(financeiroCampoFocado);
+    if (campoEl) {
+      campoEl.focus();
+      campoEl.setSelectionRange(campoEl.value.length, campoEl.value.length);
+    }
   }
+  document.getElementById('financeiro-filtro-busca').addEventListener('input', (e) => {
+    const valor = e.target.value;
+    clearTimeout(financeiroFiltroDebounce);
+    financeiroFiltroDebounce = setTimeout(() => {
+      financeiroFiltroBusca = valor;
+      financeiroCampoFocado = 'financeiro-filtro-busca';
+      renderFinanceiro();
+    }, 400);
+  });
 }
 
 function abrirModalLancamento() {
