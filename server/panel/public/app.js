@@ -1253,6 +1253,14 @@ conteudo.addEventListener('click', (e) => {
     abrirModalClienteDetalhe(clienteItemEl.dataset.clienteId);
     return;
   }
+  // Botão WhatsApp na tabela de Clientes — checado antes de
+  // data-cliente-abrir (fica dentro da mesma <tr data-cliente-abrir>), senão
+  // o clique também abriria o perfil junto.
+  const whatsappClienteBtn = e.target.closest('[data-cliente-whatsapp]');
+  if (whatsappClienteBtn) {
+    window.open(`https://wa.me/${whatsappClienteBtn.dataset.clienteWhatsapp}`, '_blank');
+    return;
+  }
   const linhaClienteEl = e.target.closest('[data-cliente-abrir]');
   if (linhaClienteEl) {
     abrirModalClienteDetalhe(linhaClienteEl.dataset.clienteAbrir);
@@ -2311,7 +2319,7 @@ async function render() {
   // grade de horários e, principalmente, pras colunas da Semana caberem sem
   // scroll horizontal — as demais telas (Perfil, Fatura, Serviços...)
   // continuam nos 720px padrão, estreitos de propósito pra formulário.
-  conteudo.classList.toggle('conteudo-largo', menuAtual === 'inicio' || menuAtual === 'agendamento');
+  conteudo.classList.toggle('conteudo-largo', menuAtual === 'inicio' || menuAtual === 'agendamento' || menuAtual === 'clientes');
 
   if (menuAtual === 'inicio') return renderInicio();
   if (menuAtual === 'configuracao') return renderConfiguracao();
@@ -2886,6 +2894,7 @@ function renderClienteLinha(c) {
         <div>${c.nome || 'Sem nome'}</div>
         <div class="cliente-linha-telefone">${c.telefone}</div>
       </td>
+      <td><button type="button" class="btn-tabela" data-cliente-whatsapp="${c.telefone}">WhatsApp</button></td>
       <td>${c.ultimo_atendimento_data ? formatarDataCurta(c.ultimo_atendimento_data) : '—'}</td>
       <td>${c.proximo_atendimento_data ? formatarDataHoraCurta(c.proximo_atendimento_data) : '—'}</td>
       <td>${formatarPreco(Number(c.total_gasto))}</td>
@@ -2917,11 +2926,6 @@ async function renderClientes() {
 
     <div class="clientes-filtros">
       <input type="text" id="clientes-filtro-busca" placeholder="Buscar por nome, telefone ou e-mail" value="${clientesFiltro.busca}">
-      <select id="clientes-tamanho">
-        <option value="10" ${clientesFiltro.tamanho === 10 ? 'selected' : ''}>10 por página</option>
-        <option value="50" ${clientesFiltro.tamanho === 50 ? 'selected' : ''}>50 por página</option>
-        <option value="100" ${clientesFiltro.tamanho === 100 ? 'selected' : ''}>100 por página</option>
-      </select>
     </div>
 
     <div class="clientes-status-pills">
@@ -2944,6 +2948,7 @@ async function renderClientes() {
           <thead>
             <tr>
               <th>Cliente</th>
+              <th>WhatsApp</th>
               <th>Último atendimento</th>
               <th>Próx. atendimento</th>
               <th>Total gasto</th>
@@ -2956,6 +2961,11 @@ async function renderClientes() {
         </table>
       </div>
       <div class="inicio-paginacao">
+        <select id="clientes-tamanho">
+          <option value="10" ${clientesFiltro.tamanho === 10 ? 'selected' : ''}>10 por página</option>
+          <option value="50" ${clientesFiltro.tamanho === 50 ? 'selected' : ''}>50 por página</option>
+          <option value="100" ${clientesFiltro.tamanho === 100 ? 'selected' : ''}>100 por página</option>
+        </select>
         <button class="btn-secundario" data-clientes-pagina="anterior" ${clientesFiltro.pagina <= 1 ? 'disabled' : ''}>← Anterior</button>
         <span>${clientesFiltro.pagina} de ${totalPaginas}</span>
         <button class="btn-secundario" data-clientes-pagina="proxima" ${clientesFiltro.pagina >= totalPaginas ? 'disabled' : ''}>Próximo →</button>
@@ -2991,12 +3001,17 @@ async function renderClientes() {
       renderClientes();
     }, 400);
   });
-  document.getElementById('clientes-tamanho').addEventListener('change', (e) => {
-    clientesCampoFocado = null;
-    clientesFiltro.tamanho = Number(e.target.value);
-    clientesFiltro.pagina = 1;
-    renderClientes();
-  });
+  // Só existe quando há resultados (fica junto da paginação, ver acima) —
+  // lista vazia não renderiza esse select.
+  const tamanhoEl = document.getElementById('clientes-tamanho');
+  if (tamanhoEl) {
+    tamanhoEl.addEventListener('change', (e) => {
+      clientesCampoFocado = null;
+      clientesFiltro.tamanho = Number(e.target.value);
+      clientesFiltro.pagina = 1;
+      renderClientes();
+    });
+  }
 }
 
 // ---------- Bloqueios manuais de agenda (US61) ----------
