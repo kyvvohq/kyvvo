@@ -4116,12 +4116,18 @@ async function start() {
         ),
         // Desempenho da agenda do mês (todos os status) + total do mês
         // anterior (pro KPI Atendimentos) + realizados do mês anterior (pro
-        // Ticket médio) — tudo numa query só.
+        // Ticket médio) — tudo numa query só. Os 4 buckets (agendados/
+        // realizados/cancelados/faltas) mapeiam 1:1 pros 4 valores de status
+        // que importam ('reagendado' nunca é setado por nenhum código, ver
+        // sincronizarLancamentoFinanceiro) — de propósito SEM filtrar
+        // "agendados" por data_hora futura, senão um 'confirmado' com data
+        // já passada (que o salão ainda não fechou como concluído/falta)
+        // ficaria de fora dos 4 buckets e a soma não bateria com "total".
         pool.query(
           `SELECT
              count(*) FILTER (WHERE data_hora >= $2::timestamptz AND data_hora < $3::timestamptz)::int AS total,
              count(*) FILTER (WHERE data_hora >= $4::timestamptz AND data_hora < $2::timestamptz)::int AS total_anterior,
-             count(*) FILTER (WHERE status = 'confirmado' AND data_hora > now() AND data_hora >= $2::timestamptz AND data_hora < $3::timestamptz)::int AS agendados,
+             count(*) FILTER (WHERE status = 'confirmado' AND data_hora >= $2::timestamptz AND data_hora < $3::timestamptz)::int AS agendados,
              count(*) FILTER (WHERE status = 'concluido' AND data_hora >= $2::timestamptz AND data_hora < $3::timestamptz)::int AS realizados,
              count(*) FILTER (WHERE status = 'concluido' AND data_hora >= $4::timestamptz AND data_hora < $2::timestamptz)::int AS realizados_anterior,
              count(*) FILTER (WHERE status = 'cancelado' AND data_hora >= $2::timestamptz AND data_hora < $3::timestamptz)::int AS cancelados,
