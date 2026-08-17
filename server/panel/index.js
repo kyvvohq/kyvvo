@@ -3997,6 +3997,46 @@ async function start() {
     }
   );
 
+  // Editar valor/descrição de um lançamento (menu de 3 pontos, "Editar") e
+  // cancelar uma despesa manual ("Cancelar despesa") — mesma rota, dois usos.
+  // status só pode virar 'cancelado' e só em lançamento manual
+  // (agendamento_id nulo): cancelar um lançamento de agendamento tem que
+  // passar pelo PATCH /api/agendamentos/:id (abrirModalCancelarPagamentoLancamento),
+  // senão o status do agendamento e o do lançamento dessincronizam — a
+  // sincronização é sempre agendamento → lançamento (sincronizarLancamentoFinanceiro),
+  // nunca o contrário.
+  fastify.patch(
+    '/api/financeiro/lancamentos/:id',
+    { preHandler: [fastify.authenticate, fastify.requireModulo('financeiro'), fastify.requireAdmin] },
+    async (request, reply) => {
+      const { tenantId } = request.user;
+      const { id } = request.params;
+      const { valor, descricao, status } = request.body || {};
+
+      if (valor !== undefined && (!Number.isFinite(valor) || valor <= 0)) {
+        return reply.code(400).send({ error: 'Campo "valor" deve ser um número maior que zero' });
+      }
+      if (status !== undefined && status !== 'cancelado') {
+        return reply.code(400).send({ error: 'Por aqui, status só pode virar "cancelado" (cancelar uma despesa manual).' });
+      }
+
+      const { rows } = await pool.query(
+        `UPDATE lancamentos_financeiros SET
+           valor = COALESCE($3, valor),
+           descricao = CASE WHEN $4::boolean THEN $5 ELSE descricao END,
+           status = COALESCE($6, status)
+         WHERE id = $1 AND tenant_id = $2
+           AND ($6::text IS NULL OR agendamento_id IS NULL)
+         RETURNING id, tipo, valor, descricao, data, status, agendamento_id`,
+        [id, tenantId, valor ?? null, descricao !== undefined, descricao ?? null, status ?? null]
+      );
+      if (!rows[0]) {
+        return reply.code(404).send({ error: 'Lançamento não encontrado' });
+      }
+      return { ...rows[0], origem: rows[0].agendamento_id ? 'agendamento' : 'manual' };
+    }
+  );
+
   // ---------- Pagamentos / Asaas (US32) ----------
   const CARTAO_FINAL_REGEX = /^\d{4}$/;
   // A Asaas exige CPF (11 dígitos) ou CNPJ (14) do Customer pra emitir

@@ -1373,9 +1373,10 @@ conteudo.addEventListener('click', (e) => {
     if (acaoBtn.dataset.acao === 'encaixar') abrirModalEncaixe(ag);
   }
 
-  // PR4 — menu de ações por linha de lançamento no Financeiro (Confirmar/
-  // Cancelar pagamento, Reagendar), só existe em lançamento vinculado a
-  // agendamento com status 'previsto' (ver renderLancamentoItem).
+  // Menu de ações por linha de lançamento no Financeiro — todo lançamento
+  // não-cancelado tem menu agora (ver menuAcoesLancamento/renderLancamentoItem):
+  // Confirmar/Cancelar pagamento/Reagendar só em agendamento ainda previsto;
+  // Editar em qualquer um; Cancelar despesa só em saída manual.
   const acaoLancamentoBtn = e.target.closest('[data-acao-lancamento]');
   if (acaoLancamentoBtn) {
     document.querySelectorAll('.menu-acoes.aberto').forEach((m) => m.classList.remove('aberto'));
@@ -1384,6 +1385,8 @@ conteudo.addEventListener('click', (e) => {
     const acao = acaoLancamentoBtn.dataset.acaoLancamento;
     if (acao === 'confirmar') confirmarPagamentoLancamento(l);
     if (acao === 'cancelar') abrirModalCancelarPagamentoLancamento(l);
+    if (acao === 'editar') abrirModalEditarLancamento(l);
+    if (acao === 'cancelar-despesa') abrirModalCancelarDespesaLancamento(l);
     if (acao === 'reagendar') {
       abrirModalReagendar({ id: l.agendamento_id, data_hora: l.data, profissional_id: l.profissional_id, servico_id: l.servico_id });
     }
@@ -1534,6 +1537,24 @@ function dataLancamentoLabel(l) {
   return new Date(l.data.slice(0, 10) + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' });
 }
 
+// Ações disponíveis por lançamento, na ordem de exibição do menu — varia
+// por origem/tipo/status. Cancelado é estado final (só leitura, fica na
+// lista pra conferência); todo o resto ganha pelo menos "Editar".
+function acoesLancamento(l) {
+  if (l.status === 'cancelado') return [];
+  const acoes = [];
+  if (l.origem === 'agendamento' && l.status === 'previsto') {
+    acoes.push({ acao: 'confirmar', label: 'Confirmar pagamento' });
+    acoes.push({ acao: 'cancelar', label: 'Cancelar pagamento', perigo: true });
+    acoes.push({ acao: 'reagendar', label: 'Reagendar' });
+  }
+  acoes.push({ acao: 'editar', label: 'Editar' });
+  if (l.origem === 'manual' && l.tipo === 'saida') {
+    acoes.push({ acao: 'cancelar-despesa', label: 'Cancelar despesa', perigo: true });
+  }
+  return acoes;
+}
+
 function renderLancamentoItem(l) {
   const classeTipo = l.tipo === 'entrada' ? 'financeiro-entrada' : 'financeiro-saida';
   const origemAgendamento = l.origem === 'agendamento';
@@ -1545,21 +1566,22 @@ function renderLancamentoItem(l) {
   const horaOuData = (abaFinanceiroAtiva === 'dia' && origemAgendamento && l.data_hora) ? formatarHora(l.data_hora) : dataLancamentoLabel(l);
 
   // CA "Cenário 8" — lançamento de agendamento identifica cliente/serviço/
-  // data do atendimento e mostra a origem explicitamente, em vez de só um
-  // texto livre de descrição como os manuais.
-  const titulo = origemAgendamento ? l.servico : (l.descricao || (l.tipo === 'entrada' ? 'Entrada' : 'Saída'));
+  // data do atendimento; l.descricao (editável via "Editar", ver
+  // abrirModalEditarLancamento) sobrepõe o nome do serviço quando presente.
+  // CAVEAT: num lançamento de agendamento, sincronizarLancamentoFinanceiro
+  // reescreve descricao/valor pro nome/preço do serviço sempre que o
+  // agendamento muda de estado de novo (reagendar, por exemplo) — uma
+  // descrição/valor editados manualmente aqui podem ser sobrescritos nesse
+  // caso. Aceitável: é raro editar e depois reagendar o mesmo atendimento.
+  const titulo = l.descricao || (origemAgendamento ? l.servico : (l.tipo === 'entrada' ? 'Entrada' : 'Saída'));
   const detalhe = origemAgendamento ? `${l.cliente || 'Cliente'} · Agendamento` : '';
   const valorLabel = l.tipo === 'saida' ? `- ${formatarPreco(l.valor)}` : formatarPreco(l.valor);
   const status = statusLancamento(l);
-
-  // PR4 — menu sanduíche (Confirmar/Cancelar pagamento, Reagendar) só em
-  // lançamento vinculado a agendamento ainda "previsto"; manual (sempre
-  // realizado) e já concluído/cancelado continuam só leitura.
-  const podeGerenciar = origemAgendamento && l.status === 'previsto';
+  const acoes = acoesLancamento(l);
 
   return `
     <div class="agendamento-item financeiro-item" data-testid="lancamento-item">
-      <div class="agendamento-linha-principal" ${podeGerenciar ? `data-acoes-toggle="lancamento-${l.id}"` : ''}>
+      <div class="agendamento-linha-principal" ${acoes.length ? `data-acoes-toggle="lancamento-${l.id}"` : ''}>
         <div class="financeiro-item-hora">${horaOuData}</div>
         <div class="financeiro-item-corpo">
           <div class="agendamento-hora">${titulo}</div>
@@ -1569,13 +1591,11 @@ function renderLancamentoItem(l) {
           <div class="${classeTipo}">${valorLabel}</div>
           <div class="financeiro-item-status">${status.emoji} ${status.texto}</div>
         </div>
-        ${podeGerenciar ? '<button class="btn-acoes" aria-label="Ações">⋮</button>' : ''}
+        ${acoes.length ? '<button class="btn-acoes" aria-label="Ações">⋮</button>' : ''}
       </div>
-      ${podeGerenciar ? `
+      ${acoes.length ? `
         <div class="menu-acoes" id="menu-acoes-lancamento-${l.id}">
-          <button data-acao-lancamento="confirmar" data-id="${l.id}">Confirmar pagamento</button>
-          <button data-acao-lancamento="cancelar" data-id="${l.id}" class="acao-perigo">Cancelar pagamento</button>
-          <button data-acao-lancamento="reagendar" data-id="${l.id}">Reagendar</button>
+          ${acoes.map((a) => `<button data-acao-lancamento="${a.acao}" data-id="${l.id}"${a.perigo ? ' class="acao-perigo"' : ''}>${a.label}</button>`).join('')}
         </div>
       ` : ''}
     </div>
@@ -1663,6 +1683,104 @@ function abrirModalCancelarPagamentoLancamento(l) {
       render();
     } else {
       mostrarToast((resultado && resultado.error) || 'Erro ao cancelar pagamento.', 'erro');
+      btn.disabled = false;
+      btn.textContent = 'Confirmar';
+    }
+  });
+}
+
+// "Editar" (valor/descrição) — disponível em todo lançamento não-cancelado
+// (menu de 3 pontos, ver acoesLancamento). PATCH /api/financeiro/lancamentos/:id
+// aceita os dois campos direto na linha, sem depender do agendamento de origem.
+function abrirModalEditarLancamento(l) {
+  abrirModal(
+    '<h3>Editar lançamento</h3>',
+    `
+      <form id="form-editar-lancamento">
+        <div class="modal-erro" id="editar-lancamento-erro"></div>
+        <label for="editar-lancamento-valor">Valor em R$ *</label>
+        <input type="number" id="editar-lancamento-valor" data-obrigatorio min="0.01" step="0.01" value="${l.valor}">
+        <label for="editar-lancamento-descricao">Descrição</label>
+        <input type="text" id="editar-lancamento-descricao" value="${l.descricao || ''}" placeholder="${l.origem === 'agendamento' ? l.servico : (l.tipo === 'entrada' ? 'Entrada' : 'Saída')}">
+        <div class="modal-acoes">
+          <button type="button" class="btn-secundario" id="btn-cancelar-editar-lancamento">Cancelar</button>
+          <button type="submit" class="btn-primario" id="btn-salvar-editar-lancamento">Salvar</button>
+        </div>
+      </form>
+    `
+  );
+
+  document.getElementById('btn-cancelar-editar-lancamento').addEventListener('click', fecharModal);
+  const form = document.getElementById('form-editar-lancamento');
+  form.querySelectorAll('[data-obrigatorio]').forEach((campo) => {
+    campo.addEventListener('input', () => campo.classList.remove('campo-invalido'));
+  });
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const erroEl = document.getElementById('editar-lancamento-erro');
+    erroEl.textContent = '';
+    const invalido = validarObrigatorios(form);
+    if (invalido) {
+      invalido.focus();
+      return;
+    }
+    const btn = document.getElementById('btn-salvar-editar-lancamento');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    const resultado = await api(`/api/financeiro/lancamentos/${l.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        valor: parseFloat(document.getElementById('editar-lancamento-valor').value),
+        descricao: document.getElementById('editar-lancamento-descricao').value.trim() || null,
+      }),
+    });
+
+    if (resultado && !resultado.error) {
+      fecharModal();
+      mostrarToast('Lançamento atualizado.', 'sucesso');
+      renderFinanceiro();
+    } else {
+      erroEl.textContent = (resultado && resultado.error) || 'Erro ao salvar lançamento.';
+      btn.disabled = false;
+      btn.textContent = 'Salvar';
+    }
+  });
+}
+
+// "Cancelar despesa" — só existe em lançamento manual de saída (menu de 3
+// pontos). Mesmo padrão de abrirModalCancelarPagamentoLancamento, mas marca
+// o próprio lançamento como cancelado direto (não depende de agendamento).
+function abrirModalCancelarDespesaLancamento(l) {
+  abrirModal(
+    '<h3>Cancelar despesa</h3>',
+    `
+      <p class="modal-texto">Deseja cancelar, essa operação não pode ser desfeita?</p>
+      <div class="modal-acoes">
+        <button class="btn-secundario" id="btn-sair-cancelar-despesa">Sair</button>
+        <button class="btn-perigo" id="btn-confirmar-cancelar-despesa">Confirmar</button>
+      </div>
+    `
+  );
+
+  document.getElementById('btn-sair-cancelar-despesa').addEventListener('click', fecharModal);
+  document.getElementById('btn-confirmar-cancelar-despesa').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-confirmar-cancelar-despesa');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    const resultado = await api(`/api/financeiro/lancamentos/${l.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'cancelado' }),
+    });
+
+    if (resultado && !resultado.error) {
+      fecharModal();
+      mostrarToast('Despesa cancelada.', 'sucesso');
+      renderFinanceiro();
+    } else {
+      mostrarToast((resultado && resultado.error) || 'Erro ao cancelar despesa.', 'erro');
       btn.disabled = false;
       btn.textContent = 'Confirmar';
     }
