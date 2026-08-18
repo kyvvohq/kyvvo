@@ -1030,10 +1030,12 @@ function abrirModalNovoAgendamento(prefill) {
       // o fluxo (as demais ocorrências já foram criadas normalmente).
       if (resultado.recorrencia) {
         const { criados, pulados, limite_atingido: limiteAtingido } = resultado.recorrencia;
-        mostrarToast(`Agendamento cadastrado — ${criados} repetição${criados === 1 ? '' : 'ões'} criada${criados === 1 ? '' : 's'}.`, 'sucesso');
+        const repeticoesCriadas = criados === 1 ? '1 repetição criada' : `${criados} repetições criadas`;
+        mostrarToast(`Agendamento cadastrado — ${repeticoesCriadas}.`, 'sucesso');
         if (pulados && pulados.length) {
           const datas = pulados.map((p) => formatarDataSimples(p.data)).join(', ');
-          mostrarToast(`${pulados.length} repetição${pulados.length === 1 ? '' : 'ões'} pulada${pulados.length === 1 ? '' : 's'} por conflito: ${datas}.`, 'erro');
+          const repeticoesPuladas = pulados.length === 1 ? '1 repetição pulada' : `${pulados.length} repetições puladas`;
+          mostrarToast(`${repeticoesPuladas} por conflito: ${datas}.`, 'erro');
         }
         if (limiteAtingido) {
           mostrarToast('Limite de repetições atingido — ajuste a data "Repetir até" se precisar de mais datas.', 'erro');
