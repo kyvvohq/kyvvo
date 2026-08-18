@@ -616,6 +616,17 @@ function formatarDataCurta(dataHoraISO) {
   return new Date(dataHoraISO).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Sao_Paulo' });
 }
 
+// "DD/MM/YYYY" a partir de uma data pura "YYYY-MM-DD" (sem hora), ex.: as
+// datas puladas de uma recorrência (POST /api/agendamentos). Não usa
+// formatarDataCurta/Date aqui de propósito: `new Date('YYYY-MM-DD')` é
+// interpretado como meia-noite UTC, e convertida de volta pra
+// America/Sao_Paulo (-03:00) viraria o dia anterior — bug sutil de fuso que
+// esse formatador evita simplesmente reordenando os componentes do texto.
+function formatarDataSimples(dataISO) {
+  const [ano, mes, dia] = dataISO.split('-');
+  return `${dia}/${mes}/${ano}`;
+}
+
 // "DD/MM às HH:mm" — usado onde o ano não agrega (próximo atendimento na
 // tela de Clientes, sempre num horizonte curto o bastante pra não precisar
 // do ano pra desambiguar).
@@ -730,6 +741,29 @@ function abrirModalNovoAgendamento(prefill) {
         <label for="novo-ag-observacoes">Observações</label>
         <textarea id="novo-ag-observacoes" rows="3" placeholder="Anotações internas sobre o agendamento"></textarea>
 
+        <label class="toggle-linha">
+          <span class="toggle-switch">
+            <input type="checkbox" id="novo-ag-recorrencia-switch">
+            <span class="toggle-switch-trilho"></span>
+          </span>
+          Recorrência
+        </label>
+
+        <div id="novo-ag-recorrencia-campos" style="display:none">
+          <label for="novo-ag-recorrencia-tipo">Repetir</label>
+          <select id="novo-ag-recorrencia-tipo">
+            <option value="">Selecione...</option>
+            <option value="semanal">Semanal</option>
+            <option value="quinzenal">Quinzenal</option>
+            <option value="mensal">Mensal</option>
+          </select>
+
+          <div id="novo-ag-recorrencia-ate-wrapper" style="display:none">
+            <label for="novo-ag-recorrencia-ate">Repetir até *</label>
+            <input type="date" id="novo-ag-recorrencia-ate" min="${hoje}">
+          </div>
+        </div>
+
         <div class="modal-acoes">
           <button type="button" class="btn-secundario" id="btn-cancelar-novo-ag">Cancelar</button>
           <button type="submit" class="btn-primario" id="btn-salvar-novo-ag">Salvar agendamento</button>
@@ -742,6 +776,22 @@ function abrirModalNovoAgendamento(prefill) {
   const erroEl = document.getElementById('novo-ag-erro');
 
   document.getElementById('btn-cancelar-novo-ag').addEventListener('click', fecharModal);
+
+  // Recorrência: o switch revela "Repetir" (tipo); só depois de escolher um
+  // tipo é que "Repetir até" aparece — mesma progressão descrita pelo Bruno
+  // (habilitar > escolher frequência > só então informar o limite).
+  document.getElementById('novo-ag-recorrencia-switch').addEventListener('change', (e) => {
+    document.getElementById('novo-ag-recorrencia-campos').style.display = e.target.checked ? 'block' : 'none';
+    if (!e.target.checked) {
+      document.getElementById('novo-ag-recorrencia-tipo').value = '';
+      document.getElementById('novo-ag-recorrencia-ate-wrapper').style.display = 'none';
+      document.getElementById('novo-ag-recorrencia-ate').value = '';
+    }
+  });
+  document.getElementById('novo-ag-recorrencia-tipo').addEventListener('change', (e) => {
+    document.getElementById('novo-ag-recorrencia-ate-wrapper').style.display = e.target.value ? 'block' : 'none';
+    if (!e.target.value) document.getElementById('novo-ag-recorrencia-ate').value = '';
+  });
 
   // Ao corrigir um campo, remove o destaque vermelho imediatamente.
   form.querySelectorAll('[data-obrigatorio]').forEach((campo) => {
@@ -924,6 +974,36 @@ function abrirModalNovoAgendamento(prefill) {
       return;
     }
 
+    // Recorrência: só entra no payload se o switch estiver ligado E um tipo
+    // tiver sido escolhido — "Repetir até" é obrigatório nesse caso (CA do
+    // Bruno), validado aqui porque não tem data-obrigatorio (só existe/é
+    // exigido condicionalmente, ao contrário dos campos sempre obrigatórios
+    // de cima que validarObrigatorios já cobre).
+    let recorrencia;
+    if (document.getElementById('novo-ag-recorrencia-switch').checked) {
+      const tipo = document.getElementById('novo-ag-recorrencia-tipo').value;
+      if (!tipo) {
+        erroEl.textContent = 'Selecione a frequência da recorrência.';
+        document.getElementById('novo-ag-recorrencia-tipo').focus();
+        return;
+      }
+      const ateInput = document.getElementById('novo-ag-recorrencia-ate');
+      const dataAgendamento = document.getElementById('novo-ag-data').value;
+      if (!ateInput.value) {
+        erroEl.textContent = 'Informe até quando a recorrência deve se repetir.';
+        ateInput.classList.add('campo-invalido');
+        ateInput.focus();
+        return;
+      }
+      if (ateInput.value <= dataAgendamento) {
+        erroEl.textContent = 'A data de "Repetir até" deve ser depois da data do agendamento.';
+        ateInput.classList.add('campo-invalido');
+        ateInput.focus();
+        return;
+      }
+      recorrencia = { tipo, ate: ateInput.value };
+    }
+
     const btn = document.getElementById('btn-salvar-novo-ag');
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner"></span>';
@@ -937,13 +1017,30 @@ function abrirModalNovoAgendamento(prefill) {
         profissional_id: document.getElementById('novo-ag-profissional').value,
         data_hora: document.getElementById('novo-ag-horario').value,
         observacoes: document.getElementById('novo-ag-observacoes').value.trim() || null,
+        recorrencia,
         origem: 'portal',
       }),
     });
 
     if (resultado && !resultado.error) {
       fecharModal();
-      mostrarToast('Agendamento cadastrado com sucesso.', 'sucesso');
+      // Recorrência (US: switch "Recorrência") — a resposta já vem com quantas
+      // ocorrências extras foram criadas e quais foram puladas por conflito;
+      // um segundo toast avisa isso separado do toast de sucesso, sem travar
+      // o fluxo (as demais ocorrências já foram criadas normalmente).
+      if (resultado.recorrencia) {
+        const { criados, pulados, limite_atingido: limiteAtingido } = resultado.recorrencia;
+        mostrarToast(`Agendamento cadastrado — ${criados} repetição${criados === 1 ? '' : 'ões'} criada${criados === 1 ? '' : 's'}.`, 'sucesso');
+        if (pulados && pulados.length) {
+          const datas = pulados.map((p) => formatarDataSimples(p.data)).join(', ');
+          mostrarToast(`${pulados.length} repetição${pulados.length === 1 ? '' : 'ões'} pulada${pulados.length === 1 ? '' : 's'} por conflito: ${datas}.`, 'erro');
+        }
+        if (limiteAtingido) {
+          mostrarToast('Limite de repetições atingido — ajuste a data "Repetir até" se precisar de mais datas.', 'erro');
+        }
+      } else {
+        mostrarToast('Agendamento cadastrado com sucesso.', 'sucesso');
+      }
       render();
     } else {
       erroEl.textContent = (resultado && resultado.error) || 'Erro ao salvar agendamento.';

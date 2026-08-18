@@ -277,6 +277,73 @@ async function buscarBloqueioConflitante(tenantId, profissionalId, dataHoraISO, 
   return rows[0] || null;
 }
 
+// ---------- Recorrência de agendamento (Novo agendamento > Recorrência) ----------
+// Gera as datas subsequentes a partir do agendamento âncora. Trabalha em
+// "componentes de Brasília" (ano/mês/dia/hora/minuto/segundo já ajustados
+// pelo offset fixo, mesmo raciocínio de diaDaSemanaBrasilia/minutosNoDia
+// acima) pra nunca calcular dia-do-mês/dia-da-semana em cima do UTC cru —
+// um agendamento às 23h de Brasília já vira o dia seguinte em UTC.
+function componentesBrasilia(dataISO) {
+  const deslocado = new Date(new Date(dataISO).getTime() - OFFSET_BRASILIA_MINUTOS * 60000);
+  return {
+    ano: deslocado.getUTCFullYear(),
+    mes: deslocado.getUTCMonth(),
+    dia: deslocado.getUTCDate(),
+    hora: deslocado.getUTCHours(),
+    minuto: deslocado.getUTCMinutes(),
+    segundo: deslocado.getUTCSeconds(),
+  };
+}
+
+function isoDeComponentesBrasilia({ ano, mes, dia, hora, minuto, segundo }) {
+  return new Date(Date.UTC(ano, mes, dia, hora, minuto, segundo) + OFFSET_BRASILIA_MINUTOS * 60000).toISOString();
+}
+
+// "YYYY-MM-DD" do calendário civil de Brasília — pra comparar com o limite
+// "recorrencia.ate" (que chega do frontend nesse mesmo formato, sem hora).
+function dataDiaISO({ ano, mes, dia }) {
+  return `${ano}-${String(mes + 1).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
+}
+
+// Semanal/quinzenal são aditivos (7/14 dias vezes N a partir da âncora,
+// Date.UTC normaliza dia > dias-no-mês automaticamente). Mensal recalcula o
+// dia-do-mês a partir do valor ORIGINAL da âncora a cada mês (não cumulativo
+// em cima da ocorrência anterior) — senão um clamp num mês curto (ex:
+// 31/jan → 28/fev, decisão confirmada com o Bruno) "vazaria" o dia 28 pros
+// meses seguintes em vez de voltar a tentar dia 31.
+function proximaOcorrenciaRecorrencia(ancora, tipo, n) {
+  if (tipo === 'mensal') {
+    const indiceMes = ancora.mes + n;
+    const ano = ancora.ano + Math.floor(indiceMes / 12);
+    const mes = ((indiceMes % 12) + 12) % 12;
+    const ultimoDiaDoMes = new Date(Date.UTC(ano, mes + 1, 0)).getUTCDate();
+    return { ...ancora, ano, mes, dia: Math.min(ancora.dia, ultimoDiaDoMes) };
+  }
+  const diasAAdicionar = (tipo === 'quinzenal' ? 14 : 7) * n;
+  const normalizado = new Date(Date.UTC(ancora.ano, ancora.mes, ancora.dia + diasAAdicionar));
+  return { ...ancora, ano: normalizado.getUTCFullYear(), mes: normalizado.getUTCMonth(), dia: normalizado.getUTCDate() };
+}
+
+// Empurra pro primeiro dia seguinte presente em `dias_funcionamento`,
+// mantendo o mesmo horário — mesma regra já usada em PATCH
+// /api/configuracoes quando o expediente muda e um agendamento existente
+// cai num dia que deixou de funcionar. Limite de 14 tentativas (uma volta
+// completa da semana): trava de segurança contra loop infinito se
+// dias_funcionamento vier vazio. Não precisa reconferir abertura/fechamento/
+// almoço — esses três são fixos pro tenant inteiro (não variam por dia da
+// semana), então se o horário da âncora já passou nessa validação, continua
+// válido em qualquer outro dia, só o dia em si pode estar fechado.
+function empurrarProximoDiaAberto(componentes, diasFuncionamento) {
+  let atual = componentes;
+  let tentativas = 0;
+  while (!diasFuncionamento.includes(diaDaSemanaBrasilia(isoDeComponentesBrasilia(atual))) && tentativas < 14) {
+    const proximoDia = new Date(Date.UTC(atual.ano, atual.mes, atual.dia + 1));
+    atual = { ...atual, ano: proximoDia.getUTCFullYear(), mes: proximoDia.getUTCMonth(), dia: proximoDia.getUTCDate() };
+    tentativas += 1;
+  }
+  return tentativas < 14 ? atual : null;
+}
+
 // US64 — cria/atualiza o lançamento financeiro vinculado a um agendamento
 // com serviço pago (CA "Cenário 1/3/4/5/6/7"). `client` pode ser o pool do
 // módulo ou um client de transação já aberto pelo chamador — POST/PATCH
@@ -2749,8 +2816,21 @@ async function start() {
       encaixe,
       origem,
       observacoes,
+      recorrencia,
     } = request.body || {};
     let { profissional_id: profissionalId } = request.body || {};
+
+    // Recorrência (Novo agendamento > Recorrência) — validado cedo, antes de
+    // qualquer consulta, mesmo padrão dos outros campos obrigatórios acima.
+    const RECORRENCIA_TIPOS = ['semanal', 'quinzenal', 'mensal'];
+    if (recorrencia !== undefined) {
+      if (!recorrencia || !RECORRENCIA_TIPOS.includes(recorrencia.tipo)) {
+        return reply.code(400).send({ error: 'recorrencia.tipo deve ser "semanal", "quinzenal" ou "mensal"' });
+      }
+      if (!recorrencia.ate || !/^\d{4}-\d{2}-\d{2}$/.test(recorrencia.ate)) {
+        return reply.code(400).send({ error: 'recorrencia.ate é obrigatório (formato YYYY-MM-DD)' });
+      }
+    }
 
     // Telefone é obrigatório: é o canal de comunicação com a cliente
     // (decisão de 2026-07-08, revertendo a US09/CA02 original). Normalizado
@@ -2844,6 +2924,78 @@ async function start() {
       }
     }
 
+    // Gera as datas das ocorrências seguintes da recorrência (a primeira
+    // ocorrência é o próprio agendamento âncora validado acima). Decisões
+    // confirmadas com o Bruno: quinzenal = a cada 14 dias corridos (não datas
+    // fixas do calendário); mensal num mês sem o dia da âncora (ex: 31 em
+    // fevereiro) usa o último dia do mês; ocorrência que cair num dia fechado
+    // (dias_funcionamento) é empurrada pro primeiro dia aberto seguinte,
+    // mantendo o horário; ocorrência que colidir com outro agendamento ou
+    // bloqueio manual é pulada (não tenta outro dia) e reportada na resposta
+    // pro frontend avisar a dona do salão.
+    const LIMITE_OCORRENCIAS_RECORRENCIA = 200; // guarda de segurança — bem acima de qualquer uso real (semanal por 1 ano = 52, mensal por 16 anos = 200)
+    const ocorrenciasParaCriar = [];
+    const ocorrenciasPuladas = [];
+    let limiteRecorrenciaAtingido = false;
+
+    if (recorrencia) {
+      const ancoraComponentes = componentesBrasilia(dataHora);
+      if (recorrencia.ate <= dataDiaISO(ancoraComponentes)) {
+        return reply.code(400).send({ error: 'recorrencia.ate deve ser depois da data do agendamento' });
+      }
+
+      const diasFuncionamento = tenantRows[0].dias_funcionamento || [1, 2, 3, 4, 5, 6];
+      let n = 1;
+      while (true) {
+        if (n > LIMITE_OCORRENCIAS_RECORRENCIA) {
+          limiteRecorrenciaAtingido = true;
+          break;
+        }
+        const bruto = proximaOcorrenciaRecorrencia(ancoraComponentes, recorrencia.tipo, n);
+        if (dataDiaISO(bruto) > recorrencia.ate) break;
+
+        const resolvido = empurrarProximoDiaAberto(bruto, diasFuncionamento);
+        if (!resolvido) {
+          ocorrenciasPuladas.push({ data: dataDiaISO(bruto), motivo: 'Nenhum dia de funcionamento disponível próximo a essa data.' });
+          n += 1;
+          continue;
+        }
+        const dataHoraOcorrencia = isoDeComponentesBrasilia(resolvido);
+
+        // Mesma checagem de bloqueio/conflito feita acima pro agendamento
+        // âncora — recorrência nunca vira encaixe automático (só o campo
+        // "Encaixe" explícito, marcado manualmente, ignora conflito).
+        const bloqueioOcorrencia = await buscarBloqueioConflitante(tenantId, profissionalId, dataHoraOcorrencia, servicoInfo.duracao_minutos);
+        if (bloqueioOcorrencia) {
+          ocorrenciasPuladas.push({
+            data: dataDiaISO(resolvido),
+            motivo: `Agenda bloqueada${bloqueioOcorrencia.motivo ? `: ${bloqueioOcorrencia.motivo}` : '.'}`,
+          });
+          n += 1;
+          continue;
+        }
+        const { rows: conflitosOcorrencia } = await pool.query(
+          `SELECT a.id
+           FROM agendamentos a
+           JOIN servicos s ON s.id = a.servico_id
+           WHERE a.tenant_id = $1
+             AND a.profissional_id = $2
+             AND a.status IN ('confirmado', 'concluido')
+             AND a.data_hora < $3::timestamptz + ($4 * interval '1 minute')
+             AND $3::timestamptz < a.data_hora + (s.duracao_minutos * interval '1 minute')`,
+          [tenantId, profissionalId, dataHoraOcorrencia, servicoInfo.duracao_minutos]
+        );
+        if (conflitosOcorrencia.length > 0) {
+          ocorrenciasPuladas.push({ data: dataDiaISO(resolvido), motivo: 'Já existe um agendamento nesse horário.' });
+          n += 1;
+          continue;
+        }
+
+        ocorrenciasParaCriar.push(dataHoraOcorrencia);
+        n += 1;
+      }
+    }
+
     // US64 — cliente, agendamento e o lançamento financeiro automático
     // (CA "Cenário 1") precisam nascer juntos: um crash entre o INSERT do
     // agendamento e o do financeiro não pode deixar receita prevista órfã
@@ -2885,6 +3037,27 @@ async function start() {
         statusAgendamento: 'confirmado',
       });
 
+      // Ocorrências seguintes da recorrência (já validadas/resolvidas acima) —
+      // mesmo cliente/profissional/serviço/observações do agendamento âncora,
+      // cada uma com seu próprio lançamento financeiro (nunca "encaixe": ver
+      // comentário na geração das datas).
+      for (const dataHoraOcorrencia of ocorrenciasParaCriar) {
+        const { rows: criadoOcorrencia } = await client.query(
+          `INSERT INTO agendamentos (tenant_id, cliente_id, profissional_id, servico_id, data_hora, encaixe, origem, observacoes)
+           VALUES ($1, $2, $3, $4, $5, false, $6, $7)
+           RETURNING id`,
+          [tenantId, clienteId, profissionalId, servicoId, dataHoraOcorrencia, origemFinal, observacoes || null]
+        );
+        await sincronizarLancamentoFinanceiro(client, {
+          tenantId,
+          agendamentoId: criadoOcorrencia[0].id,
+          servicoNome: servicoInfo.nome,
+          servicoPreco: servicoInfo.preco,
+          dataHora: dataHoraOcorrencia,
+          statusAgendamento: 'confirmado',
+        });
+      }
+
       await client.query('COMMIT');
     } catch (erro) {
       await client.query('ROLLBACK');
@@ -2907,7 +3080,15 @@ async function start() {
     );
 
     reply.code(201);
-    return detalhado[0];
+    const resposta = detalhado[0];
+    if (recorrencia) {
+      resposta.recorrencia = {
+        criados: ocorrenciasParaCriar.length,
+        pulados: ocorrenciasPuladas,
+        limite_atingido: limiteRecorrenciaAtingido,
+      };
+    }
+    return resposta;
   });
 
   // ---------- Perfil (US33) ----------
