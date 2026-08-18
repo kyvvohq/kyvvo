@@ -41,7 +41,7 @@
   const toggleSenhaBtn = document.getElementById('btn-toggle-senha');
 
   if (localStorage.getItem('kyvvo_admin_token')) {
-    window.location.href = '/painel.html';
+    window.location.href = '/dashboard.html';
   }
 
   toggleSenhaBtn.addEventListener('click', () => {
@@ -84,7 +84,7 @@
 
       localStorage.setItem('kyvvo_admin_token', data.token);
       localStorage.setItem('kyvvo_admin_nome', data.nome || '');
-      window.location.href = '/painel.html';
+      window.location.href = '/dashboard.html';
     } catch (err) {
       erroEl.textContent = 'Erro de conexão. Tente novamente.';
     } finally {

@@ -312,6 +312,21 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   border-left-color: var(--accent);
 }
 
+/* Cabeçalho de seção da área admin (Visão geral/Clientes/Operação/Sistema) —
+   só um rótulo separador, sem clique/hover: ao contrário de
+   .menu-item-grupo (que agrupa filhos colapsáveis), aqui os links de cada
+   seção continuam sempre visíveis, é puramente organização visual. */
+.menu-secao-titulo {
+  padding: 16px 14px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #5a5f80;
+}
+
+.menu-secao-titulo:first-child { padding-top: 4px; }
+
 /* Cabeçalho de grupo "Cadastros" (PR10) — visual quase igual a .menu-item,
    mas fora dela de propósito (sem data-menu, sem tela própria) pra não
    entrar no loop genérico de clique/`active` dos itens de menu. */
@@ -358,6 +373,11 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
      de uma sidebar vertical, não faz sentido aqui. */
   .btn-toggle-sidebar { display: none; }
   .menu { flex-direction: row; gap: 4px; }
+  /* Nessa barra horizontal os rótulos de seção não cabem sem virar ruído
+     entre os links — a área admin só é usada em desktop na prática, então
+     esconder aqui é o suficiente (não vale o esforço de um menu mobile
+     dedicado por seção pra uma tela interna da equipe). */
+  .menu-secao-titulo { display: none; }
   .menu-item { border-left: none; border-bottom: 2px solid transparent; border-radius: 8px 8px 0 0; white-space: nowrap; }
   .menu-item.active { border-left-color: transparent; border-bottom-color: var(--accent); }
   .menu-item-grupo { border-left: none; border-bottom: 2px solid transparent; border-radius: 8px 8px 0 0; white-space: nowrap; }
@@ -2687,4 +2707,116 @@ button.loading::after {
   border-top-color: #fff;
   border-radius: 50%;
   animation: girar 0.6s linear infinite;
+}
+
+/* ---------- Admin: reagrupamento do menu / redesign de Tenants ---------- */
+
+/* Linha de crescimento do card "Total" nos cards de estatística (reaproveita
+   .financeiro-resumo-card/.financeiro-resumo-label) — só aparece quando há
+   tenants novos no mês corrente. */
+.resumo-delta { color: #4ade80; font-size: 12px; font-weight: 600; margin-top: 4px; }
+
+/* Linha de busca + selects de filtro (Status/Plano/Modo) + "Novo tenant",
+   acima da tabela de Tenants — mesmo padrão de .clientes-filtros, estendido
+   pra cobrir input[type="search"] (usado aqui) além de type="text". */
+.clientes-filtros input[type="search"] { flex: 1; min-width: 220px; margin: 0; }
+
+/* Menu "•••" por linha da tabela (Tenants) — ao contrário de .menu-acoes
+   (que expande inline abaixo do conteúdo, pensado pra cards), este é um
+   popover posicionado sobre a própria tabela, porque numa linha de tabela
+   um menu inline empurraria as células vizinhas e desalinharia a grade. */
+.tabela-acoes-wrapper { position: relative; display: inline-block; }
+
+.tabela-acoes-dropdown {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 20;
+  min-width: 220px;
+  background: #12162a;
+  border: 1px solid #232847;
+  border-radius: 10px;
+  padding: 6px;
+  box-shadow: 0 8px 24px rgba(5, 7, 14, 0.5);
+}
+
+.tabela-acoes-dropdown.aberto { display: flex; flex-direction: column; gap: 2px; }
+
+.tabela-acoes-dropdown button {
+  width: 100%;
+  margin: 0;
+  padding: 8px 10px;
+  background: transparent;
+  color: #f2f2f7;
+  font-weight: 500;
+  font-size: 13px;
+  text-align: left;
+  border-radius: 6px;
+}
+
+.tabela-acoes-dropdown button:hover { background: #232847; }
+.tabela-acoes-dropdown button.acao-perigo { color: #ff6b6b; }
+.tabela-acoes-divisor { height: 1px; background: #232847; margin: 4px 2px; }
+
+/* Contato (responsável + e-mail) em duas linhas na mesma célula — mesmo
+   espírito de .agendamento-item-info (linha principal + linha secundária
+   apagada), só que dentro de uma <td>. */
+.tabela-contato-nome { color: #f2f2f7; }
+.tabela-contato-email { color: #a1a5c4; font-size: 12px; margin-top: 2px; }
+
+/* Painel lateral "Ver detalhes" — desliza da direita, ao contrário do modal
+   centralizado (.modal-overlay/.modal-card) usado pro resto do CRUD. Reusa
+   a mesma paleta (bg #12162a, borda #232847) pra manter consistência visual
+   com o resto do admin. */
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(5, 7, 14, 0.72);
+  backdrop-filter: blur(4px);
+}
+
+.drawer-painel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  max-width: 420px;
+  overflow-y: auto;
+  background: #12162a;
+  border-left: 1px solid #232847;
+  padding: 28px;
+}
+
+.drawer-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 32px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  color: #f2f2f7;
+  font-size: 15px;
+}
+
+.drawer-close:hover { background: rgba(255, 255, 255, 0.12); }
+
+.drawer-secao { margin-top: 24px; }
+.drawer-secao h4 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #a1a5c4;
+  margin-bottom: 8px;
+}
+.drawer-secao p { font-size: 14px; margin: 4px 0; }
+.drawer-secao p strong { color: #a1a5c4; font-weight: 500; margin-right: 4px; }
+
+@media (max-width: 480px) {
+  .drawer-painel { max-width: 100%; }
 }

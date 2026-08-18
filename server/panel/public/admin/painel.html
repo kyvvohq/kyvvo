@@ -20,11 +20,17 @@
   <aside class="painel-sidebar">
     <div class="logo">ky<span class="logo-vv">vv</span>o</div>
     <nav class="menu">
+      <div class="menu-secao-titulo">Visão geral</div>
+      <a class="menu-item" href="/dashboard.html">Dashboard</a>
+      <div class="menu-secao-titulo">Clientes</div>
       <a class="menu-item active" href="/painel.html">Tenants</a>
-      <a class="menu-item" href="/whatsapp.html">📱 WhatsApp</a>
-      <a class="menu-item" href="/ia-uso.html">🤖 IA — Consumo</a>
-      <a class="menu-item" href="/configuracoes.html">⚙️ Configurações</a>
-      <a class="menu-item" href="/versao.html">🏷️ Versão</a>
+      <a class="menu-item" href="/assinaturas.html">Assinaturas</a>
+      <div class="menu-secao-titulo">Operação</div>
+      <a class="menu-item" href="/whatsapp.html">WhatsApp</a>
+      <a class="menu-item" href="/ia-uso.html">IA e consumo</a>
+      <div class="menu-secao-titulo">Sistema</div>
+      <a class="menu-item" href="/configuracoes.html">Configurações</a>
+      <a class="menu-item" href="/versao.html">Versões / Changelog</a>
     </nav>
   </aside>
   <div class="painel-main">
@@ -46,11 +52,6 @@
       </div>
     </div>
     <div class="conteudo" style="max-width: 1400px;">
-      <div class="busca-tenants-wrapper">
-        <span class="busca-tenants-icone" aria-hidden="true">🔍</span>
-        <input type="search" id="busca-tenants" class="busca-tenants-input" placeholder="Buscar por e-mail ou WhatsApp..." aria-label="Buscar por e-mail ou WhatsApp">
-        <button type="button" id="btn-limpar-busca" class="btn-limpar-busca" hidden aria-label="Limpar busca">✕</button>
-      </div>
       <div id="conteudo"></div>
     </div>
     <footer class="rodape-app">
