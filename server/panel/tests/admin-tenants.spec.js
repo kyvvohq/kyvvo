@@ -1,8 +1,9 @@
 const { test, expect } = require('@playwright/test');
 
 // Cobre US26/US27/US28/US31: listagem de tenants (busca, ordenação,
-// paginação, badges de status) dentro do painel admin. API mockada via
-// page.route — sem dependência de Postgres real.
+// paginação, badges de status, filtros e menu "•••" de ações) dentro do
+// painel admin. API mockada via page.route — sem dependência de Postgres
+// real.
 
 function tenantMock(overrides = {}) {
   return {
@@ -14,13 +15,29 @@ function tenantMock(overrides = {}) {
     cadastrado_em: '2026-07-01T10:00:00Z',
     ativado_em: '2026-07-02T11:30:00Z',
     ativo: true,
+    plano: 'professional',
+    plano_nome: 'Professional',
     status_conta: 'Trial ativo',
     total_usuarios: 1,
     ...overrides,
   };
 }
 
+// Toda renderização da tela de Tenants busca também os cards de
+// estatística (/resumo) e o catálogo de planos (pro filtro "Plano ▾") —
+// sem mockar os dois, o fetch cairia na rede real (404 no ambiente de
+// teste) e a tela nunca terminaria de carregar.
+async function mockResumoEPlanos(page, resumo = {}) {
+  await page.route('**/admin/api/tenants/resumo', (route) =>
+    route.fulfill({ json: { total: 0, ativos: 0, em_trial: 0, inativos: 0, novos_mes: 0, ...resumo } })
+  );
+  await page.route('**/admin/api/planos', (route) =>
+    route.fulfill({ json: { planos: [{ chave: 'professional', nome: 'Professional' }] } })
+  );
+}
+
 async function entrarNaListaDeTenants(page, tenants = [], meta = {}) {
+  await mockResumoEPlanos(page);
   await page.route('**/admin/api/tenants*', (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
     return route.fulfill({
@@ -32,6 +49,12 @@ async function entrarNaListaDeTenants(page, tenants = [], meta = {}) {
     window.localStorage.setItem('kyvvo_admin_nome', 'Equipe Kyvvo');
   });
   await page.goto('/admin/painel.html');
+}
+
+// Menu "•••" da linha começa fechado (display:none) — precisa abrir antes
+// de qualquer ação dentro dele ficar clicável.
+async function abrirAcoesDaLinha(page, id) {
+  await page.click(`[data-testid="btn-acoes-${id}"]`);
 }
 
 test.describe('Admin — listagem de tenants (US26)', () => {
@@ -47,12 +70,9 @@ test.describe('Admin — listagem de tenants (US26)', () => {
     await expect(linha).toContainText('Salão Kyvvo Teste');
     await expect(linha).toContainText('Ana Paula');
     await expect(linha).toContainText('ana@salaokyvvo.com');
-    // WhatsApp formatado (XX) XXXXX-XXXX
-    await expect(linha).toContainText('(11) 98765-4321');
     await expect(linha).toContainText('01/07/2026');
-    await expect(linha).toContainText('02/07/2026');
+    await expect(linha).toContainText('Professional');
     await expect(linha.locator('.badge-status')).toHaveText('Trial ativo');
-    await expect(linha.locator('.btn-ver-detalhes')).toHaveAttribute('href', '/admin/tenants/t1');
   });
 
   test('Status "Trial ativo" mostra a contagem de dias restantes (US31/CA06)', async ({ page }) => {
@@ -108,8 +128,24 @@ test.describe('Admin — listagem de tenants (US26)', () => {
     await expect(page.locator('.vazio')).toHaveText('Nenhum tenant cadastrado ainda.');
   });
 
+  test('cards de estatística refletem o resumo do backend', async ({ page }) => {
+    await entrarNaListaDeTenants(page, [tenantMock()], {});
+    await page.route('**/admin/api/tenants/resumo', (route) =>
+      route.fulfill({ json: { total: 6, ativos: 2, em_trial: 1, inativos: 3, novos_mes: 2 } })
+    );
+    await page.reload();
+
+    const cards = page.locator('.financeiro-resumo-card');
+    await expect(cards.nth(0)).toContainText('6');
+    await expect(cards.nth(0)).toContainText('2 este mês');
+    await expect(cards.nth(1)).toContainText('2');
+    await expect(cards.nth(2)).toContainText('1');
+    await expect(cards.nth(3)).toContainText('3');
+  });
+
   test('ordenação padrão por data de cadastro decrescente (CA03)', async ({ page }) => {
     let urlRecebida = null;
+    await mockResumoEPlanos(page);
     await page.route('**/admin/api/tenants*', (route) => {
       urlRecebida = route.request().url();
       return route.fulfill({ json: { tenants: [tenantMock()], page: 1, limit: 20, total: 1, total_paginas: 1 } });
@@ -125,6 +161,7 @@ test.describe('Admin — listagem de tenants (US26)', () => {
 
   test('clicar no cabeçalho de uma coluna reordena a tabela (CA03)', async ({ page }) => {
     const requisicoes = [];
+    await mockResumoEPlanos(page);
     await page.route('**/admin/api/tenants*', (route) => {
       requisicoes.push(route.request().url());
       return route.fulfill({ json: { tenants: [tenantMock()], page: 1, limit: 20, total: 1, total_paginas: 1 } });
@@ -145,6 +182,7 @@ test.describe('Admin — listagem de tenants (US26)', () => {
 
   test('paginação: botões Anterior/Próximo e indicador de página (CA04)', async ({ page }) => {
     const requisicoes = [];
+    await mockResumoEPlanos(page);
     await page.route('**/admin/api/tenants*', (route) => {
       const url = new URL(route.request().url());
       requisicoes.push(url.toString());
@@ -168,16 +206,179 @@ test.describe('Admin — listagem de tenants (US26)', () => {
   });
 });
 
+test.describe('Admin — filtros da listagem de tenants', () => {
+  test('selecionar um filtro de Status envia o parâmetro certo e reseta pra página 1', async ({ page }) => {
+    const requisicoes = [];
+    await mockResumoEPlanos(page);
+    await page.route('**/admin/api/tenants*', (route) => {
+      requisicoes.push(route.request().url());
+      return route.fulfill({ json: { tenants: [tenantMock()], page: 1, limit: 20, total: 1, total_paginas: 1 } });
+    });
+    await page.addInitScript(() => {
+      window.localStorage.setItem('kyvvo_admin_token', 'admin-token-fake');
+    });
+    await page.goto('/admin/painel.html');
+
+    await page.selectOption('#filtro-status', 'trial');
+    await expect.poll(() => requisicoes.at(-1)).toContain('status=trial');
+    expect(requisicoes.at(-1)).toContain('page=1');
+  });
+
+  test('selecionar um filtro de Plano envia o parâmetro certo', async ({ page }) => {
+    const requisicoes = [];
+    await mockResumoEPlanos(page);
+    await page.route('**/admin/api/tenants*', (route) => {
+      requisicoes.push(route.request().url());
+      return route.fulfill({ json: { tenants: [tenantMock()], page: 1, limit: 20, total: 1, total_paginas: 1 } });
+    });
+    await page.addInitScript(() => {
+      window.localStorage.setItem('kyvvo_admin_token', 'admin-token-fake');
+    });
+    await page.goto('/admin/painel.html');
+
+    await page.selectOption('#filtro-plano', 'professional');
+    await expect.poll(() => requisicoes.at(-1)).toContain('plano=professional');
+  });
+
+  test('selecionar um filtro de Modo envia o parâmetro certo', async ({ page }) => {
+    const requisicoes = [];
+    await mockResumoEPlanos(page);
+    await page.route('**/admin/api/tenants*', (route) => {
+      requisicoes.push(route.request().url());
+      return route.fulfill({ json: { tenants: [tenantMock()], page: 1, limit: 20, total: 1, total_paginas: 1 } });
+    });
+    await page.addInitScript(() => {
+      window.localStorage.setItem('kyvvo_admin_token', 'admin-token-fake');
+    });
+    await page.goto('/admin/painel.html');
+
+    await page.selectOption('#filtro-modo', 'ia');
+    await expect.poll(() => requisicoes.at(-1)).toContain('modo=ia');
+  });
+});
+
+test.describe('Admin — menu "•••" de ações da listagem de tenants', () => {
+  test('abre só um dropdown por vez e fecha ao clicar fora', async ({ page }) => {
+    await entrarNaListaDeTenants(page, [tenantMock({ id: 't1' }), tenantMock({ id: 't2', nome: 'PetShop Amigo Fiel' })]);
+
+    await abrirAcoesDaLinha(page, 't1');
+    await expect(page.locator('#dropdown-t1')).toHaveClass(/aberto/);
+
+    await abrirAcoesDaLinha(page, 't2');
+    await expect(page.locator('#dropdown-t1')).not.toHaveClass(/aberto/);
+    await expect(page.locator('#dropdown-t2')).toHaveClass(/aberto/);
+
+    await page.click('body');
+    await expect(page.locator('#dropdown-t2')).not.toHaveClass(/aberto/);
+  });
+
+  test('"Ver detalhes" abre o painel lateral com informações/assinatura/whatsapp', async ({ page }) => {
+    await entrarNaListaDeTenants(page, [tenantMock({ id: 't1' })]);
+    await page.route('**/admin/api/tenants/t1/assinatura-resumo', (route) =>
+      route.fulfill({
+        json: {
+          id: 't1',
+          nome: 'Salão Kyvvo Teste',
+          status_conta: 'Trial ativo',
+          trial_dias_restantes: 3,
+          responsavel: { nome: 'Ana Ribeiro', email: 'ana@salaokyvvo.com' },
+          whatsapp: '11987654321',
+          plano_nome: 'Smart',
+          valor_plano: 149.9,
+          proxima_cobranca: { data: '2026-08-10', valor: 149.9 },
+          whatsapp_conectado: true,
+          whatsapp_numero: '11987654321',
+        },
+      })
+    );
+
+    await abrirAcoesDaLinha(page, 't1');
+    await page.click('[data-tenant-acao="ver-detalhes"][data-id="t1"]');
+
+    const drawer = page.locator('.drawer-painel');
+    await expect(drawer).toContainText('Salão Kyvvo Teste');
+    await expect(drawer).toContainText('Ana Ribeiro');
+    await expect(drawer).toContainText('Smart');
+    await expect(drawer).toContainText('Conectado');
+
+    await page.click('#drawer-btn-gerenciar');
+    await expect(page).toHaveURL(/\/admin\/tenants\/t1/);
+  });
+
+  test('"Editar tenant" abre o modal de edição', async ({ page }) => {
+    await entrarNaListaDeTenants(page, [tenantMock({ id: 't1' })]);
+    await page.route('**/admin/api/tenants/t1', (route) => {
+      if (route.request().method() !== 'GET') return route.fallback();
+      return route.fulfill({
+        json: {
+          id: 't1',
+          nome: 'Salão Kyvvo Teste',
+          segmento: 'salao_beleza',
+          ativo: true,
+          modulos_ativos: [],
+          usuarios: [],
+          contagens: { servicos: 0, profissionais: 0 },
+        },
+      });
+    });
+
+    await abrirAcoesDaLinha(page, 't1');
+    await page.click('[data-tenant-acao="editar"][data-id="t1"]');
+    await expect(page.locator('#tenant-nome')).toHaveValue('Salão Kyvvo Teste');
+  });
+
+  test('"Desativar acesso" chama o PATCH correto e atualiza a lista', async ({ page }) => {
+    await entrarNaListaDeTenants(page, [tenantMock({ id: 't1' })]);
+    let corpoEnviado = null;
+    await page.route('**/admin/api/tenants/t1', (route) => {
+      if (route.request().method() !== 'PATCH') return route.fallback();
+      corpoEnviado = route.request().postDataJSON();
+      return route.fulfill({ json: { id: 't1', ativo: false } });
+    });
+
+    await abrirAcoesDaLinha(page, 't1');
+    await page.click('[data-tenant-acao="alternar"][data-id="t1"]');
+
+    await expect(page.locator('.toast-sucesso')).toHaveText(/desativado com sucesso/);
+    expect(corpoEnviado).toMatchObject({ ativo: false });
+  });
+
+  test('"Gerenciar assinatura" navega pra Assinaturas já filtrado pelo nome do tenant', async ({ page }) => {
+    await entrarNaListaDeTenants(page, [tenantMock({ id: 't1', nome: 'Salão Kyvvo Teste' })]);
+    await abrirAcoesDaLinha(page, 't1');
+    await page.click('[data-tenant-acao="gerenciar-assinatura"][data-id="t1"]');
+    await expect(page).toHaveURL(/\/assinaturas\.html\?busca=Sal%C3%A3o/);
+  });
+
+  test('"Excluir tenant" pede confirmação e chama o DELETE (soft delete)', async ({ page }) => {
+    await entrarNaListaDeTenants(page, [tenantMock({ id: 't1' })]);
+    let metodoChamado = null;
+    await page.route('**/admin/api/tenants/t1', (route) => {
+      if (route.request().method() !== 'DELETE') return route.fallback();
+      metodoChamado = 'DELETE';
+      return route.fulfill({ json: { ok: true } });
+    });
+
+    await abrirAcoesDaLinha(page, 't1');
+    await page.click('[data-tenant-acao="excluir"][data-id="t1"]');
+    await expect(page.locator('.modal-card')).toContainText('Excluir tenant');
+
+    await page.click('#btn-confirmar-excluir');
+    await expect(page.locator('.toast-sucesso')).toHaveText(/excluído com sucesso/);
+    expect(metodoChamado).toBe('DELETE');
+  });
+});
+
 test.describe('Admin — busca na listagem de tenants (US27)', () => {
-  test('campo de busca com placeholder e ícone de lupa (CA01)', async ({ page }) => {
+  test('campo de busca com placeholder (CA01)', async ({ page }) => {
     await entrarNaListaDeTenants(page, [tenantMock()]);
     const campo = page.locator('#busca-tenants');
     await expect(campo).toHaveAttribute('placeholder', 'Buscar por e-mail ou WhatsApp...');
-    await expect(page.locator('.busca-tenants-icone')).toBeVisible();
   });
 
   test('digitar aciona a busca com debounce e reseta pra página 1 (CA02, CA05)', async ({ page }) => {
     const requisicoes = [];
+    await mockResumoEPlanos(page);
     await page.route('**/admin/api/tenants*', (route) => {
       requisicoes.push(route.request().url());
       return route.fulfill({ json: { tenants: [tenantMock()], page: 1, limit: 20, total: 1, total_paginas: 1 } });
@@ -195,6 +396,7 @@ test.describe('Admin — busca na listagem de tenants (US27)', () => {
 
   test('busca por trecho do WhatsApp envia o termo ao backend (CA03)', async ({ page }) => {
     const requisicoes = [];
+    await mockResumoEPlanos(page);
     await page.route('**/admin/api/tenants*', (route) => {
       requisicoes.push(route.request().url());
       return route.fulfill({ json: { tenants: [tenantMock()], page: 1, limit: 20, total: 1, total_paginas: 1 } });
@@ -209,6 +411,7 @@ test.describe('Admin — busca na listagem de tenants (US27)', () => {
   });
 
   test('contador e estado vazio de busca sem resultados (CA04)', async ({ page }) => {
+    await mockResumoEPlanos(page);
     await page.route('**/admin/api/tenants*', (route) => {
       const url = new URL(route.request().url());
       const search = url.searchParams.get('search');
@@ -223,35 +426,6 @@ test.describe('Admin — busca na listagem de tenants (US27)', () => {
     await page.goto('/admin/painel.html');
 
     await page.fill('#busca-tenants', 'inexistente');
-    await expect(page.getByText("Nenhum tenant encontrado para 'inexistente'.")).toBeVisible();
-  });
-
-  test('botão limpar busca aparece ao digitar e restaura a listagem completa (CA04)', async ({ page }) => {
-    const requisicoes = [];
-    await page.route('**/admin/api/tenants*', (route) => {
-      const url = new URL(route.request().url());
-      requisicoes.push(url.toString());
-      const search = url.searchParams.get('search');
-      if (search) {
-        return route.fulfill({ json: { tenants: [], page: 1, limit: 20, total: 0, total_paginas: 1 } });
-      }
-      return route.fulfill({ json: { tenants: [tenantMock()], page: 1, limit: 20, total: 1, total_paginas: 1 } });
-    });
-    await page.addInitScript(() => {
-      window.localStorage.setItem('kyvvo_admin_token', 'admin-token-fake');
-    });
-    await page.goto('/admin/painel.html');
-
-    const btnLimpar = page.locator('#btn-limpar-busca');
-    await expect(btnLimpar).toBeHidden();
-
-    await page.fill('#busca-tenants', 'termo');
-    await expect(btnLimpar).toBeVisible();
-    await expect.poll(() => requisicoes.at(-1)).toContain('search=termo');
-
-    await btnLimpar.click();
-    await expect(btnLimpar).toBeHidden();
-    await expect(page.locator('#busca-tenants')).toHaveValue('');
-    await expect.poll(() => requisicoes.at(-1)).not.toContain('search=');
+    await expect(page.getByText('Nenhum tenant encontrado para os filtros aplicados.')).toBeVisible();
   });
 });

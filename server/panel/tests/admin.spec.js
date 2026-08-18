@@ -17,9 +17,12 @@ test.describe('Admin — login (US16)', () => {
     await expect(page.locator('.admin-badge')).toHaveText(/Área administrativa/);
   });
 
-  test('login bem-sucedido redireciona pro painel admin', async ({ page }) => {
+  test('login bem-sucedido redireciona pro dashboard admin', async ({ page }) => {
     await page.route('**/admin/api/auth/login', (route) =>
       route.fulfill({ json: { token: 'admin-token-fake', nome: 'Equipe Kyvvo', email: 'equipe@kyvvo.com.br' } })
+    );
+    await page.route('**/admin/api/tenants/resumo', (route) =>
+      route.fulfill({ json: { total: 0, ativos: 0, em_trial: 0, inativos: 0, novos_mes: 0 } })
     );
     await page.route('**/admin/api/tenants*', (route) => route.fulfill({ json: { tenants: [], page: 1, limit: 20, total: 0, total_paginas: 1 } }));
 
@@ -28,7 +31,7 @@ test.describe('Admin — login (US16)', () => {
     await page.fill('#senha', 'senha-forte');
     await page.click('#btn-entrar');
 
-    await expect(page).toHaveURL(/\/admin\/painel\.html/);
+    await expect(page).toHaveURL(/\/admin\/dashboard\.html/);
     await expect(page.locator('#admin-nome')).toHaveText('Equipe Kyvvo');
   });
 
@@ -59,7 +62,14 @@ test.describe('Admin — CRUD de tenants (US16)', () => {
     };
   }
 
+  // Toda renderização da tela de Tenants busca também os cards de
+  // estatística (/resumo) e o catálogo de planos (filtro "Plano ▾") — sem
+  // mockar os dois, o fetch cairia na rede real (404 no ambiente de teste).
   async function entrarNoPainelAdmin(page, tenants = []) {
+    await page.route('**/admin/api/tenants/resumo', (route) =>
+      route.fulfill({ json: { total: 0, ativos: 0, em_trial: 0, inativos: 0, novos_mes: 0 } })
+    );
+    await page.route('**/admin/api/planos', (route) => route.fulfill({ json: { planos: [] } }));
     await page.route('**/admin/api/tenants*', (route) => {
       if (route.request().method() !== 'GET') return route.fallback();
       return route.fulfill({ json: { tenants, page: 1, limit: 20, total: tenants.length, total_paginas: 1 } });
@@ -71,6 +81,12 @@ test.describe('Admin — CRUD de tenants (US16)', () => {
     await page.goto('/admin/painel.html');
   }
 
+  // O menu "•••" da linha começa fechado (display:none) — precisa abrir
+  // antes de qualquer ação dentro dele ficar clicável.
+  async function abrirAcoesDaLinha(page, id) {
+    await page.click(`[data-testid="btn-acoes-${id}"]`);
+  }
+
   test('lista os tenants cadastrados', async ({ page }) => {
     await entrarNoPainelAdmin(page, [
       tenantMock({ id: 't1', nome: 'Salão Kyvvo Teste' }),
@@ -80,11 +96,12 @@ test.describe('Admin — CRUD de tenants (US16)', () => {
     await expect(page.locator('.tabela-tenants tbody tr').first()).toContainText('Salão Kyvvo Teste');
   });
 
-  test('tenant desativado mostra o status "Inativo" e o botão "Ativar"', async ({ page }) => {
+  test('tenant desativado mostra o status "Inativo" e a ação "Ativar acesso"', async ({ page }) => {
     await entrarNoPainelAdmin(page, [tenantMock({ id: 't1', nome: 'Cliente Antigo', ativo: false, status_conta: 'Inativo' })]);
     const linha = page.locator('.tabela-tenants tbody tr').first();
     await expect(linha.locator('.badge-status')).toHaveText('Inativo');
-    await expect(linha.locator('[data-tenant-acao="alternar"]')).toHaveText('Ativar');
+    await abrirAcoesDaLinha(page, 't1');
+    await expect(page.locator('[data-tenant-acao="alternar"][data-id="t1"]')).toHaveText('Ativar acesso');
   });
 
   test('cria um tenant novo, sem usuário de login junto', async ({ page }) => {
@@ -146,6 +163,7 @@ test.describe('Admin — CRUD de tenants (US16)', () => {
       });
     });
 
+    await abrirAcoesDaLinha(page, 't1');
     await page.click('[data-tenant-acao="editar"][data-id="t1"]');
 
     await expect(page.locator('.modal-texto')).toContainText('Agenda Inteligente');
@@ -163,16 +181,11 @@ test.describe('Admin — CRUD de tenants (US16)', () => {
       return route.fulfill({ json: { id: 't1', ativo: false } });
     });
 
+    await abrirAcoesDaLinha(page, 't1');
     await page.click('[data-tenant-acao="alternar"][data-id="t1"]');
 
     await expect(page.locator('.toast-sucesso')).toHaveText(/desativado com sucesso/);
     expect(corpoEnviado).toMatchObject({ ativo: false });
-  });
-
-  test('clicar numa linha da tabela navega pro detalhe do tenant', async ({ page }) => {
-    await entrarNoPainelAdmin(page, [tenantMock({ id: 't1', nome: 'Salão Kyvvo Teste' })]);
-    await page.click('.tabela-tenants tbody tr[data-id="t1"]');
-    await expect(page).toHaveURL(/\/admin\/tenants\/t1/);
   });
 
   test('nome em branco fica destacado como obrigatório', async ({ page }) => {
