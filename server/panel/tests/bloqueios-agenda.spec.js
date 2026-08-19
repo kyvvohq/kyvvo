@@ -1,21 +1,20 @@
 const { test, expect } = require('@playwright/test');
 
 // Cobre US61: bloqueios manuais de agenda pelo portal (listar, criar — pra
-// toda a agenda ou só um profissional —, validar e excluir). As chamadas de
-// API são mockadas via page.route — sem dependência de Postgres real.
+// toda a agenda ou só um profissional —, validar e excluir), agora dentro do
+// menu Configurações (item "Bloqueio de agenda", movido do menu Agenda). As
+// chamadas de API são mockadas via page.route — sem dependência de Postgres
+// real.
 
-async function entrarNoPainel(page, { bloqueios = [], profissionais = [] } = {}) {
+async function entrarNoPainel(page, { bloqueios = [], profissionais = [], plano = 'professional' } = {}) {
   await page.route('**/api/configuracao', (route) =>
     route.fulfill({ json: { dias_funcionamento: [1, 2, 3, 4, 5, 6], formato_hora: '24h', segmento: 'salao_beleza' } })
   );
-  // mostrar_profissional reflete a mesma regra do backend real (profissionais
-  // > 1) — sem isso o campo "Profissional (opcional)" do modal de bloqueio
-  // fica sempre escondido nos testes (contaStatus fica null sem esse mock).
   await page.route('**/api/tenant/status', (route) =>
     route.fulfill({
       json: {
         role: 'administrador',
-        plano: 'professional',
+        plano,
         status: 'ativo',
         email_verified: true,
         onboarding_dispensado: true,
@@ -44,7 +43,7 @@ async function entrarNoPainel(page, { bloqueios = [], profissionais = [] } = {})
 }
 
 async function abrirTelaBloqueios(page) {
-  await page.click('#menu-agenda-toggle');
+  await page.click('#menu-config-toggle');
   await page.click('.menu-item[data-menu="bloqueios"]');
 }
 
@@ -75,7 +74,7 @@ test.describe('Bloqueios de agenda — CRUD (US61)', () => {
     await expect(page.locator('.vazio')).toContainText('Nenhum bloqueio cadastrado');
   });
 
-  test('cria um bloqueio para toda a agenda (sem selecionar profissional)', async ({ page }) => {
+  test('cria um bloqueio de um dia só para toda a agenda (sem selecionar profissional)', async ({ page }) => {
     await entrarNoPainel(page, { bloqueios: [], profissionais: [{ id: 'p1', nome: 'Bruna' }] });
     let corpoEnviado = null;
     await page.route('**/api/bloqueios', (route) => {
@@ -86,9 +85,9 @@ test.describe('Bloqueios de agenda — CRUD (US61)', () => {
 
     await abrirTelaBloqueios(page);
     await page.click('#btn-novo-bloqueio');
-    await page.fill('#bloqueio-data-inicio', '2026-08-10');
+    await page.fill('#bloqueio-periodo-inicio', '2026-08-10');
+    await page.fill('#bloqueio-periodo-fim', '2026-08-10');
     await page.fill('#bloqueio-hora-inicio', '09:00');
-    await page.fill('#bloqueio-data-fim', '2026-08-10');
     await page.fill('#bloqueio-hora-fim', '12:00');
     await page.fill('#bloqueio-motivo', 'Manutenção do salão');
     await page.click('#btn-salvar-bloqueio');
@@ -101,9 +100,6 @@ test.describe('Bloqueios de agenda — CRUD (US61)', () => {
   });
 
   test('cria um bloqueio para um profissional específico', async ({ page }) => {
-    // 2 profissionais: com só 1, o campo "Profissional (opcional)" some do
-    // modal (não é mais uma escolha real) — só faz sentido testar a seleção
-    // explícita com 2+, mesma regra do backend (mostrar_profissional).
     await entrarNoPainel(page, { bloqueios: [], profissionais: [{ id: 'p1', nome: 'Bruna' }, { id: 'p2', nome: 'Carla' }] });
     let corpoEnviado = null;
     await page.route('**/api/bloqueios', (route) => {
@@ -114,15 +110,72 @@ test.describe('Bloqueios de agenda — CRUD (US61)', () => {
 
     await abrirTelaBloqueios(page);
     await page.click('#btn-novo-bloqueio');
-    await page.fill('#bloqueio-data-inicio', '2026-08-10');
+    await page.fill('#bloqueio-periodo-inicio', '2026-08-10');
+    await page.fill('#bloqueio-periodo-fim', '2026-08-10');
     await page.fill('#bloqueio-hora-inicio', '09:00');
-    await page.fill('#bloqueio-data-fim', '2026-08-10');
     await page.fill('#bloqueio-hora-fim', '12:00');
     await page.selectOption('#bloqueio-profissional', 'p1');
     await page.click('#btn-salvar-bloqueio');
 
     await expect(page.locator('.toast-sucesso')).toHaveText(/criado com sucesso/);
     expect(corpoEnviado.profissional_id).toBe('p1');
+  });
+
+  test('período de vários dias desabilita o horário e bloqueia o dia inteiro', async ({ page }) => {
+    await entrarNoPainel(page, { bloqueios: [], profissionais: [] });
+    let corpoEnviado = null;
+    await page.route('**/api/bloqueios', (route) => {
+      if (route.request().method() !== 'POST') return route.fallback();
+      corpoEnviado = route.request().postDataJSON();
+      return route.fulfill({ status: 201, json: { id: 'novo', ...corpoEnviado } });
+    });
+
+    await abrirTelaBloqueios(page);
+    await page.click('#btn-novo-bloqueio');
+    await page.fill('#bloqueio-periodo-inicio', '2026-08-10');
+    await page.fill('#bloqueio-periodo-fim', '2026-08-15');
+
+    await expect(page.locator('#bloqueio-hora-inicio')).toBeDisabled();
+    await expect(page.locator('#bloqueio-hora-fim')).toBeDisabled();
+    await expect(page.locator('#bloqueio-horario-aviso')).toContainText('o bloqueio vale o dia inteiro');
+
+    await page.click('#btn-salvar-bloqueio');
+
+    await expect(page.locator('.toast-sucesso')).toHaveText(/criado com sucesso/);
+    expect(corpoEnviado.inicio).toBe('2026-08-10T03:00:00.000Z');
+    expect(corpoEnviado.fim).toBe('2026-08-16T02:59:59.000Z');
+  });
+
+  test('voltar de um período de vários dias pro mesmo dia reabilita o horário (e exige preencher de novo)', async ({ page }) => {
+    await entrarNoPainel(page, { bloqueios: [], profissionais: [] });
+    await abrirTelaBloqueios(page);
+    await page.click('#btn-novo-bloqueio');
+
+    await page.fill('#bloqueio-periodo-inicio', '2026-08-10');
+    await page.fill('#bloqueio-periodo-fim', '2026-08-15');
+    await expect(page.locator('#bloqueio-hora-inicio')).toBeDisabled();
+
+    await page.fill('#bloqueio-periodo-fim', '2026-08-10');
+    await expect(page.locator('#bloqueio-hora-inicio')).toBeEnabled();
+    await expect(page.locator('#bloqueio-horario-aviso')).toBeEmpty();
+  });
+
+  test('campo Profissional aparece em qualquer plano exceto o Essencial, independente da quantidade de profissionais', async ({ page }) => {
+    await entrarNoPainel(page, { bloqueios: [], profissionais: [{ id: 'p1', nome: 'Bruna' }], plano: 'business' });
+    await abrirTelaBloqueios(page);
+    await page.click('#btn-novo-bloqueio');
+    await expect(page.locator('#bloqueio-profissional')).toBeVisible();
+  });
+
+  test('campo Profissional some no plano Essencial mesmo com mais de um profissional', async ({ page }) => {
+    await entrarNoPainel(page, {
+      bloqueios: [],
+      profissionais: [{ id: 'p1', nome: 'Bruna' }, { id: 'p2', nome: 'Carla' }],
+      plano: 'starter',
+    });
+    await abrirTelaBloqueios(page);
+    await page.click('#btn-novo-bloqueio');
+    await expect(page.locator('#bloqueio-profissional')).toBeHidden();
   });
 
   test('fim antes ou igual ao início mostra erro sem chamar a API', async ({ page }) => {
@@ -136,9 +189,9 @@ test.describe('Bloqueios de agenda — CRUD (US61)', () => {
 
     await abrirTelaBloqueios(page);
     await page.click('#btn-novo-bloqueio');
-    await page.fill('#bloqueio-data-inicio', '2026-08-10');
+    await page.fill('#bloqueio-periodo-inicio', '2026-08-10');
+    await page.fill('#bloqueio-periodo-fim', '2026-08-10');
     await page.fill('#bloqueio-hora-inicio', '12:00');
-    await page.fill('#bloqueio-data-fim', '2026-08-10');
     await page.fill('#bloqueio-hora-fim', '09:00');
     await page.click('#btn-salvar-bloqueio');
 
@@ -155,9 +208,9 @@ test.describe('Bloqueios de agenda — CRUD (US61)', () => {
 
     await abrirTelaBloqueios(page);
     await page.click('#btn-novo-bloqueio');
-    await page.fill('#bloqueio-data-inicio', '2026-08-10');
+    await page.fill('#bloqueio-periodo-inicio', '2026-08-10');
+    await page.fill('#bloqueio-periodo-fim', '2026-08-10');
     await page.fill('#bloqueio-hora-inicio', '09:00');
-    await page.fill('#bloqueio-data-fim', '2026-08-10');
     await page.fill('#bloqueio-hora-fim', '12:00');
     await page.click('#btn-salvar-bloqueio');
 
@@ -201,9 +254,9 @@ test.describe('Bloqueios de agenda — CRUD (US61)', () => {
     expect(chamou).toBe(false);
   });
 
-  test('o cabeçalho "Agenda" fica destacado quando Bloqueios está ativo', async ({ page }) => {
+  test('o cabeçalho "Configurações" fica destacado quando Bloqueio de agenda está ativo', async ({ page }) => {
     await entrarNoPainel(page, { bloqueios: [] });
     await abrirTelaBloqueios(page);
-    await expect(page.locator('#menu-agenda-toggle')).toHaveClass(/tem-filho-ativo/);
+    await expect(page.locator('#menu-config-toggle')).toHaveClass(/tem-filho-ativo/);
   });
 });

@@ -3310,7 +3310,7 @@ async function renderBloqueios() {
 
   let html = `
     <div class="nav-periodo">
-      <strong>Bloqueios</strong>
+      <strong>Bloqueio de agenda</strong>
       <button class="btn-novo-agendamento" id="btn-novo-bloqueio">+ Novo bloqueio</button>
     </div>
   `;
@@ -3324,21 +3324,30 @@ async function renderBloqueios() {
 
 function abrirModalBloqueio() {
   const hoje = formatarDataISO(new Date());
+  // Campo de profissional é uma diferenciação por plano (não pela contagem
+  // de profissionais como em mostrar_profissional, usado no resto do app) —
+  // decisão do Bruno: todo plano exceto o Essencial (chave 'starter') pode
+  // bloquear a agenda de um profissional específico; no Essencial o bloqueio
+  // sempre vale pra agenda inteira.
+  const mostrarProfissional = contaStatus && contaStatus.plano !== 'starter';
   abrirModal(
     '<h3>Novo bloqueio</h3>',
     `
       <form id="form-bloqueio">
         <div class="modal-erro" id="bloqueio-erro"></div>
-        <label for="bloqueio-data-inicio">Data de início *</label>
-        <input type="date" id="bloqueio-data-inicio" data-obrigatorio min="${hoje}" value="${hoje}">
+        <label for="bloqueio-periodo-inicio">Período *</label>
+        <div class="campo-periodo">
+          <input type="date" id="bloqueio-periodo-inicio" data-obrigatorio min="${hoje}" value="${hoje}">
+          <span class="periodo-separador">até</span>
+          <input type="date" id="bloqueio-periodo-fim" data-obrigatorio min="${hoje}" value="${hoje}">
+        </div>
         <label for="bloqueio-hora-inicio">Hora de início *</label>
         <input type="time" id="bloqueio-hora-inicio" data-obrigatorio>
-        <label for="bloqueio-data-fim">Data de fim *</label>
-        <input type="date" id="bloqueio-data-fim" data-obrigatorio min="${hoje}" value="${hoje}">
         <label for="bloqueio-hora-fim">Hora de fim *</label>
         <input type="time" id="bloqueio-hora-fim" data-obrigatorio>
-        <label for="bloqueio-profissional"${contaStatus && contaStatus.mostrar_profissional ? '' : ' hidden style="display:none"'}>Profissional (opcional)</label>
-        <select id="bloqueio-profissional"${contaStatus && contaStatus.mostrar_profissional ? '' : ' hidden style="display:none"'}><option value="">Toda a agenda</option></select>
+        <div class="campo-aviso" id="bloqueio-horario-aviso"></div>
+        <label for="bloqueio-profissional"${mostrarProfissional ? '' : ' hidden style="display:none"'}>Profissional (opcional)</label>
+        <select id="bloqueio-profissional"${mostrarProfissional ? '' : ' hidden style="display:none"'}><option value="">Toda a agenda</option></select>
         <label for="bloqueio-motivo">Motivo (opcional)</label>
         <input type="text" id="bloqueio-motivo" placeholder="Ex: Férias, Feriado, Compromisso pessoal">
         <div class="modal-acoes">
@@ -3351,12 +3360,50 @@ function abrirModalBloqueio() {
 
   document.getElementById('btn-cancelar-bloqueio').addEventListener('click', fecharModal);
 
-  api('/api/profissionais').then((resultado) => {
-    const select = document.getElementById('bloqueio-profissional');
-    if (!resultado || !resultado.profissionais) return;
-    select.innerHTML = '<option value="">Toda a agenda</option>' +
-      resultado.profissionais.map((p) => `<option value="${p.id}">${p.nome}</option>`).join('');
-  });
+  if (mostrarProfissional) {
+    api('/api/profissionais').then((resultado) => {
+      const select = document.getElementById('bloqueio-profissional');
+      if (!resultado || !resultado.profissionais) return;
+      select.innerHTML = '<option value="">Toda a agenda</option>' +
+        resultado.profissionais.map((p) => `<option value="${p.id}">${p.nome}</option>`).join('');
+    });
+  }
+
+  // Horário só faz sentido quando o período é um único dia — um bloqueio de
+  // vários dias (ex: férias) cobre o dia inteiro em cada um deles. Fora
+  // desse caso os campos de hora ficam desabilitados (e saem da validação
+  // obrigatória); o payload usa 00:00–23:59:59 pro período inteiro.
+  const periodoInicioEl = document.getElementById('bloqueio-periodo-inicio');
+  const periodoFimEl = document.getElementById('bloqueio-periodo-fim');
+  const horaInicioEl = document.getElementById('bloqueio-hora-inicio');
+  const horaFimEl = document.getElementById('bloqueio-hora-fim');
+  const horarioAvisoEl = document.getElementById('bloqueio-horario-aviso');
+
+  function atualizarHabilitacaoHorario() {
+    // Fim nunca pode ficar antes do início — ajusta o mínimo permitido e
+    // empurra o valor pra frente se o usuário mudou o início pra depois do
+    // fim já escolhido.
+    periodoFimEl.min = periodoInicioEl.value || hoje;
+    if (periodoFimEl.value && periodoInicioEl.value && periodoFimEl.value < periodoInicioEl.value) {
+      periodoFimEl.value = periodoInicioEl.value;
+    }
+
+    const mesmoDia = periodoInicioEl.value && periodoInicioEl.value === periodoFimEl.value;
+    [horaInicioEl, horaFimEl].forEach((campo) => {
+      campo.disabled = !mesmoDia;
+      campo.classList.remove('campo-invalido');
+      if (mesmoDia) {
+        campo.setAttribute('data-obrigatorio', '');
+      } else {
+        campo.removeAttribute('data-obrigatorio');
+        campo.value = '';
+      }
+    });
+    horarioAvisoEl.textContent = mesmoDia ? '' : 'Período de mais de um dia — o bloqueio vale o dia inteiro, sem horário específico.';
+  }
+  periodoInicioEl.addEventListener('change', atualizarHabilitacaoHorario);
+  periodoFimEl.addEventListener('change', atualizarHabilitacaoHorario);
+  atualizarHabilitacaoHorario();
 
   const form = document.getElementById('form-bloqueio');
   form.querySelectorAll('[data-obrigatorio]').forEach((campo) => {
@@ -3376,8 +3423,13 @@ function abrirModalBloqueio() {
 
     // Ancorado em Brasília (-03:00), mesmo padrão do resto do sistema —
     // nunca deixar o fuso do navegador do usuário influenciar o horário.
-    const inicioISO = new Date(`${document.getElementById('bloqueio-data-inicio').value}T${document.getElementById('bloqueio-hora-inicio').value}:00-03:00`).toISOString();
-    const fimISO = new Date(`${document.getElementById('bloqueio-data-fim').value}T${document.getElementById('bloqueio-hora-fim').value}:00-03:00`).toISOString();
+    // Período de mais de um dia ignora os campos de hora (desabilitados,
+    // ver atualizarHabilitacaoHorario) e cobre o dia inteiro em cada ponta.
+    const mesmoDiaAoSalvar = periodoInicioEl.value === periodoFimEl.value;
+    const horaInicio = mesmoDiaAoSalvar ? `${horaInicioEl.value}:00` : '00:00:00';
+    const horaFim = mesmoDiaAoSalvar ? `${horaFimEl.value}:00` : '23:59:59';
+    const inicioISO = new Date(`${periodoInicioEl.value}T${horaInicio}-03:00`).toISOString();
+    const fimISO = new Date(`${periodoFimEl.value}T${horaFim}-03:00`).toISOString();
 
     if (fimISO <= inicioISO) {
       erroEl.textContent = 'O fim do bloqueio deve ser depois do início.';

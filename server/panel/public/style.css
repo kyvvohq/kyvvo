@@ -168,6 +168,7 @@ button {
 
 button:hover { background: #6a4ce0; }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
+input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .erro {
   color: #ff6b6b;
@@ -2324,6 +2325,17 @@ textarea:focus { outline: none; border-color: var(--accent); }
 }
 
 .campo-aviso:empty { min-height: 0; margin-top: 0; }
+
+/* Período (início/fim) do bloqueio de agenda num campo só (US61) — dois
+   inputs de data lado a lado sob um único label "Período". */
+.campo-periodo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.campo-periodo input { width: auto; flex: 1; margin: 0; }
+.periodo-separador { color: #a1a5c4; font-size: 13px; flex-shrink: 0; }
 
 .spinner {
   display: inline-block;
