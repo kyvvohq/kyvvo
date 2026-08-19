@@ -25,6 +25,36 @@ async function api(path, options = {}) {
 
 const conteudo = document.getElementById('conteudo');
 
+// ---------- Modal genérico (duplicado intencionalmente, ver comentário acima sobre isolamento entre telas admin) ----------
+function escFecharModal(e) {
+  if (e.key === 'Escape') fecharModal();
+}
+
+function fecharModal() {
+  const overlay = document.getElementById('modal-overlay');
+  if (overlay) overlay.remove();
+  document.removeEventListener('keydown', escFecharModal);
+}
+
+function abrirModal(tituloHtml, conteudoHtml, { larga = false } = {}) {
+  fecharModal();
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal-card${larga ? ' modal-card-larga' : ''}">
+      <button class="modal-close" id="modal-close" aria-label="Fechar">✕</button>
+      ${tituloHtml}
+      ${conteudoHtml}
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  document.getElementById('modal-close').addEventListener('click', fecharModal);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) fecharModal(); });
+  document.addEventListener('keydown', escFecharModal);
+  return overlay;
+}
+
 // Duplicado intencionalmente do app.js do painel admin (mesmo raciocínio de
 // isolamento entre as telas admin — ver comentário em admin/app.js).
 function escapeHtml(valor) {
@@ -76,10 +106,9 @@ const CONFIG_SISTEMA_NUMERICAS = new Set(['trial_dias', 'carencia_dias_inadimple
 const CONFIG_SISTEMA_ORDEM = ['trial_dias', 'carencia_dias_inadimplencia', 'max_tentativas_reenvio_token', 'email_suporte', 'whatsapp_suporte'];
 
 let dados = null;
-// Chaves de plano/configuração atualmente em modo de edição — controla tanto
-// os inputs renderizados quanto o banner de aviso (CA04, só enquanto há
-// algum campo de preço em edição).
-const planosEmEdicao = new Set();
+// Chaves de configuração geral atualmente em modo de edição inline (planos
+// não usam mais edição inline — ver abrirModalEditarPlano — só as
+// configurações gerais continuam editando direto na linha da tabela).
 const sistemaEmEdicao = new Set();
 
 async function carregar() {
@@ -92,19 +121,13 @@ async function carregar() {
 function render() {
   const html = `
     <h2 class="titulo-detalhe">Configurações do sistema</h2>
-    ${planosEmEdicao.size > 0 ? `
-      <div class="banner-aviso">
-        ⚠️ Atenção: alterações de preço afetam apenas novas assinaturas. Clientes com assinaturas ativas continuarão pagando o valor original.
-      </div>
-    ` : ''}
     <section class="secao-detalhe">
       <h3>Preços dos planos</h3>
       <div class="tabela-wrapper">
         <table class="tabela-tenants">
           <thead>
             <tr>
-              <th>Plano</th><th>Descrição</th><th>Headline (diferencial)</th><th>Frase de benefício</th><th>Diferenciais (até 3)</th><th>Limites de uso</th><th>Slug</th><th>Tecnologia</th><th>Tipo número</th>
-              <th>Preço mensal</th><th>Limite de disparos</th><th>Destaque</th><th>Badge</th><th>Ativo</th><th></th>
+              <th>Plano</th><th>Descrição</th><th>Destaque</th><th>Ativo</th><th></th>
             </tr>
           </thead>
           <tbody>${dados.planos.map(renderLinhaPlano).join('')}</tbody>
@@ -145,84 +168,133 @@ function render() {
 }
 
 function renderLinhaPlano(plano) {
-  const editando = planosEmEdicao.has(plano.chave);
   const toggleAtivoClasse = plano.ativo ? 'toggle-on' : 'toggle-off';
   const toggleDestaqueClasse = plano.destaque ? 'toggle-on' : 'toggle-off';
-  // Slug/Tecnologia/Tipo número são identificadores estruturais da grade
-  // 2x2 — somente leitura em qualquer modo (US67/CA04).
-  const colunasSomenteLeitura = `
-    <td data-testid="slug-${plano.chave}">${escapeHtml(plano.slug || plano.chave)}</td>
-    <td>${escapeHtml(TECNOLOGIA_LABELS[plano.tecnologia] || plano.tecnologia || '—')}</td>
-    <td>${escapeHtml(TIPO_NUMERO_LABELS[plano.tipo_numero] || plano.tipo_numero || '—')}</td>
-  `;
-
-  // US74/CA05 — 3 campos fixos (não uma lista dinâmica) já garantem o
-  // máximo de 3 diferenciais por plano sem precisar de validação extra de
-  // UI; slot vazio simplesmente não é salvo (ver salvarPlano).
-  const features = plano.features || [];
-  const limites = plano.limites || {};
-
-  if (editando) {
-    const camposFeatures = [0, 1, 2].map((i) => `
-      <input type="text" class="input-plano-feature" data-testid="input-feature-${i + 1}-${plano.chave}"
-             value="${escapeHtml(features[i] ? features[i].label : '')}" placeholder="Diferencial ${i + 1}">
-    `).join('');
-    const camposLimites = PLANO_LIMITE_CHAVES.map((chaveLimite) => `
-      <div class="limite-editor-linha">
-        <input type="number" min="0" class="input-plano-limite-${chaveLimite}" data-testid="input-limite-${chaveLimite}-${plano.chave}"
-               value="${limites[chaveLimite] ?? ''}" placeholder="ilimitado">
-        <label>${PLANO_LIMITE_ROTULOS[chaveLimite]}</label>
-      </div>
-    `).join('');
-
-    return `
-      <tr data-plano="${plano.chave}">
-        <td><input type="text" class="input-plano-nome" data-testid="input-nome-${plano.chave}" value="${escapeHtml(plano.nome)}"></td>
-        <td><input type="text" class="input-plano-descricao" value="${escapeHtml(plano.descricao || '')}"></td>
-        <td>
-          <input type="text" class="input-plano-headline" data-testid="input-headline-${plano.chave}" value="${escapeHtml(plano.headline_diferencial || '')}">
-          <div class="contador-caracteres" data-contador="headline-${plano.chave}"></div>
-        </td>
-        <td>
-          <input type="text" class="input-plano-frase" data-testid="input-frase-${plano.chave}" value="${escapeHtml(plano.frase_beneficio || '')}">
-          <div class="contador-caracteres" data-contador="frase-${plano.chave}"></div>
-        </td>
-        <td class="celula-features-plano">${camposFeatures}</td>
-        <td class="celula-limites-plano">${camposLimites}</td>
-        ${colunasSomenteLeitura}
-        <td><input type="number" step="0.01" min="1" class="input-plano-preco" value="${plano.preco_mensal}"></td>
-        <td><input type="number" step="1" min="0" class="input-plano-limite" value="${plano.limite_disparos ?? ''}" placeholder="ilimitado"></td>
-        <td><span class="toggle-readonly toggle-clicavel ${toggleDestaqueClasse}" data-acao="toggle-destaque-plano" data-chave="${plano.chave}"></span></td>
-        <td><input type="text" class="input-plano-badge" value="${escapeHtml(plano.badge || '')}" placeholder="ex: Mais popular"></td>
-        <td><span class="toggle-readonly toggle-clicavel ${toggleAtivoClasse}" data-acao="toggle-ativo-plano" data-chave="${plano.chave}"></span></td>
-        <td class="celula-acoes-plano">
-          <div class="modal-erro" data-erro-plano="${plano.chave}"></div>
-          <button class="btn-secundario btn-tabela" data-acao="cancelar-plano" data-chave="${plano.chave}">Cancelar</button>
-          <button class="btn-primario btn-tabela" data-testid="salvar-${plano.chave}" data-acao="salvar-plano" data-chave="${plano.chave}">Salvar</button>
-        </td>
-      </tr>
-    `;
-  }
-
   return `
     <tr data-plano="${plano.chave}">
       <td>${escapeHtml(plano.nome)}</td>
       <td>${escapeHtml(plano.descricao || '—')}</td>
-      <td>${escapeHtml(plano.headline_diferencial || '—')}</td>
-      <td>${escapeHtml(plano.frase_beneficio || '—')}</td>
-      <td>${features.length ? `<ul class="lista-features-plano">${features.map((f) => `<li>${escapeHtml(f.label)}</li>`).join('')}</ul>` : '—'}</td>
-      <td>${PLANO_LIMITE_CHAVES.map((k) => `${PLANO_LIMITE_ROTULOS[k]}: ${formatarLimiteAdmin(limites[k])}`).join('<br>')}</td>
-      ${colunasSomenteLeitura}
-      <td>${formatarPreco(plano.preco_mensal)}</td>
-      <td>${plano.limite_disparos != null ? plano.limite_disparos : 'Ilimitado'}</td>
-      <td><span class="toggle-readonly toggle-clicavel ${toggleDestaqueClasse}" data-acao="toggle-destaque-plano" data-chave="${plano.chave}"></span></td>
-      <td>${escapeHtml(plano.badge || '—')}</td>
-      <td><span class="toggle-readonly toggle-clicavel ${toggleAtivoClasse}" data-acao="toggle-ativo-plano" data-chave="${plano.chave}"></span></td>
+      <td><span class="toggle-readonly ${toggleDestaqueClasse}" data-testid="destaque-${plano.chave}" title="${plano.destaque ? 'Em destaque' : 'Sem destaque'}"></span></td>
+      <td><span class="toggle-readonly ${toggleAtivoClasse}" data-testid="ativo-${plano.chave}" title="${plano.ativo ? 'Ativo' : 'Inativo'}"></span></td>
       <td class="celula-acoes-plano">
-        <button class="btn-secundario btn-tabela" data-acao="editar-plano" data-chave="${plano.chave}">Editar</button>
+        <button class="btn-secundario btn-tabela" data-testid="editar-${plano.chave}" data-acao="editar-plano" data-chave="${plano.chave}">Editar</button>
       </td>
     </tr>
   `;
+}
+
+// ---------- Modal "Editar plano" (todos os campos, Salvar/Sair) ----------
+function abrirModalEditarPlano(chave) {
+  const plano = dados.planos.find((p) => p.chave === chave);
+  if (!plano) return;
+
+  const features = plano.features || [];
+  const limites = plano.limites || {};
+  const camposFeatures = [0, 1, 2].map((i) => `
+    <div>
+      <input type="text" id="plano-editar-feature-${i}" value="${escapeHtml(features[i] ? features[i].label : '')}" placeholder="Diferencial ${i + 1}">
+    </div>
+  `).join('');
+  const camposLimites = PLANO_LIMITE_CHAVES.map((chaveLimite) => `
+    <div>
+      <label for="plano-editar-limite-${chaveLimite}">${PLANO_LIMITE_ROTULOS[chaveLimite]}</label>
+      <input type="number" min="0" id="plano-editar-limite-${chaveLimite}" value="${limites[chaveLimite] ?? ''}" placeholder="ilimitado">
+    </div>
+  `).join('');
+
+  abrirModal(
+    '<h3>Editar plano</h3>',
+    `
+      <div class="modal-erro" id="plano-editar-erro"></div>
+      <form id="form-editar-plano">
+        <label for="plano-editar-nome">Nome *</label>
+        <input type="text" id="plano-editar-nome" data-testid="input-nome-${chave}" value="${escapeHtml(plano.nome)}">
+
+        <label for="plano-editar-descricao">Descrição</label>
+        <input type="text" id="plano-editar-descricao" value="${escapeHtml(plano.descricao || '')}">
+
+        <label for="plano-editar-headline">Headline (diferencial)</label>
+        <input type="text" id="plano-editar-headline" data-testid="input-headline-${chave}" value="${escapeHtml(plano.headline_diferencial || '')}">
+        <div class="contador-caracteres" id="plano-editar-headline-contador"></div>
+
+        <label for="plano-editar-frase">Frase de benefício</label>
+        <input type="text" id="plano-editar-frase" data-testid="input-frase-${chave}" value="${escapeHtml(plano.frase_beneficio || '')}">
+        <div class="contador-caracteres" id="plano-editar-frase-contador"></div>
+
+        <label>Diferenciais (até 3)</label>
+        <div class="pagamento-grid-3col">${camposFeatures}</div>
+
+        <label>Limites de uso</label>
+        <div class="pagamento-grid-3col">${camposLimites}</div>
+
+        <div class="pagamento-grid-2col">
+          <div>
+            <label for="plano-editar-preco">Preço mensal *</label>
+            <input type="number" step="0.01" min="1" id="plano-editar-preco" value="${plano.preco_mensal}">
+          </div>
+          <div>
+            <label for="plano-editar-limite-disparos">Limite de disparos</label>
+            <input type="number" step="1" min="0" id="plano-editar-limite-disparos" value="${plano.limite_disparos ?? ''}" placeholder="ilimitado">
+          </div>
+        </div>
+
+        <label for="plano-editar-badge">Badge</label>
+        <input type="text" id="plano-editar-badge" value="${escapeHtml(plano.badge || '')}" placeholder="ex: Mais popular">
+
+        <div class="pagamento-grid-2col">
+          <div>
+            <label class="toggle-linha"><span class="toggle-switch"><input type="checkbox" id="plano-editar-destaque" ${plano.destaque ? 'checked' : ''}><span class="toggle-switch-trilho"></span></span> Destaque</label>
+          </div>
+          <div>
+            <label class="toggle-linha"><span class="toggle-switch"><input type="checkbox" id="plano-editar-ativo" ${plano.ativo ? 'checked' : ''}><span class="toggle-switch-trilho"></span></span> Ativo</label>
+          </div>
+        </div>
+
+        <p class="modal-texto">
+          <strong>Slug:</strong> ${escapeHtml(plano.slug || plano.chave)} ·
+          <strong>Tecnologia:</strong> ${escapeHtml(TECNOLOGIA_LABELS[plano.tecnologia] || plano.tecnologia || '—')} ·
+          <strong>Tipo de número:</strong> ${escapeHtml(TIPO_NUMERO_LABELS[plano.tipo_numero] || plano.tipo_numero || '—')}
+        </p>
+        <p class="modal-texto">⚠️ Alterações de preço afetam apenas novas assinaturas — quem já assina continua pagando o valor original.</p>
+
+        <div class="modal-acoes">
+          <button type="button" class="btn-secundario" id="btn-sair-editar-plano">Sair</button>
+          <button type="submit" class="btn-primario" data-testid="salvar-${chave}" id="btn-salvar-editar-plano">Salvar</button>
+        </div>
+      </form>
+    `,
+    { larga: true }
+  );
+
+  document.getElementById('btn-sair-editar-plano').addEventListener('click', fecharModal);
+
+  const headlineEl = document.getElementById('plano-editar-headline');
+  const fraseEl = document.getElementById('plano-editar-frase');
+  const erroEl = document.getElementById('plano-editar-erro');
+  const salvarBtn = document.getElementById('btn-salvar-editar-plano');
+
+  // US73/CA04 — contador + bloqueio do Salvar em tempo real (não só no
+  // submit) quando headline/frase passam de 120 caracteres.
+  function validarLimitesCopyPlano() {
+    document.getElementById('plano-editar-headline-contador').textContent = `${headlineEl.value.length}/120`;
+    document.getElementById('plano-editar-frase-contador').textContent = `${fraseEl.value.length}/120`;
+    const acimaDoLimite = headlineEl.value.length > 120 || fraseEl.value.length > 120;
+    if (acimaDoLimite) {
+      erroEl.textContent = 'Headline e frase de benefício têm o máximo de 120 caracteres.';
+      salvarBtn.disabled = true;
+    } else if (erroEl.textContent.startsWith('Headline e frase')) {
+      erroEl.textContent = '';
+      salvarBtn.disabled = false;
+    }
+  }
+  headlineEl.addEventListener('input', validarLimitesCopyPlano);
+  fraseEl.addEventListener('input', validarLimitesCopyPlano);
+  validarLimitesCopyPlano();
+
+  document.getElementById('form-editar-plano').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    await salvarPlano(chave);
+  });
 }
 
 function renderLinhaSistema(chave) {
@@ -259,26 +331,7 @@ function renderLinhaSistema(chave) {
 
 function wireEventos() {
   conteudo.querySelectorAll('[data-acao="editar-plano"]').forEach((btn) => {
-    btn.addEventListener('click', () => { planosEmEdicao.add(btn.dataset.chave); render(); });
-  });
-  conteudo.querySelectorAll('[data-acao="cancelar-plano"]').forEach((btn) => {
-    btn.addEventListener('click', () => { planosEmEdicao.delete(btn.dataset.chave); render(); });
-  });
-  conteudo.querySelectorAll('[data-acao="salvar-plano"]').forEach((btn) => {
-    btn.addEventListener('click', () => salvarPlano(btn.dataset.chave));
-  });
-  // US73/CA04 — contador de caracteres + bloqueio do Salvar em tempo real
-  // (não só no submit) quando headline/frase passam de 120 caracteres.
-  conteudo.querySelectorAll('tr[data-plano] .input-plano-headline, tr[data-plano] .input-plano-frase').forEach((input) => {
-    const chave = input.closest('tr').dataset.plano;
-    input.addEventListener('input', () => validarLimitesCopyPlano(chave));
-    validarLimitesCopyPlano(chave);
-  });
-  conteudo.querySelectorAll('[data-acao="toggle-ativo-plano"]').forEach((toggle) => {
-    toggle.addEventListener('click', () => alternarAtivoPlano(toggle.dataset.chave));
-  });
-  conteudo.querySelectorAll('[data-acao="toggle-destaque-plano"]').forEach((toggle) => {
-    toggle.addEventListener('click', () => alternarDestaquePlano(toggle.dataset.chave));
+    btn.addEventListener('click', () => abrirModalEditarPlano(btn.dataset.chave));
   });
 
   conteudo.querySelectorAll('[data-acao="editar-config"]').forEach((btn) => {
@@ -292,53 +345,31 @@ function wireEventos() {
   });
 }
 
-// US73/CA04 — contador + bloqueio de Salvar quando headline/frase passam de
-// 120 (mesmo limite do CHECK da migration 048); não mexe no texto do erro se
-// ele veio de outra validação (preço, erro do backend).
-function validarLimitesCopyPlano(chave) {
-  const linha = conteudo.querySelector(`tr[data-plano="${chave}"]`);
-  if (!linha) return;
-  const headline = linha.querySelector('.input-plano-headline');
-  const frase = linha.querySelector('.input-plano-frase');
-  if (!headline || !frase) return;
-  const erroEl = linha.querySelector(`[data-erro-plano="${chave}"]`);
-  const salvarBtn = linha.querySelector('[data-acao="salvar-plano"]');
-  const contadorHeadline = linha.querySelector(`[data-contador="headline-${chave}"]`);
-  const contadorFrase = linha.querySelector(`[data-contador="frase-${chave}"]`);
-  if (contadorHeadline) contadorHeadline.textContent = `${headline.value.length}/120`;
-  if (contadorFrase) contadorFrase.textContent = `${frase.value.length}/120`;
-
-  const acimaDoLimite = headline.value.length > 120 || frase.value.length > 120;
-  if (acimaDoLimite) {
-    erroEl.textContent = 'Headline e frase de benefício têm o máximo de 120 caracteres.';
-    salvarBtn.disabled = true;
-  } else if (erroEl.textContent.startsWith('Headline e frase')) {
-    erroEl.textContent = '';
-    salvarBtn.disabled = false;
-  }
-}
-
+// Lê e valida o formulário do modal "Editar plano" (abrirModalEditarPlano)
+// e manda tudo num PATCH só — mesmo formato que a edição inline antiga já
+// mandava, só que os campos agora vêm do modal em vez de uma <tr>.
 async function salvarPlano(chave) {
-  const linha = conteudo.querySelector(`tr[data-plano="${chave}"]`);
-  const nome = linha.querySelector('.input-plano-nome').value.trim();
-  const descricao = linha.querySelector('.input-plano-descricao').value.trim();
-  const headlineDiferencial = linha.querySelector('.input-plano-headline').value.trim();
-  const fraseBeneficio = linha.querySelector('.input-plano-frase').value.trim();
-  const precoMensal = linha.querySelector('.input-plano-preco').value;
-  const limiteBruto = linha.querySelector('.input-plano-limite').value.trim();
-  const badge = linha.querySelector('.input-plano-badge').value.trim();
+  const nome = document.getElementById('plano-editar-nome').value.trim();
+  const descricao = document.getElementById('plano-editar-descricao').value.trim();
+  const headlineDiferencial = document.getElementById('plano-editar-headline').value.trim();
+  const fraseBeneficio = document.getElementById('plano-editar-frase').value.trim();
+  const precoMensal = document.getElementById('plano-editar-preco').value;
+  const limiteBruto = document.getElementById('plano-editar-limite-disparos').value.trim();
+  const badge = document.getElementById('plano-editar-badge').value.trim();
+  const destaque = document.getElementById('plano-editar-destaque').checked;
+  const ativo = document.getElementById('plano-editar-ativo').checked;
   // US74/CA05 — slots vazios não viram feature; os 3 campos fixos garantem o
   // máximo de 3.
-  const features = Array.from(linha.querySelectorAll('.input-plano-feature'))
-    .map((input) => input.value.trim())
+  const features = [0, 1, 2]
+    .map((i) => document.getElementById(`plano-editar-feature-${i}`).value.trim())
     .filter(Boolean);
   const limites = Object.fromEntries(
     PLANO_LIMITE_CHAVES.map((chaveLimite) => {
-      const valorBruto = linha.querySelector(`.input-plano-limite-${chaveLimite}`).value.trim();
+      const valorBruto = document.getElementById(`plano-editar-limite-${chaveLimite}`).value.trim();
       return [chaveLimite, valorBruto === '' ? null : Number(valorBruto)];
     })
   );
-  const erroEl = linha.querySelector(`[data-erro-plano="${chave}"]`);
+  const erroEl = document.getElementById('plano-editar-erro');
   erroEl.textContent = '';
 
   // US72/CA04 — nome editável, mas o slug (identificador público usado em
@@ -356,6 +387,10 @@ async function salvarPlano(chave) {
     return;
   }
 
+  const btn = document.getElementById('btn-salvar-editar-plano');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>';
+
   const resultado = await api(`/api/configuracoes/planos/${chave}`, {
     method: 'PATCH',
     body: JSON.stringify({
@@ -366,47 +401,21 @@ async function salvarPlano(chave) {
       preco_mensal: Number(precoMensal),
       limite_disparos: limiteBruto === '' ? null : Number(limiteBruto),
       badge: badge === '' ? null : badge,
+      destaque,
+      ativo,
       features,
       limites,
     }),
   });
 
   if (resultado && !resultado.error) {
-    planosEmEdicao.delete(chave);
-    mostrarToast('Preço atualizado. Novas assinaturas serão cobradas com o novo valor.', 'sucesso');
+    fecharModal();
+    mostrarToast('Plano atualizado com sucesso.', 'sucesso');
     await carregar();
   } else {
     erroEl.textContent = (resultado && resultado.error) || 'Erro ao salvar plano.';
-  }
-}
-
-async function alternarAtivoPlano(chave) {
-  const plano = dados.planos.find((p) => p.chave === chave);
-  const resultado = await api(`/api/configuracoes/planos/${chave}`, {
-    method: 'PATCH',
-    body: JSON.stringify({ ativo: !plano.ativo }),
-  });
-
-  if (resultado && !resultado.error) {
-    mostrarToast(`Plano ${resultado.ativo ? 'ativado' : 'desativado'} com sucesso.`, 'sucesso');
-    await carregar();
-  } else {
-    mostrarToast((resultado && resultado.error) || 'Erro ao atualizar plano.', 'erro');
-  }
-}
-
-async function alternarDestaquePlano(chave) {
-  const plano = dados.planos.find((p) => p.chave === chave);
-  const resultado = await api(`/api/configuracoes/planos/${chave}`, {
-    method: 'PATCH',
-    body: JSON.stringify({ destaque: !plano.destaque }),
-  });
-
-  if (resultado && !resultado.error) {
-    mostrarToast(`Destaque ${resultado.destaque ? 'ativado' : 'desativado'} com sucesso.`, 'sucesso');
-    await carregar();
-  } else {
-    mostrarToast((resultado && resultado.error) || 'Erro ao atualizar plano.', 'erro');
+    btn.disabled = false;
+    btn.textContent = 'Salvar';
   }
 }
 

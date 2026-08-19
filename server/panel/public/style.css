@@ -1629,6 +1629,15 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   .pagamento-span-3 { grid-column: auto; }
 }
 
+/* Variante larga genérica de .modal-card — formulários com muitos campos
+   (ex: admin > Configurações > Editar plano) que não cabem confortavelmente
+   nos 420px padrão. Reaproveita .pagamento-grid-2col/3col (já genéricas,
+   apesar do nome) pra layout em colunas dentro dela. */
+.modal-card-larga { max-width: 640px; }
+@media (max-width: 640px) {
+  .modal-card-larga { max-width: 420px; }
+}
+
 /* Ações de agendamento (US08) */
 .agendamento-linha-principal {
   display: flex;
