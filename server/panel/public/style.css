@@ -349,8 +349,12 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 .menu-item-grupo:hover { color: #f2f2f7; background: rgba(124, 92, 252, 0.08); }
 .menu-item-grupo.tem-filho-ativo { color: #f2f2f7; background: rgba(124, 92, 252, 0.15); border-left-color: var(--accent); }
 
-.menu-chevron { font-size: 11px; transition: transform 0.15s; }
-.menu-item-grupo.expandido .menu-chevron { transform: rotate(180deg); }
+/* Seta pra baixo (recolhido) / pra cima (expandido) — glifo trocado de
+   verdade via ::before em vez de rotacionar um triângulo só, pedido
+   explícito do Bruno (⌵ / ⌃, não mais o "ponto" ▾ girando). */
+.menu-chevron { font-size: 13px; line-height: 1; }
+.menu-chevron::before { content: '⌵'; }
+.menu-item-grupo.expandido .menu-chevron::before { content: '⌃'; }
 
 .menu-submenu {
   display: none;

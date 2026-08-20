@@ -338,9 +338,10 @@ function selecionarMenu(novoMenu, { atualizarUrl = true } = {}) {
   menuEl.querySelectorAll('.menu-item').forEach((i) => i.classList.remove('active'));
   const itemSidebar = menuEl.querySelector(`.menu-item[data-menu="${novoMenu}"]`);
   if (itemSidebar) itemSidebar.classList.add('active');
-  // Destaca o cabeçalho do grupo (Agenda/Configurações) quando um item de
-  // dentro do submenu fica ativo — senão nada na sidebar aparece realçado
-  // enquanto uma dessas telas está aberta. Itens que vieram do user menu
+  // Destaca o cabeçalho do grupo (hoje só Configurações — Agenda foi
+  // promovida de submenu a item fixo) quando um item de dentro do submenu
+  // fica ativo — senão nada na sidebar aparece realçado enquanto uma dessas
+  // telas está aberta. Itens que vieram do user menu
   // (perfil/equipe/ajuda) não têm item correspondente na sidebar, então
   // itemSidebar é null e isso vira um no-op — correto, nenhum item da
   // sidebar deve ficar "active" nessas telas.
@@ -383,7 +384,7 @@ menuEl.querySelectorAll('.menu-item').forEach((item) => {
   item.addEventListener('click', () => ativarMenuItem(item));
 });
 
-// Cabeçalhos de grupo (Agenda, Configurações) não são item de menu com tela
+// Cabeçalhos de grupo (hoje só Configurações) não são item de menu com tela
 // própria — por isso usam a classe .menu-item-grupo (fora do .menu-item
 // genérico acima) e só expandem/recolhem o submenu, sem chamar ativarMenuItem.
 gruposMenu.forEach(({ toggle, submenu }) => {
