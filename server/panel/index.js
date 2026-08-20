@@ -55,33 +55,41 @@ const metaWhatsappService = require('./meta-whatsapp-service');
 const evolutionService = require('./evolution-service');
 const anthropicService = require('./anthropic-service');
 const { parsearIntentIA, escolherAgendamentoAlvoIA, IA_INTENTS_VALIDOS } = require('./ia-intent-parser');
+// Fase 1 da modularização (ver plano "Kyvvo — modularizar server/panel/index.js")
+const datetime = require('./lib/datetime');
+const feriados = require('./lib/feriados');
+const validadores = require('./lib/validadores');
+const horarioFuncionamento = require('./lib/horario-funcionamento');
+const configSistema = require('./lib/configuracoes-sistema');
+const trialConta = require('./lib/trial-conta');
+const planos = require('./lib/planos');
+const { sincronizarLancamentoFinanceiro } = require('./lib/financeiro');
+const eventos = require('./lib/eventos');
+const { registerBloqueiosRoutes } = require('./routes/bloqueios');
+const {
+  horarioParaMinutos, minutosNoDia, diaDaSemanaBrasilia, componentesBrasilia,
+  isoDeComponentesBrasilia, dataDiaISO, dataAtualBrasilia, mesAtualBrasilia,
+} = datetime;
+const { calcularPascoa, listarFeriadosNacionais, ehFeriadoNacional } = feriados;
+const { EMAIL_REGEX, SENHA_REGEX } = validadores;
+const { dentroDoHorarioFuncionamento, buscarBloqueioConflitante, empurrarProximoDiaAberto } = horarioFuncionamento;
+const { calcularTrialTenant, calcularBloqueioAssinatura, statusContaTenant, BLOQUEIO_MENSAGENS } = trialConta;
+const { EVENTOS_ANALYTICS_TIPOS, EVENTOS_ANALYTICS_TIPOS_FRONTEND, registrarEvento, registrarEventoTrialExpiradoUmaVez } = eventos;
 
 // ---------- Cadastro self-service (US20) ----------
-// `let` (não `const`) porque a US38 permite um admin da Kyvvo sobrescrever
-// esses valores em runtime via /admin/api/configuracoes/sistema, sem deploy —
-// os literais abaixo são só o valor padrão até `carregarConfiguracoesSistema`
-// rodar (e o fallback se a tabela `configuracoes_sistema` estiver vazia).
-let TRIAL_DIAS = 14;
-let MAX_REENVIOS_HORA = 5;
+// TRIAL_DIAS/MAX_REENVIOS_HORA/CARENCIA_DIAS_INADIMPLENCIA/EMAIL_SUPORTE/
+// WHATSAPP_SUPORTE viraram `configSistema.config` (lib/configuracoes-sistema.js,
+// fase 1 da modularização) — editáveis em runtime via
+// /admin/api/configuracoes/sistema, sem deploy.
 // Cooldown entre pedidos de reenvio — não faz parte da lista de
 // configurações editáveis da CA06, então continua fixo no código.
 const REENVIO_COOLDOWN_SEGUNDOS = 60;
-// CA06 (US38) — configurações gerais editáveis pelo admin. EMAIL_SUPORTE/
-// WHATSAPP_SUPORTE são consumidos por GET /api/tenant/status desde a US52
-// (tela de bloqueio pós-trial precisa dizer como falar com o suporte);
-// CARENCIA_DIAS_INADIMPLENCIA é o prazo antes de bloquear quem está
-// 'inadimplente' (ver calcularBloqueioAssinatura/authenticate).
-let CARENCIA_DIAS_INADIMPLENCIA = 3;
-let EMAIL_SUPORTE = 'suporte@kyvvo.com.br';
-let WHATSAPP_SUPORTE = '553484285182';
 // Módulos liberados durante o trial ("plano Profissional" — CA09). Todo
 // tenant novo precisa ao menos da agenda; os demais dão a experiência
 // completa enquanto o trial está ativo.
 const MODULOS_TRIAL = ['agenda_inteligente', 'financeiro', 'dashboards'];
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-// Senha: mínimo 8 caracteres, ao menos 1 número e 1 letra maiúscula (CA02).
-const SENHA_REGEX = /^(?=.*[A-Z])(?=.*\d).{8,}$/;
+// EMAIL_REGEX/SENHA_REGEX viraram lib/validadores.js (fase 1 da modularização).
 // US79 — versão vigente dos documentos legais aceitos no cadastro, gravada
 // junto com o consentimento (CA03). É a data de "Última atualização" exibida
 // em /termos.html e /privacidade.html — atualizar aqui junto com o texto
@@ -143,242 +151,18 @@ if (!ADMIN_JWT_SECRET) throw new Error('ADMIN_JWT_SECRET não configurado');
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 tokenService.init(pool);
-
-// CA06/CA09 (US38) — carrega `configuracoes_sistema` do banco pra dentro das
-// variáveis em memória usadas pelo resto do código (TRIAL_DIAS etc.), tanto no
-// boot quanto logo após um PATCH do admin — assim a mudança vale pro processo
-// já rodando, sem precisar de deploy/restart. Chaves ausentes na tabela (banco
-// vazio/erro de leitura) mantêm o valor atual em memória.
-async function carregarConfiguracoesSistema() {
-  const { rows } = await pool.query('SELECT chave, valor FROM configuracoes_sistema');
-  const valores = Object.fromEntries(rows.map((r) => [r.chave, r.valor]));
-
-  if (valores.trial_dias != null) TRIAL_DIAS = parseInt(valores.trial_dias, 10);
-  if (valores.max_tentativas_reenvio_token != null) MAX_REENVIOS_HORA = parseInt(valores.max_tentativas_reenvio_token, 10);
-  if (valores.carencia_dias_inadimplencia != null) CARENCIA_DIAS_INADIMPLENCIA = parseInt(valores.carencia_dias_inadimplencia, 10);
-  if (valores.email_suporte != null) EMAIL_SUPORTE = valores.email_suporte;
-  if (valores.whatsapp_suporte != null) WHATSAPP_SUPORTE = valores.whatsapp_suporte;
-}
-
-// CA09 (US38) — catálogo de planos (chave -> {nome, preco_mensal, ...}) lido
-// da tabela `planos`, nunca mais hardcoded. Recarregado no boot e logo após
-// qualquer PATCH de um plano, pra refletir mudança de preço/nome/descrição
-// imediatamente nas próximas assinaturas (sem afetar as já existentes, que já
-// têm o valor gravado na Subscription da Asaas).
-let PLANOS_CACHE = {};
-// Plano que um tenant sem plano escolhido (trial ou nulo) contrata ao
-// cadastrar pagamento — qual plano é o "padrão" é uma decisão de produto,
-// não uma configuração de preço, por isso continua fixo no código.
-// US67: sucessor do antigo 'profissional' na grade 2x2 (mesmo limite de
-// disparos e mesma tecnologia liberada no trial — ver MODULOS_TRIAL).
-const PLANO_PADRAO_CHAVE = 'professional';
-
-async function carregarPlanos() {
-  const { rows } = await pool.query(
-    `SELECT chave, slug, nome, descricao, tecnologia, tipo_numero, preco_mensal,
-            limite_disparos, destaque, badge, ativo
-       FROM planos`
-  );
-  PLANOS_CACHE = Object.fromEntries(rows.map((r) => [r.chave, r]));
-}
-
-// Nome de exibição do plano — usado tanto no perfil do tenant quanto no
-// detalhe do tenant na área admin, pra nunca divergir (US28/US33).
-function nomeDoPlano(chave) {
-  if (chave === 'trial') return 'Trial';
-  return (PLANOS_CACHE[chave] && PLANOS_CACHE[chave].nome) || 'Não definido';
-}
-
-// Converte um "time" do Postgres ("08:00:00" ou "08:00") em minutos desde a
-// meia-noite, pra comparar com o horário (também em minutos) de um
-// agendamento — usado tanto na geração de slots quanto na validação de
-// horário de funcionamento em POST/PATCH de agendamentos.
-function horarioParaMinutos(horario) {
-  const [h, m] = horario.split(':').map(Number);
-  return h * 60 + m;
-}
-
-// O servidor roda em UTC (container Docker), mas todo horário de
-// funcionamento/agenda é pensado em horário de Brasília. Brasil não observa
-// horário de verão desde 2019, então o offset fixo -3h é seguro (sem precisar
-// de lib de timezone). BUG HISTÓRICO: código anterior usava new Date(...) e
-// os métodos locais (getHours/setMinutes) assumindo que "horário local do
-// processo" era Brasília — como o processo roda em UTC, isso deslocava todo
-// slot gerado em 3h pra trás (um slot rotulado "09:00" era na verdade 06:00
-// em Brasília) e podia até cruzar a virada do dia. Toda conversão de/para
-// horário de Brasília deve passar pelas duas funções abaixo, nunca por
-// getHours/setMinutes/toISOString direto num Date.
-const OFFSET_BRASILIA_MINUTOS = 180;
-
-// Minutos desde a meia-noite (em horário de Brasília) de um timestamp de
-// agendamento — usado na validação de horário de funcionamento em
-// POST/PATCH de agendamentos.
-function minutosNoDia(dataISO) {
-  const d = new Date(dataISO);
-  const minutosUtc = d.getUTCHours() * 60 + d.getUTCMinutes();
-  return ((minutosUtc - OFFSET_BRASILIA_MINUTOS) % 1440 + 1440) % 1440;
-}
-
-// Dia da semana (0=domingo..6=sábado) de um timestamp de agendamento, já
-// ajustado pro dia civil de Brasília (mesmo raciocínio de offset fixo de
-// minutosNoDia — ver comentário acima sobre o bug histórico de fuso).
-function diaDaSemanaBrasilia(dataISO) {
-  return new Date(new Date(dataISO).getTime() - OFFSET_BRASILIA_MINUTOS * 60000).getUTCDay();
-}
-
-// ---------- Feriados nacionais (Configurações > Bloqueio de agenda) ----------
-// Calcula o domingo de Páscoa pelo algoritmo Anônimo Gregoriano (Meeus/Jones/
-// Butcher) — os 3 feriados móveis (Carnaval seg/ter, Sexta-feira Santa,
-// Corpus Christi) são deslocamentos fixos em dias a partir dela. Puro cálculo
-// de calendário, sem tabela nem chamada externa — por isso o switch em
-// tenants.feriados_bloqueados (migration 062) nunca "vence": o ano é sempre
-// derivado da própria data checada.
-function calcularPascoa(ano) {
-  const a = ano % 19;
-  const b = Math.floor(ano / 100);
-  const c = ano % 100;
-  const d = Math.floor(b / 4);
-  const e = b % 4;
-  const f = Math.floor((b + 8) / 25);
-  const g = Math.floor((b - f + 1) / 3);
-  const h = (19 * a + b - d - g + 15) % 30;
-  const i = Math.floor(c / 4);
-  const k = c % 4;
-  const l = (32 + 2 * e + 2 * i - h - k) % 7;
-  const m = Math.floor((a + 11 * h + 22 * l) / 451);
-  const mes = Math.floor((h + l - 7 * m + 114) / 31); // 3=março, 4=abril
-  const dia = ((h + l - 7 * m + 114) % 31) + 1;
-  return { mes, dia };
-}
-
-// Lista dos feriados nacionais do Brasil pro ano dado: os 8 fixos por lei
-// (Lei 6.802/80 + 10.607/2002) + os 4 móveis de uso comercial consolidado
-// (Carnaval, embora seja ponto facultativo e não feriado decretado por lei
-// federal, entra porque é assim que qualquer calendário/comércio brasileiro
-// trata). `mes` é 1-indexado (1=janeiro), pra bater com o formato DD/MM
-// exibido no frontend.
-function listarFeriadosNacionais(ano) {
-  const pascoa = calcularPascoa(ano);
-  const pascoaUtc = Date.UTC(ano, pascoa.mes - 1, pascoa.dia);
-  const deslocarDaPascoa = (offsetDias) => {
-    const d = new Date(pascoaUtc + offsetDias * 86400000);
-    return { mes: d.getUTCMonth() + 1, dia: d.getUTCDate() };
-  };
-  const carnavalSegunda = deslocarDaPascoa(-48);
-  const carnavalTerca = deslocarDaPascoa(-47);
-  const sextaSanta = deslocarDaPascoa(-2);
-  const corpusChristi = deslocarDaPascoa(60);
-
-  return [
-    { nome: 'Confraternização Universal', mes: 1, dia: 1 },
-    { nome: 'Carnaval', mes: carnavalSegunda.mes, dia: carnavalSegunda.dia },
-    { nome: 'Carnaval', mes: carnavalTerca.mes, dia: carnavalTerca.dia },
-    { nome: 'Sexta-feira Santa', mes: sextaSanta.mes, dia: sextaSanta.dia },
-    { nome: 'Tiradentes', mes: 4, dia: 21 },
-    { nome: 'Dia do Trabalho', mes: 5, dia: 1 },
-    { nome: 'Corpus Christi', mes: corpusChristi.mes, dia: corpusChristi.dia },
-    { nome: 'Independência do Brasil', mes: 9, dia: 7 },
-    { nome: 'Nossa Senhora Aparecida', mes: 10, dia: 12 },
-    { nome: 'Finados', mes: 11, dia: 2 },
-    { nome: 'Proclamação da República', mes: 11, dia: 15 },
-    { nome: 'Natal', mes: 12, dia: 25 },
-  ].sort((x, y) => x.mes - y.mes || x.dia - y.dia);
-}
-
-function ehFeriadoNacional(ano, mes, dia) {
-  return listarFeriadosNacionais(ano).some((f) => f.mes === mes && f.dia === dia);
-}
-
-// Valida um agendamento (dia da semana + intervalo abertura/fechamento +
-// intervalo de almoço, se ativo) contra a configuração de horário do tenant.
-// `duracaoMinutos` (padrão 0) deixa o fim do agendamento também respeitar o
-// fechamento/almoço, não só o início — usado tanto pra validar POST/PATCH de
-// agendamentos quanto pra filtrar slots de disponibilidade.
-function dentroDoHorarioFuncionamento(tenant, dataHoraISO, duracaoMinutos = 0) {
-  const diasFuncionamento = tenant.dias_funcionamento || [1, 2, 3, 4, 5, 6];
-  if (!diasFuncionamento.includes(diaDaSemanaBrasilia(dataHoraISO))) {
-    return { valido: false, motivo: 'O estabelecimento não abre nesse dia.' };
-  }
-
-  // componentesBrasilia é declarada mais abaixo no arquivo, mas function
-  // declaration é hoisted — chamada aqui é segura (só roda em tempo de
-  // request, bem depois do módulo inteiro já ter carregado).
-  if (tenant.feriados_bloqueados) {
-    const { ano, mes, dia } = componentesBrasilia(dataHoraISO);
-    if (ehFeriadoNacional(ano, mes + 1, dia)) {
-      return { valido: false, motivo: 'Essa data é feriado nacional — agenda fechada.' };
-    }
-  }
-
-  const inicioMinutos = minutosNoDia(dataHoraISO);
-  const fimMinutos = inicioMinutos + duracaoMinutos;
-  const aberturaMinutos = horarioParaMinutos(tenant.horario_abertura);
-  const fechamentoMinutos = horarioParaMinutos(tenant.horario_fechamento);
-  if (inicioMinutos < aberturaMinutos || fimMinutos > fechamentoMinutos) {
-    return {
-      valido: false,
-      motivo: `Horário fora do funcionamento do salão (${tenant.horario_abertura.slice(0, 5)}–${tenant.horario_fechamento.slice(0, 5)}).`,
-    };
-  }
-
-  if (tenant.horario_almoco_ativo) {
-    const almocoInicioMinutos = horarioParaMinutos(tenant.horario_almoco_inicio);
-    const almocoFimMinutos = horarioParaMinutos(tenant.horario_almoco_fim);
-    if (inicioMinutos < almocoFimMinutos && almocoInicioMinutos < fimMinutos) {
-      return { valido: false, motivo: 'Esse horário cai no intervalo de almoço.' };
-    }
-  }
-
-  return { valido: true };
-}
-
-// US61 — checa se [dataHoraISO, dataHoraISO + duracaoMinutos) cai dentro de
-// algum bloqueio manual de agenda ativo (profissional_id nulo = bloqueio
-// vale pra agenda inteira). Mesmo padrão de overlap já usado nas queries de
-// conflito de agendamento (a.inicio < fim_novo AND inicio_novo < a.fim).
-// Usada tanto pra criar/reagendar agendamentos quanto pro cálculo de
-// disponibilidade — aplica mesmo em encaixe, já que um bloqueio manual
-// significa "agenda indisponível", não só "já tem algo marcado".
-async function buscarBloqueioConflitante(tenantId, profissionalId, dataHoraISO, duracaoMinutos) {
-  const { rows } = await pool.query(
-    `SELECT motivo FROM bloqueios_agenda
-     WHERE tenant_id = $1 AND (profissional_id IS NULL OR profissional_id = $2)
-       AND inicio < $3::timestamptz + ($4 * interval '1 minute')
-       AND $3::timestamptz < fim
-     LIMIT 1`,
-    [tenantId, profissionalId, dataHoraISO, duracaoMinutos]
-  );
-  return rows[0] || null;
-}
+horarioFuncionamento.init(pool);
+configSistema.init(pool);
+planos.init(pool);
+eventos.init(pool);
 
 // ---------- Recorrência de agendamento (Novo agendamento > Recorrência) ----------
-// Gera as datas subsequentes a partir do agendamento âncora. Trabalha em
-// "componentes de Brasília" (ano/mês/dia/hora/minuto/segundo já ajustados
-// pelo offset fixo, mesmo raciocínio de diaDaSemanaBrasilia/minutosNoDia
-// acima) pra nunca calcular dia-do-mês/dia-da-semana em cima do UTC cru —
-// um agendamento às 23h de Brasília já vira o dia seguinte em UTC.
-function componentesBrasilia(dataISO) {
-  const deslocado = new Date(new Date(dataISO).getTime() - OFFSET_BRASILIA_MINUTOS * 60000);
-  return {
-    ano: deslocado.getUTCFullYear(),
-    mes: deslocado.getUTCMonth(),
-    dia: deslocado.getUTCDate(),
-    hora: deslocado.getUTCHours(),
-    minuto: deslocado.getUTCMinutes(),
-    segundo: deslocado.getUTCSeconds(),
-  };
-}
-
-function isoDeComponentesBrasilia({ ano, mes, dia, hora, minuto, segundo }) {
-  return new Date(Date.UTC(ano, mes, dia, hora, minuto, segundo) + OFFSET_BRASILIA_MINUTOS * 60000).toISOString();
-}
-
-// "YYYY-MM-DD" do calendário civil de Brasília — pra comparar com o limite
-// "recorrencia.ate" (que chega do frontend nesse mesmo formato, sem hora).
-function dataDiaISO({ ano, mes, dia }) {
-  return `${ano}-${String(mes + 1).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
-}
-
+// componentesBrasilia/isoDeComponentesBrasilia/dataDiaISO viraram lib/datetime.js
+// (fase 1 da modularização); dentroDoHorarioFuncionamento/
+// buscarBloqueioConflitante/empurrarProximoDiaAberto viraram
+// lib/horario-funcionamento.js; calcularPascoa/listarFeriadosNacionais/
+// ehFeriadoNacional viraram lib/feriados.js.
+//
 // Semanal/quinzenal são aditivos (7/14 dias vezes N a partir da âncora,
 // Date.UTC normaliza dia > dias-no-mês automaticamente). Mensal recalcula o
 // dia-do-mês a partir do valor ORIGINAL da âncora a cada mês (não cumulativo
@@ -398,135 +182,20 @@ function proximaOcorrenciaRecorrencia(ancora, tipo, n) {
   return { ...ancora, ano: normalizado.getUTCFullYear(), mes: normalizado.getUTCMonth(), dia: normalizado.getUTCDate() };
 }
 
-// Empurra pro primeiro dia seguinte presente em `dias_funcionamento` (e, se
-// `feriadosBloqueados`, que também não seja feriado nacional), mantendo o
-// mesmo horário — mesma regra já usada em PATCH /api/configuracoes quando o
-// expediente muda e um agendamento existente cai num dia que deixou de
-// funcionar; reaproveitada pelo switch de feriados (bloqueio de agenda) pra
-// mover pro primeiro dia útil quem já estava marcado num feriado. Limite de
-// 14 tentativas (uma volta completa da semana): trava de segurança contra
-// loop infinito se dias_funcionamento vier vazio. Não precisa reconferir
-// abertura/fechamento/almoço — esses três são fixos pro tenant inteiro (não
-// variam por dia da semana), então se o horário da âncora já passou nessa
-// validação, continua válido em qualquer outro dia, só o dia em si pode
-// estar fechado/feriado.
-function empurrarProximoDiaAberto(componentes, diasFuncionamento, feriadosBloqueados = false) {
-  let atual = componentes;
-  let tentativas = 0;
-  const fechado = (c) => {
-    if (!diasFuncionamento.includes(diaDaSemanaBrasilia(isoDeComponentesBrasilia(c)))) return true;
-    return feriadosBloqueados && ehFeriadoNacional(c.ano, c.mes + 1, c.dia);
-  };
-  while (fechado(atual) && tentativas < 14) {
-    const proximoDia = new Date(Date.UTC(atual.ano, atual.mes, atual.dia + 1));
-    atual = { ...atual, ano: proximoDia.getUTCFullYear(), mes: proximoDia.getUTCMonth(), dia: proximoDia.getUTCDate() };
-    tentativas += 1;
-  }
-  return tentativas < 14 ? atual : null;
-}
-
-// US64 — cria/atualiza o lançamento financeiro vinculado a um agendamento
-// com serviço pago (CA "Cenário 1/3/4/5/6/7"). `client` pode ser o pool do
-// módulo ou um client de transação já aberto pelo chamador — POST/PATCH
-// /api/agendamentos precisam que a mudança no agendamento e no financeiro
-// aconteçam atomicamente, senão um crash no meio deixaria os dois lados
-// inconsistentes.
-//
-// Sempre um UPDATE em cima do lançamento existente do agendamento (nunca um
-// segundo INSERT): o ON CONFLICT usa o índice único uq_lancamentos_agendamento,
-// que também garante isso numa corrida (CA "Cenário 7", evitar duplicidade).
-async function sincronizarLancamentoFinanceiro(client, {
-  tenantId, agendamentoId, servicoNome, servicoPreco, dataHora, statusAgendamento, formaPagamento,
-}) {
-  // Serviço sem preço (ou preço zero) nunca gera lançamento automático (CA
-  // "Cenário 2") — nem na criação nem numa atualização: hoje não existe
-  // jeito de mudar o serviço/preço de um agendamento já criado (servico_id é
-  // fixo, e servicos.preco não tem endpoint de edição), então um agendamento
-  // que nasceu sem lançamento nunca precisa ganhar um depois.
-  const preco = servicoPreco != null ? Number(servicoPreco) : 0;
-  if (!(preco > 0)) return;
-
-  // 'reagendado' nunca é de fato setado por nenhum código hoje (reagendar só
-  // muda data_hora no mesmo registro) — trata como 'confirmado' por
-  // segurança, caso isso mude no futuro. 'falta' (no-show) mapeia pro mesmo
-  // 'cancelado' que uma cancelação de verdade — financeiramente o efeito é
-  // igual (a receita prevista não acontece) — mas o status do AGENDAMENTO em
-  // si continua 'falta', distinto de 'cancelado', pro Relatórios conseguir
-  // medir taxa de comparecimento e faturamento perdido por no-show à parte.
-  const statusFinanceiro = statusAgendamento === 'concluido'
-    ? 'realizado'
-    : (statusAgendamento === 'cancelado' || statusAgendamento === 'falta')
-      ? 'cancelado'
-      : 'previsto';
-
-  // formaPagamento só chega preenchida em "Confirmar pagamento" (US, menu
-  // Financeiro) — as outras chamadas (criar/reagendar/cancelar agendamento)
-  // não sabem a forma de pagamento e não podem apagar a que já foi
-  // registrada, por isso o COALESCE no UPDATE mantém o valor existente
-  // quando formaPagamento vem null.
-  await client.query(
-    `INSERT INTO lancamentos_financeiros (tenant_id, agendamento_id, tipo, valor, descricao, data, status, forma_pagamento)
-     VALUES ($1, $2, 'entrada', $3, $4, ($5::timestamptz AT TIME ZONE 'America/Sao_Paulo')::date, $6, $7)
-     ON CONFLICT (agendamento_id) WHERE agendamento_id IS NOT NULL
-     DO UPDATE SET valor = EXCLUDED.valor, data = EXCLUDED.data, status = EXCLUDED.status, descricao = EXCLUDED.descricao,
-                    forma_pagamento = COALESCE(EXCLUDED.forma_pagamento, lancamentos_financeiros.forma_pagamento)`,
-    [tenantId, agendamentoId, preco, servicoNome, dataHora, statusFinanceiro, formaPagamento || null]
-  );
-}
-
-// Data (YYYY-MM-DD) de "agora" em horário de Brasília — usada como fallback
-// quando a view de agenda é consultada sem o parâmetro "data" explícito.
-function dataAtualBrasilia() {
-  return new Date(Date.now() - OFFSET_BRASILIA_MINUTOS * 60000).toISOString().slice(0, 10);
-}
-
-// Mês (YYYY-MM) de "agora" em horário de Brasília — mesmo raciocínio acima.
-function mesAtualBrasilia() {
-  return new Date(Date.now() - OFFSET_BRASILIA_MINUTOS * 60000).toISOString().slice(0, 7);
-}
-
 // US32/CA05 — data da primeira cobrança da assinatura Asaas: se o trial (14
 // dias a partir de `ativado_em`) ainda não acabou, a cobrança só nasce pra
 // vencer no fim do trial; senão, vence hoje (tenant já devia estar pagando).
 function proximaCobrancaRespeitandoTrial(tenant) {
   if (tenant.ativado_em) {
-    const trialFim = new Date(new Date(tenant.ativado_em).getTime() + TRIAL_DIAS * 24 * 60 * 60 * 1000);
+    const trialFim = new Date(new Date(tenant.ativado_em).getTime() + configSistema.config.trialDias * 24 * 60 * 60 * 1000);
     if (trialFim.getTime() > Date.now()) return trialFim.toISOString().slice(0, 10);
   }
   return new Date().toISOString().slice(0, 10);
 }
 
-// US52 — funil de conversão pós-trial (CA: aviso exibido, trial expirado,
-// bloqueio exibido, pagamento iniciado, pagamento concluído). Tabela
-// append-only (eventos_analytics); os tipos válidos são só esses, checados
-// aqui em vez de num enum/check no banco.
-const EVENTOS_ANALYTICS_TIPOS = new Set([
-  'aviso_trial_exibido',
-  'trial_expirado',
-  'bloqueio_exibido',
-  'pagamento_iniciado',
-  'pagamento_concluido',
-]);
-// Subconjunto que o próprio frontend pode registrar via POST /api/eventos —
-// os outros (trial_expirado, pagamento_iniciado/concluido) nascem direto nos
-// handlers do backend, que já sabem que o evento de fato aconteceu; aceitar
-// esses pelo endpoint deixaria qualquer tenant forjar métricas de conversão.
-const EVENTOS_ANALYTICS_TIPOS_FRONTEND = new Set(['aviso_trial_exibido', 'bloqueio_exibido']);
-
-async function registrarEvento(tenantId, tipo) {
-  await pool.query('INSERT INTO eventos_analytics (tenant_id, tipo) VALUES ($1, $2)', [tenantId, tipo]);
-}
-
-// 'trial_expirado' marca a transição de estado, não uma impressão de tela —
-// só grava na primeira vez que o guard de `authenticate` barra esse tenant,
-// senão toda requisição bloqueada geraria uma linha nova.
-async function registrarEventoTrialExpiradoUmaVez(tenantId) {
-  const { rows } = await pool.query(
-    "SELECT 1 FROM eventos_analytics WHERE tenant_id = $1 AND tipo = 'trial_expirado' LIMIT 1",
-    [tenantId]
-  );
-  if (rows.length === 0) await registrarEvento(tenantId, 'trial_expirado');
-}
+// EVENTOS_ANALYTICS_TIPOS/EVENTOS_ANALYTICS_TIPOS_FRONTEND/registrarEvento/
+// registrarEventoTrialExpiradoUmaVez viraram lib/eventos.js (fase 1 da
+// modularização).
 
 // ---------- US68 — IA Engine (motor conversacional Claude Haiku 4.5) ----------
 // Substitui o fluxo de bot por menus (n8n) pra tenants com tecnologia='ia'.
@@ -1843,7 +1512,7 @@ async function start() {
       // antes os dois eram o mesmo valor, misturando pessoa física com nome
       // do negócio nas mensagens do WhatsApp. O tenant pode ajustá-lo depois
       // em Minha Empresa (US33).
-      const trialExpira = new Date(Date.now() + TRIAL_DIAS * 24 * 60 * 60 * 1000);
+      const trialExpira = new Date(Date.now() + configSistema.config.trialDias * 24 * 60 * 60 * 1000);
       const { rows: tenantRows } = await client.query(
         `INSERT INTO tenants (nome, telefone, whatsapp, segmento, segmento_id, plano, status, trial_expires_at, onboarding_pendente)
          VALUES ($1, $2, $3, $4, $5, $6, 'trial', $7, $8)
@@ -1969,7 +1638,7 @@ async function start() {
        WHERE user_id = $1 AND tipo = 'email_verificacao' AND criado_em > now() - interval '1 hour'`,
       [userId]
     );
-    if (contagem[0].na_hora >= MAX_REENVIOS_HORA) {
+    if (contagem[0].na_hora >= configSistema.config.maxReenviosHora) {
       return reply.code(429).send({ error: 'Limite de reenvios atingido. Tente novamente mais tarde.' });
     }
     if (contagem[0].ultimo && Date.now() - new Date(contagem[0].ultimo).getTime() < REENVIO_COOLDOWN_SEGUNDOS * 1000) {
@@ -2056,8 +1725,8 @@ async function start() {
       trial_ativo: trial.trialAtivo,
       dias_restantes: trial.trialDiasRestantes,
       bloqueio_motivo: bloqueioMotivo,
-      suporte_email: EMAIL_SUPORTE,
-      suporte_whatsapp: WHATSAPP_SUPORTE,
+      suporte_email: configSistema.config.emailSuporte,
+      suporte_whatsapp: configSistema.config.whatsappSuporte,
       pagamento_pendente: info.status === 'inadimplente',
       // horario_nao_confirmado (US56): diferente de sem_servicos/
       // whatsapp_desconectado, o horário de funcionamento sempre tem um
@@ -2866,154 +2535,10 @@ async function start() {
     return { ok: true };
   });
 
-  // ---------- Bloqueios manuais de agenda (US61) ----------
-  fastify.get('/api/bloqueios', { preHandler: [fastify.authenticate] }, async (request) => {
-    const { tenantId } = request.user;
-    const { rows } = await pool.query(
-      `SELECT b.id, b.profissional_id, p.nome AS profissional, b.inicio, b.fim, b.motivo
-       FROM bloqueios_agenda b
-       LEFT JOIN profissionais p ON p.id = b.profissional_id
-       WHERE b.tenant_id = $1
-       ORDER BY b.inicio`,
-      [tenantId]
-    );
-    return { bloqueios: rows };
-  });
-
-  fastify.post('/api/bloqueios', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const { tenantId } = request.user;
-    const { inicio, fim, motivo, profissional_id: profissionalId } = request.body || {};
-
-    if (!inicio || !fim) {
-      return reply.code(400).send({ error: 'Campos "inicio" e "fim" são obrigatórios' });
-    }
-    const inicioData = new Date(inicio);
-    const fimData = new Date(fim);
-    if (Number.isNaN(inicioData.getTime()) || Number.isNaN(fimData.getTime())) {
-      return reply.code(400).send({ error: 'Datas inválidas' });
-    }
-    if (fimData <= inicioData) {
-      return reply.code(400).send({ error: 'O fim do bloqueio deve ser depois do início' });
-    }
-
-    if (profissionalId) {
-      const { rows: profissionalRows } = await pool.query(
-        'SELECT id FROM profissionais WHERE id = $1 AND tenant_id = $2',
-        [profissionalId, tenantId]
-      );
-      if (!profissionalRows[0]) {
-        return reply.code(404).send({ error: 'Profissional não encontrado' });
-      }
-    }
-
-    // Sobreposição inválida (CA04): não deixa bloquear um período que já tem
-    // agendamento confirmado — o dono precisa cancelar/reagendar esses
-    // atendimentos antes de bloquear o horário, em vez do bloqueio silenciar
-    // um conflito que já existe.
-    const { rows: conflitos } = await pool.query(
-      `SELECT COUNT(*)::int AS total
-       FROM agendamentos a
-       JOIN servicos s ON s.id = a.servico_id
-       WHERE a.tenant_id = $1
-         AND a.status = 'confirmado'
-         AND ($2::uuid IS NULL OR a.profissional_id = $2)
-         AND a.data_hora < $4::timestamptz
-         AND $3::timestamptz < a.data_hora + (s.duracao_minutos * interval '1 minute')`,
-      [tenantId, profissionalId || null, inicio, fim]
-    );
-    if (conflitos[0].total > 0) {
-      return reply.code(409).send({
-        error: `Não é possível bloquear: há ${conflitos[0].total} agendamento(s) confirmado(s) nesse período.`,
-      });
-    }
-
-    const { rows } = await pool.query(
-      `INSERT INTO bloqueios_agenda (tenant_id, profissional_id, inicio, fim, motivo)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, profissional_id, inicio, fim, motivo`,
-      [tenantId, profissionalId || null, inicio, fim, motivo ? motivo.trim() : null]
-    );
-    reply.code(201);
-    return rows[0];
-  });
-
-  fastify.delete('/api/bloqueios/:id', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const { tenantId } = request.user;
-    const { id } = request.params;
-
-    const { rowCount } = await pool.query('DELETE FROM bloqueios_agenda WHERE id = $1 AND tenant_id = $2', [id, tenantId]);
-    if (!rowCount) {
-      return reply.code(404).send({ error: 'Bloqueio não encontrado' });
-    }
-    return { ok: true };
-  });
-
-  // ---------- Feriados nacionais (Configurações > Bloqueio de agenda) ----------
-  // Um switch só (não um bloqueio por feriado): a lista em si não é editável
-  // (calculada, não persistida — ver listarFeriadosNacionais), só o
-  // habilitado/desabilitado por tenant.
-  fastify.get('/api/feriados', { preHandler: [fastify.authenticate] }, async (request) => {
-    const { tenantId } = request.user;
-    const { rows } = await pool.query('SELECT feriados_bloqueados FROM tenants WHERE id = $1', [tenantId]);
-    const anoAtual = componentesBrasilia(new Date().toISOString()).ano;
-    return {
-      habilitado: rows[0] ? rows[0].feriados_bloqueados : false,
-      feriados: listarFeriadosNacionais(anoAtual),
-    };
-  });
-
-  fastify.patch('/api/feriados', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const { tenantId } = request.user;
-    const { habilitado } = request.body || {};
-    if (typeof habilitado !== 'boolean') {
-      return reply.code(400).send({ error: 'Campo "habilitado" é obrigatório (true/false).' });
-    }
-
-    let agendamentosMovidos = 0;
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-
-      if (habilitado) {
-        const { rows: tenantRows } = await client.query(
-          'SELECT dias_funcionamento FROM tenants WHERE id = $1 FOR UPDATE',
-          [tenantId]
-        );
-        const diasFuncionamento = tenantRows[0].dias_funcionamento || [1, 2, 3, 4, 5, 6];
-
-        // Mesmo raciocínio do reagendamento em cascata de PATCH
-        // /api/configuracao (dias_funcionamento mudando): só agendamentos
-        // futuros e confirmados que caem num feriado são movidos, pro mesmo
-        // horário no primeiro dia útil seguinte, sem checar colisão com
-        // outro agendamento já existente nesse dia — comportamento simples,
-        // equivalente a um reagendamento manual apressado (mesma decisão já
-        // tomada pro caso de dias_funcionamento). O frontend já confirmou
-        // essa consequência num popup antes de chamar este PATCH.
-        const { rows: futuros } = await client.query(
-          `SELECT id, data_hora FROM agendamentos WHERE tenant_id = $1 AND status = 'confirmado' AND data_hora > now()`,
-          [tenantId]
-        );
-        for (const ag of futuros) {
-          const comp = componentesBrasilia(ag.data_hora);
-          if (!ehFeriadoNacional(comp.ano, comp.mes + 1, comp.dia)) continue;
-          const resolvido = empurrarProximoDiaAberto(comp, diasFuncionamento, true);
-          if (!resolvido) continue; // trava de segurança (dias_funcionamento vazio) — não deveria acontecer na prática
-          await client.query('UPDATE agendamentos SET data_hora = $1 WHERE id = $2', [isoDeComponentesBrasilia(resolvido), ag.id]);
-          agendamentosMovidos++;
-        }
-      }
-
-      await client.query('UPDATE tenants SET feriados_bloqueados = $2 WHERE id = $1', [tenantId, habilitado]);
-      await client.query('COMMIT');
-    } catch (erro) {
-      await client.query('ROLLBACK');
-      throw erro;
-    } finally {
-      client.release();
-    }
-
-    return { habilitado, agendamentos_movidos: agendamentosMovidos };
-  });
+  // Bloqueios manuais de agenda (US61) + Feriados nacionais (Configurações >
+  // Bloqueio de agenda) — extraídos pra routes/bloqueios.js (fase 1 da
+  // modularização): GET/POST/DELETE /api/bloqueios, GET/PATCH /api/feriados.
+  registerBloqueiosRoutes(fastify, pool);
 
   fastify.post('/api/agendamentos', { preHandler: [fastify.authenticate] }, async (request, reply) => {
     const { tenantId } = request.user;
@@ -3324,7 +2849,7 @@ async function start() {
     if (!perfil) return perfil;
     // CA05 — rótulo amigável do plano atual, mesma fonte usada no detalhe do
     // tenant na área admin (US28/nomeDoPlano), pra nunca divergir.
-    return { ...perfil, plano_nome: nomeDoPlano(perfil.plano) };
+    return { ...perfil, plano_nome: planos.nomeDoPlano(perfil.plano) };
   }
 
   fastify.get('/api/perfil', { preHandler: [fastify.authenticate] }, async (request) => {
@@ -3998,7 +3523,7 @@ async function start() {
     if (!config) return config;
     // US69/CA06 — modo de atendimento é somente leitura no portal do salão;
     // o admin Kyvvo é quem altera (PATCH /admin/api/tenants/:id/modo).
-    return { ...config, plano_atual: nomeDoPlano(config.plano) };
+    return { ...config, plano_atual: planos.nomeDoPlano(config.plano) };
   });
 
   const HORARIO_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -4874,7 +4399,7 @@ async function start() {
     // em vez de null pra US37/CA02 poder anunciar "R$ [VALOR]" antes do
     // trial acabar. CA09 (US38) — preço/nome sempre lidos do cache carregado
     // da tabela `planos` (nunca mais hardcoded em asaas-service.js).
-    const planoInfo = PLANOS_CACHE[tenant.plano] || PLANOS_CACHE[PLANO_PADRAO_CHAVE] || null;
+    const planoInfo = planos.obterPlano(tenant.plano) || planos.obterPlano(planos.PLANO_PADRAO_CHAVE) || null;
     const subscription = await asaasService.buscarSubscription(tenant.asaas_subscription_id).catch((erro) => {
       console.error(`[pagamentos] falha ao buscar subscription ${tenant.asaas_subscription_id}: ${erro.message}`);
       return null;
@@ -4926,8 +4451,8 @@ async function start() {
       // US52 — tela de bloqueio pós-trial (bloqueio.html) explica como falar
       // com o suporte durante a regularização; reaproveita as mesmas
       // configurações já usadas em GET /api/tenant/status.
-      suporte_email: EMAIL_SUPORTE,
-      suporte_whatsapp: WHATSAPP_SUPORTE,
+      suporte_email: configSistema.config.emailSuporte,
+      suporte_whatsapp: configSistema.config.whatsappSuporte,
       proxima_cobranca: subscription
         ? { plano_nome: planoInfo ? planoInfo.nome : null, data: subscription.nextDueDate, valor: subscription.value }
         : null,
@@ -4981,8 +4506,8 @@ async function start() {
     const trial = calcularTrialTenant(tenant);
     const diasUtilizados = trial.trialDiasRestantes == null
       ? null
-      : Math.min(TRIAL_DIAS, Math.max(0, TRIAL_DIAS - trial.trialDiasRestantes));
-    const trialPercentual = diasUtilizados == null ? null : Math.min(100, Math.round((diasUtilizados / TRIAL_DIAS) * 100));
+      : Math.min(configSistema.config.trialDias, Math.max(0, configSistema.config.trialDias - trial.trialDiasRestantes));
+    const trialPercentual = diasUtilizados == null ? null : Math.min(100, Math.round((diasUtilizados / configSistema.config.trialDias) * 100));
 
     return {
       trial_ativo: trial.trialAtivo,
@@ -5102,13 +4627,13 @@ async function start() {
     // Trial (ou tenant sem plano definido) ainda não escolheu um plano pago —
     // hoje só existe o Profissional (mesmo conjunto de módulos liberado no
     // trial, ver MODULOS_TRIAL); vira o plano contratado.
-    const plano = tenant.plano && tenant.plano !== 'trial' ? tenant.plano : PLANO_PADRAO_CHAVE;
+    const plano = tenant.plano && tenant.plano !== 'trial' ? tenant.plano : planos.PLANO_PADRAO_CHAVE;
     // CA09 (US38) — preço/nome sempre lidos do cache carregado da tabela
     // `planos`, nunca hardcoded; um plano desativado (`ativo = false`) ainda
     // pode ser usado aqui (só novas assinaturas deixam de oferecê-lo na
     // seleção de plano quando essa tela existir — não é o caso hoje, já que
     // só o Profissional é contratável).
-    const planoInfo = PLANOS_CACHE[plano];
+    const planoInfo = planos.obterPlano(plano);
     if (!planoInfo) {
       return reply.code(400).send({ error: 'Plano não configurado. Contate o suporte.' });
     }
@@ -5400,81 +4925,10 @@ async function start() {
   // separados dos tenants) — nunca fastify.authenticate. Servem a equipe da
   // Kyvvo, não os clientes.
 
-  // Indicador de trial somente leitura (US31/CA02) — calculado a partir de
-  // `ativado_em` (data real de ativação da conta), não de `trial_expires_at`
-  // (que reflete a data de cadastro/US20 e pode divergir da ativação).
-  // trial_ativo = ativado_em não nulo E ativado_em + TRIAL_DIAS dias >= hoje.
-  function calcularTrialTenant(tenant) {
-    if (!tenant.ativado_em) {
-      return { trialAtivo: false, trialInicio: null, trialFim: null, trialDiasRestantes: null };
-    }
-    const inicio = new Date(tenant.ativado_em);
-    const fim = new Date(inicio.getTime() + TRIAL_DIAS * 24 * 60 * 60 * 1000);
-    const diasRestantes = Math.ceil((fim.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
-    return {
-      trialAtivo: fim.getTime() >= Date.now(),
-      trialInicio: inicio.toISOString(),
-      trialFim: fim.toISOString(),
-      trialDiasRestantes: diasRestantes,
-    };
-  }
-
-  // Bloqueio de acesso por falta de pagamento — usado tanto por
-  // `authenticate` (enforça de verdade) quanto por GET /api/tenant/status e
-  // montarResumoPagamentos (pra frontend saber pra onde redirecionar/o que
-  // mostrar), sempre a partir da mesma fonte de verdade: nunca duplicar essa
-  // conta em mais de um lugar.
-  // - trial vencido sem assinatura: bloqueia (fluxo já existia).
-  // - inadimplente (Asaas PAYMENT_OVERDUE): só bloqueia depois de
-  //   CARENCIA_DIAS_INADIMPLENCIA dias desde a mudança de status — dá tempo
-  //   de a cobrança ser regularizada (retry automático da Asaas, por ex.)
-  //   antes de cortar o acesso.
-  // - suspenso (Asaas PAYMENT_DELETED — cobrança excluída/falhou de vez):
-  //   bloqueia na hora, sem carência — já é o estado mais grave.
-  // - cancelado: bloqueia só depois de `acesso_ate` (o período já pago),
-  //   igual já era feito na Cobrança pra exibição, agora também aqui pra
-  //   valer de verdade.
-  function calcularBloqueioAssinatura(tenant) {
-    if (tenant.status === 'trial') {
-      return calcularTrialTenant(tenant).trialAtivo ? null : 'trial_expirado';
-    }
-    if (tenant.status === 'suspenso') {
-      return 'suspenso';
-    }
-    if (tenant.status === 'inadimplente') {
-      if (!tenant.status_alterado_em) return 'inadimplente';
-      const fimCarencia = new Date(tenant.status_alterado_em).getTime() + CARENCIA_DIAS_INADIMPLENCIA * 24 * 60 * 60 * 1000;
-      return Date.now() >= fimCarencia ? 'inadimplente' : null;
-    }
-    if (tenant.status === 'cancelado') {
-      if (!tenant.acesso_ate) return 'cancelado';
-      // `acesso_ate` é `date` (sem hora) — vale até o fim do próprio dia.
-      const fimAcesso = new Date(`${tenant.acesso_ate}T23:59:59-03:00`).getTime();
-      return Date.now() > fimAcesso ? 'cancelado' : null;
-    }
-    return null;
-  }
-
-  const BLOQUEIO_MENSAGENS = {
-    trial_expirado: 'Seu período de teste terminou. Cadastre um meio de pagamento para continuar usando o Kyvvo.',
-    inadimplente: 'Não conseguimos confirmar seu pagamento. Atualize sua forma de pagamento para reativar o acesso.',
-    suspenso: 'Sua assinatura foi suspensa por falha no pagamento. Atualize sua forma de pagamento para reativar o acesso.',
-    cancelado: 'Sua assinatura foi encerrada e o período pago já terminou. Reative sua assinatura para continuar usando o Kyvvo.',
-  };
-
-  // Status de conta exibido na listagem de tenants e no detalhe (US26/US28/
-  // CA02) — o estado de trial usa `calcularTrialTenant` (US31), baseada em
-  // `ativado_em`, no lugar do cálculo antigo por `trial_expires_at`.
-  function statusContaTenant(tenant) {
-    if (!tenant.ativo) return 'Inativo';
-    if (tenant.status === 'trial') {
-      if (!tenant.ativado_em) return 'Não ativado';
-      return calcularTrialTenant(tenant).trialAtivo ? 'Trial ativo' : 'Trial expirado';
-    }
-    if (tenant.status === 'ativo') return 'Ativo';
-    if (tenant.status === 'suspenso') return 'Suspenso';
-    return 'Inativo';
-  }
+  // calcularTrialTenant/calcularBloqueioAssinatura/statusContaTenant/
+  // BLOQUEIO_MENSAGENS viraram lib/trial-conta.js (fase 1 da modularização)
+  // — estavam fisicamente aqui, mas já eram consumidas por `authenticate` e
+  // por rotas fora da área admin (GET /api/tenant/status, Pagamentos).
 
   // US65 — catálogo completo de módulos com o estado (ativo/inativo) daquele
   // tenant específico, pra gestão de módulos por salão no portal Admin. LEFT
@@ -5597,7 +5051,7 @@ async function start() {
         const trial = calcularTrialTenant(t);
         return {
           ...t,
-          plano_nome: nomeDoPlano(t.plano),
+          plano_nome: planos.nomeDoPlano(t.plano),
           status_conta: statusContaTenant(t),
           trial_ativo: trial.trialAtivo,
           trial_dias_restantes: trial.trialDiasRestantes,
@@ -5649,7 +5103,7 @@ async function start() {
         const trial = calcularTrialTenant(t);
         return {
           ...t,
-          plano_nome: nomeDoPlano(t.plano),
+          plano_nome: planos.nomeDoPlano(t.plano),
           status_conta: statusContaTenant(t),
           trial_ativo: trial.trialAtivo,
           trial_dias_restantes: trial.trialDiasRestantes,
@@ -5734,7 +5188,7 @@ async function start() {
     return {
       ...tenant,
       status_conta: statusContaTenant(tenant),
-      plano_atual: nomeDoPlano(tenant.plano),
+      plano_atual: planos.nomeDoPlano(tenant.plano),
       trial_ativo: trial.trialAtivo,
       trial_inicio: trial.trialInicio,
       trial_fim: trial.trialFim,
@@ -6077,7 +5531,7 @@ async function start() {
   // (PLANOS_CACHE), sem consulta ao banco.
   fastify.get('/admin/api/planos', { preHandler: [fastify.authenticateAdmin] }, async () => {
     return {
-      planos: Object.values(PLANOS_CACHE)
+      planos: planos.obterTodos()
         .filter((p) => p.ativo)
         .sort((a, b) => Number(a.preco_mensal) - Number(b.preco_mensal))
         .map((p) => ({ chave: p.chave, nome: p.nome })),
@@ -6267,7 +5721,7 @@ async function start() {
       }
 
       await client.query('COMMIT');
-      await carregarPlanos();
+      await planos.carregar();
       // pg devolve NUMERIC como string — converte antes de devolver ao front.
       return { ...novo, preco_mensal: Number(novo.preco_mensal) };
     } catch (erro) {
@@ -6327,7 +5781,7 @@ async function start() {
       client.release();
     }
 
-    await carregarConfiguracoesSistema();
+    await configSistema.carregar();
     const { rows: sistemaRows } = await pool.query('SELECT chave, valor FROM configuracoes_sistema');
     return Object.fromEntries(sistemaRows.map((r) => [r.chave, r.valor]));
   });
@@ -6600,8 +6054,8 @@ async function start() {
   // CA09 — carrega os valores configuráveis do banco antes de aceitar
   // requisições, pra nunca servir com os literais hardcoded quando já existe
   // uma configuração diferente salva.
-  await carregarConfiguracoesSistema();
-  await carregarPlanos();
+  await configSistema.carregar();
+  await planos.carregar();
 
   await fastify.listen({ port: PORT, host: '0.0.0.0' });
   console.log(`Painel Kyvvo rodando na porta ${PORT}`);
