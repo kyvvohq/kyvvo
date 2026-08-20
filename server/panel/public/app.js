@@ -2272,14 +2272,6 @@ function renderBlocoTrial(trialInfo) {
   `;
 }
 
-const PAGAMENTOS_STATUS_CARD_CLASSE = {
-  ativo: 'status-card-ativo',
-  inadimplente: 'status-card-pendente',
-  suspenso: 'status-card-inativo',
-  cancelado: 'status-card-inativo',
-  expirado: 'status-card-inativo',
-};
-
 function formatarMeioHistorico(meio) {
   if (meio === 'PIX') return 'Pix';
   if (meio === 'CREDIT_CARD') return 'Cartão de crédito';
@@ -2297,7 +2289,7 @@ async function renderPagamentos() {
       ? 'Pix recorrente'
       : 'Não cadastrado';
 
-  let html = '<div class="nav-periodo"><strong>Cobrança</strong></div>';
+  let html = '<div class="nav-periodo"><strong>Plano</strong></div>';
 
   if (dados.status === 'trial' && dados.meio_pagamento) {
     // CA05 (US37) — pagamento já cadastrado durante o trial: a cobrança está
@@ -2344,62 +2336,70 @@ async function renderPagamentos() {
     `;
   } else {
     // CA01/CA04/CA06 (US35) — cancelado é um estado à parte: some o botão de
-    // "Alterar forma de pagamento" (não há mais assinatura ativa pra alterar)
-    // e mostra "Reativar assinatura" no lugar; o collapse "Detalhes" (com
-    // "Cancelar assinatura" dentro) só aparece com status 'ativo'/
+    // "Alterar plano" (não há mais assinatura ativa pra alterar) e mostra
+    // "Reativar assinatura" no lugar; o collapse "Alterar forma de pagar"
+    // (com "Cancelar assinatura" dentro) só aparece com status 'ativo'/
     // inadimplente/suspenso — quem já cancelou não tem mais assinatura pra
     // alterar/cancelar de novo.
     const cancelado = dados.status === 'cancelado';
     const ativo = dados.status === 'ativo';
-    const statusCardClasse = PAGAMENTOS_STATUS_CARD_CLASSE[dados.status] || 'status-card-inativo';
-    const dataAlteracaoMeio = dados.meio_pagamento_alterado_em ? formatarDataCurtaISO(dados.meio_pagamento_alterado_em) : '—';
+    const statusBadgeClasse = PAGAMENTOS_STATUS_BADGE[dados.status] || 'badge-status-inativo';
 
     html += `
-      <div class="financeiro-resumo">
-        <div class="financeiro-resumo-card financeiro-resumo-card-3linhas">
-          <div class="financeiro-resumo-label">Plano Atual</div>
-          <div class="financeiro-resumo-linha2">${dados.plano_nome || '—'}</div>
-          <div class="financeiro-resumo-linha3">${dados.valor_plano != null ? formatarPreco(dados.valor_plano) : '—'}</div>
+      <div class="pagamento-plano-card">
+        <div class="pagamento-plano-linha">
+          <span class="pagamento-plano-nome">${dados.plano_nome || '—'}</span>
+          <span class="pagamento-plano-valor">${dados.valor_plano != null ? formatarPreco(dados.valor_plano) : '—'}</span>
         </div>
-        <div class="financeiro-resumo-card financeiro-resumo-card-3linhas">
-          <div class="financeiro-resumo-label">Meio de pagamento</div>
-          <div class="financeiro-resumo-linha2">${meioLabel}</div>
-          <div class="financeiro-resumo-linha3">${dados.meio_pagamento ? `Alterado em ${dataAlteracaoMeio}` : '—'}</div>
+        <div class="pagamento-plano-linha pagamento-plano-linha-secundaria">
+          <span>${meioLabel}</span>
+          <span>${dados.ciclo || 'Mensal'}</span>
         </div>
-        <div class="financeiro-resumo-card financeiro-resumo-card-3linhas ${statusCardClasse}">
-          <div class="financeiro-resumo-label">Status</div>
-          <div class="financeiro-resumo-linha2">${PAGAMENTOS_STATUS_LABEL[dados.status] || dados.status}</div>
+        <div class="pagamento-plano-linha pagamento-plano-linha-secundaria">
+          <span class="badge ${statusBadgeClasse}">${PAGAMENTOS_STATUS_LABEL[dados.status] || dados.status}</span>
+          ${cancelado
+            ? '<button type="button" class="btn-primario btn-pequeno" id="btn-reativar-pagamento">Reativar assinatura</button>'
+            : '<button type="button" class="btn-secundario btn-pequeno" id="btn-trocar-plano">Alterar plano</button>'}
         </div>
       </div>
+
+      <div class="pagamento-secao-divisor"></div>
+      <h3 class="inicio-secao-titulo">Cobrança</h3>
+
       ${cancelado
         ? `<p class="modal-texto">Seu acesso está ativo até ${formatarDataCurtaISO(dados.acesso_ate)}. Após essa data, o sistema será suspenso.</p>`
         : `<p class="modal-texto">
-            Próxima cobrança: ${dados.proxima_cobranca ? `${formatarPreco(dados.proxima_cobranca.valor)} em ${formatarDataCurtaISO(dados.proxima_cobranca.data)}` : 'não disponível'}
-          </p>
-          <button class="btn-secundario" id="btn-trocar-plano" style="margin-bottom:16px">Trocar de plano</button>`}
-      ${cancelado
-        ? '<button class="btn-novo-agendamento" id="btn-reativar-pagamento" style="margin-bottom:16px">Reativar assinatura</button>'
-        : `
-          <div class="pagamento-detalhes">
-            <button type="button" class="pagamento-detalhes-toggle" id="btn-toggle-detalhes" aria-expanded="false">Detalhes ▾</button>
-            <div class="pagamento-detalhes-conteudo" id="pagamento-detalhes-conteudo" hidden>
-              <h4>Alterar forma de cobrança</h4>
-              ${htmlFormPagamento(dados, { comBotaoCancelar: false })}
-              ${ativo ? '<button type="button" class="btn-secundario acao-perigo" id="btn-cancelar-assinatura" style="margin-top:12px">Cancelar assinatura</button>' : ''}
-            </div>
-          </div>
-        `}
+            Próxima cobrança: ${dados.proxima_cobranca
+              ? `${dados.proxima_cobranca.plano_nome || dados.plano_nome || 'Plano'}, ${formatarPreco(dados.proxima_cobranca.valor)} em ${formatarDataCurtaISO(dados.proxima_cobranca.data)}`
+              : 'não disponível'}
+          </p>`}
+
       <h4 class="pagamento-historico-titulo">Histórico de cobranças</h4>
       <div class="tabela-wrapper">
         <table class="tabela-tenants">
-          <thead><tr><th>Data</th><th>Valor</th><th>Status</th><th>Meio de pagamento</th></tr></thead>
+          <thead><tr><th>Data da cobrança</th><th>Plano</th><th>Valor</th><th>Tipo</th><th>Meio de pagamento</th><th>Status</th></tr></thead>
           <tbody>
             ${dados.historico.length
-              ? dados.historico.map((h) => `<tr><td>${formatarDataCurtaISO(h.data)}</td><td>${formatarPreco(h.valor)}</td><td>${renderHistoricoStatus(h.status)}</td><td>${formatarMeioHistorico(h.meio)}</td></tr>`).join('')
-              : '<tr><td colspan="4">Nenhuma cobrança registrada ainda.</td></tr>'}
+              ? dados.historico.map((h) => `<tr><td>${formatarDataCurtaISO(h.data)}</td><td>${h.plano_nome || '—'}</td><td>${formatarPreco(h.valor)}</td><td>${h.ciclo || 'Mensal'}</td><td>${formatarMeioHistorico(h.meio)}</td><td>${renderHistoricoStatus(h.status)}</td></tr>`).join('')
+              : '<tr><td colspan="6">Nenhuma cobrança registrada ainda.</td></tr>'}
           </tbody>
         </table>
       </div>
+
+      ${cancelado ? '' : `
+        <div class="pagamento-detalhes">
+          <button type="button" class="pagamento-detalhes-toggle" id="btn-toggle-detalhes" aria-expanded="false">
+            <span class="menu-chevron" aria-hidden="true"></span><span>Alterar forma de pagar</span>
+          </button>
+          <div class="pagamento-detalhes-conteudo" id="pagamento-detalhes-conteudo" hidden>
+            ${htmlFormPagamento(dados, {
+              comBotaoCancelar: false,
+              botoesPequenos: true,
+              botaoExtraHtml: ativo ? '<button type="button" class="btn-perigo btn-pequeno" id="btn-cancelar-assinatura">Cancelar assinatura</button>' : '',
+            })}
+          </div>
+        </div>
+      `}
     `;
   }
 
@@ -2411,10 +2411,12 @@ async function renderPagamentos() {
   const btnTrocarPlano = document.getElementById('btn-trocar-plano');
   if (btnTrocarPlano) btnTrocarPlano.addEventListener('click', () => abrirModalTrocarPlano(dados));
 
-  // Collapse "Detalhes" (US35 redesign) — substitui o antigo botão "Alterar
-  // forma de pagamento" pra assinatura já ativa: o próprio formulário
-  // (htmlFormPagamento) já foi renderizado (oculto) dentro do conteúdo
-  // acima, só falta ligar o toggle e o wiring do formulário/cancelamento.
+  // Collapse "Alterar forma de pagar" (redesenho "Plano") — substitui o
+  // antigo "Detalhes ▾"; o próprio formulário (htmlFormPagamento) já foi
+  // renderizado (oculto) dentro do conteúdo acima, só falta ligar o toggle e
+  // o wiring do formulário/cancelamento. `.expandido` no botão troca o
+  // glifo do `.menu-chevron` (> recolhido / ⌵ expandido, mesma convenção do
+  // menu lateral — ver style.css).
   const btnToggleDetalhes = document.getElementById('btn-toggle-detalhes');
   if (btnToggleDetalhes) {
     btnToggleDetalhes.addEventListener('click', () => {
@@ -2422,6 +2424,7 @@ async function renderPagamentos() {
       const vaiAbrir = painel.hidden;
       painel.hidden = !vaiAbrir;
       btnToggleDetalhes.setAttribute('aria-expanded', String(vaiAbrir));
+      btnToggleDetalhes.classList.toggle('expandido', vaiAbrir);
     });
     wireFormPagamento(dados, { onSucesso: () => renderPagamentos() });
     const btnCancelarAssinatura = document.getElementById('btn-cancelar-assinatura');

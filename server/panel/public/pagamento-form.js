@@ -25,15 +25,23 @@ function formatarDataCurtaISO(dataISO) {
 
 // Formulário de forma de pagamento (US32/US37) — HTML puro reaproveitado
 // tanto no modal de "Cadastrar/Alterar forma de pagamento" (trial, primeira
-// vez, reativação) quanto no collapse "Detalhes" da assinatura já ativa
-// (US35 redesign) quanto na tela de bloqueio pós-trial (US52).
+// vez, reativação) quanto no collapse "Alterar forma de pagar" da assinatura
+// já ativa (redesenho "Plano") quanto na tela de bloqueio pós-trial (US52).
 // `comBotaoCancelar` só existe no uso em modal (fechar sem salvar); o
-// collapse e a tela de bloqueio não precisam.
-function htmlFormPagamento(dadosAtuais, { comBotaoCancelar = true } = {}) {
+// collapse e a tela de bloqueio não precisam. `botoesPequenos`/`botaoExtraHtml`
+// (redesenho "Plano") só usados pelo collapse "Alterar forma de pagar" em
+// renderPagamentos, pra encaixar "Cancelar assinatura" ao lado de "Confirmar"
+// dentro do mesmo .modal-acoes (que já é flex+gap — lado a lado de graça).
+function htmlFormPagamento(dadosAtuais, { comBotaoCancelar = true, botoesPequenos = false, botaoExtraHtml = '' } = {}) {
   const cpfCnpjJaCadastrado = !!dadosAtuais.cpf_cnpj;
   const enderecoJaCadastrado = !!(dadosAtuais.endereco_cep && dadosAtuais.endereco_numero);
   const opcoesUF = UF_OPCOES.map((uf) => `<option value="${uf}" ${uf === dadosAtuais.endereco_uf ? 'selected' : ''}>${uf}</option>`).join('');
   const desabilitarEndereco = enderecoJaCadastrado ? 'disabled' : '';
+  const classeBotao = botoesPequenos ? ' btn-pequeno' : '';
+  // Endereço já cadastrado nasce com o checkbox "Atualizar" desmarcado — os
+  // campos começam desabilitados, então já nasce no visual compacto
+  // também (ver .pagamento-secao-endereco-compacta em style.css).
+  const classeEnderecoCompacto = enderecoJaCadastrado ? ' pagamento-secao-endereco-compacta' : '';
 
   // CA02 (US37) — durante o trial ainda ativo, avisa antes do formulário que
   // o cadastro não cobra na hora; a cobrança só é agendada pro fim do trial
@@ -88,7 +96,7 @@ function htmlFormPagamento(dadosAtuais, { comBotaoCancelar = true } = {}) {
             <input type="checkbox" id="pagamento-atualizar-endereco"> Atualizar endereço de cobrança
           </label>
         ` : ''}
-        <div class="pagamento-grid-3col pagamento-secao-endereco" id="campos-endereco">
+        <div class="pagamento-grid-3col pagamento-secao-endereco${classeEnderecoCompacto}" id="campos-endereco">
           <div class="pagamento-span-3">
             <label for="pagamento-logradouro">Logradouro *</label>
             <input type="text" id="pagamento-logradouro" value="${dadosAtuais.endereco_logradouro || ''}" ${desabilitarEndereco}>
@@ -121,8 +129,9 @@ function htmlFormPagamento(dadosAtuais, { comBotaoCancelar = true } = {}) {
       </div>
 
       <div class="modal-acoes">
-        ${comBotaoCancelar ? '<button type="button" class="btn-secundario" id="btn-cancelar-pagamento">Cancelar</button>' : ''}
-        <button type="submit" class="btn-primario" id="btn-salvar-pagamento">Confirmar</button>
+        ${comBotaoCancelar ? `<button type="button" class="btn-secundario${classeBotao}" id="btn-cancelar-pagamento">Cancelar</button>` : ''}
+        ${botaoExtraHtml}
+        <button type="submit" class="btn-primario${classeBotao}" id="btn-salvar-pagamento">Confirmar</button>
       </div>
     </form>
   `;
@@ -151,6 +160,9 @@ function wireFormPagamento(dadosAtuais, { onFechar, onSucesso } = {}) {
       document.querySelectorAll('#campos-endereco input, #campos-endereco select').forEach((campo) => {
         campo.disabled = !e.target.checked;
       });
+      // Compacto (2 linhas, campos menores) enquanto desmarcado — mesma
+      // convenção do disabled acima (ver .pagamento-secao-endereco-compacta).
+      document.getElementById('campos-endereco').classList.toggle('pagamento-secao-endereco-compacta', !e.target.checked);
     });
   }
 

@@ -45,9 +45,9 @@ async function entrarNoPainel(page, pagamentos, trialStatus) {
   await page.click('.menu-item[data-menu="pagamentos"]');
 }
 
-// Assinatura já ativa (US35 redesign): "Alterar forma de pagamento" vira o
-// collapse "Detalhes" — precisa expandir antes de mexer no formulário ou no
-// botão "Cancelar assinatura" (que fica dentro do collapse).
+// Assinatura já ativa (redesenho "Plano"): "Alterar forma de pagamento" vira
+// o collapse "Alterar forma de pagar" — precisa expandir antes de mexer no
+// formulário ou no botão "Cancelar assinatura" (que fica dentro do collapse).
 async function abrirDetalhesPagamento(page) {
   await page.click('#btn-toggle-detalhes');
   await expect(page.locator('#pagamento-detalhes-conteudo')).toBeVisible();
@@ -80,11 +80,11 @@ test.describe('Pagamentos (US32)', () => {
       proxima_cobranca: { data: '2026-08-01', valor: 247 },
       historico: [{ data: '2026-07-01', valor: 247, status: 'CONFIRMED' }],
     });
-    await expect(page.locator('.financeiro-resumo-card')).toContainText(['Profissional', 'Pix recorrente', 'Ativo']);
-    await expect(page.locator('.status-card-ativo')).toBeVisible();
+    await expect(page.locator('.pagamento-plano-card')).toContainText(['Profissional', 'Pix recorrente', 'Ativo']);
+    await expect(page.locator('.pagamento-plano-card .badge-status-ativo')).toHaveText('Ativo');
     await expect(page.locator('.modal-texto')).toContainText('01/08/2026');
     await expect(page.locator('.tabela-tenants tbody tr').first()).toContainText('01/07/2026');
-    await expect(page.locator('#btn-toggle-detalhes')).toContainText('Detalhes');
+    await expect(page.locator('#btn-toggle-detalhes')).toContainText('Alterar forma de pagar');
   });
 
   test('histórico de cobranças mostra o status colorido (pendente/confirmado/cancelado)', async ({ page }) => {
@@ -109,7 +109,7 @@ test.describe('Pagamentos (US32)', () => {
     await expect(linhas.nth(2).locator('.badge-pagamento-cancelado')).toHaveText('Vencido');
   });
 
-  test('cards de Plano Atual e Meio de pagamento em 3 linhas (PR5)', async ({ page }) => {
+  test('card único de Plano com 3 linhas empilhadas (redesenho "Plano")', async ({ page }) => {
     await entrarNoPainel(page, {
       status: 'ativo',
       plano: 'profissional',
@@ -117,18 +117,19 @@ test.describe('Pagamentos (US32)', () => {
       valor_plano: 247,
       meio_pagamento: 'pix',
       meio_pagamento_alterado_em: '2026-06-01T12:00:00Z',
+      ciclo: 'Mensal',
       cartao_final: null,
       proxima_cobranca: { data: '2026-08-01', valor: 247 },
       historico: [],
     });
 
-    const cards = page.locator('.financeiro-resumo-card-3linhas');
-    await expect(cards.nth(0).locator('.financeiro-resumo-label')).toHaveText('Plano Atual');
-    await expect(cards.nth(0).locator('.financeiro-resumo-linha2')).toHaveText('Profissional');
-    await expect(cards.nth(0).locator('.financeiro-resumo-linha3')).toHaveText('R$ 247,00');
-    await expect(cards.nth(1).locator('.financeiro-resumo-label')).toHaveText('Meio de pagamento');
-    await expect(cards.nth(1).locator('.financeiro-resumo-linha2')).toHaveText('Pix recorrente');
-    await expect(cards.nth(1).locator('.financeiro-resumo-linha3')).toContainText('01/06/2026');
+    const linhas = page.locator('.pagamento-plano-linha');
+    await expect(linhas.nth(0).locator('.pagamento-plano-nome')).toHaveText('Profissional');
+    await expect(linhas.nth(0).locator('.pagamento-plano-valor')).toHaveText('R$ 247,00');
+    await expect(linhas.nth(1)).toContainText('Pix recorrente');
+    await expect(linhas.nth(1)).toContainText('Mensal');
+    await expect(linhas.nth(2).locator('.badge')).toHaveText('Ativo');
+    await expect(linhas.nth(2).locator('#btn-trocar-plano')).toHaveText('Alterar plano');
   });
 
   test('histórico mostra a coluna Meio de pagamento (PR5)', async ({ page }) => {
@@ -146,13 +147,13 @@ test.describe('Pagamentos (US32)', () => {
       ],
     });
 
-    await expect(page.locator('.pagamento-historico-titulo')).toHaveText('Histórico pagamentos');
+    await expect(page.locator('.pagamento-historico-titulo')).toHaveText('Histórico de cobranças');
     const linhas = page.locator('.tabela-tenants tbody tr');
     await expect(linhas.nth(0)).toContainText('Pix');
     await expect(linhas.nth(1)).toContainText('Cartão de crédito');
   });
 
-  test('collapse "Detalhes" começa fechado e abre/fecha ao clicar (PR5)', async ({ page }) => {
+  test('collapse "Alterar forma de pagar" começa fechado, abre/fecha ao clicar e troca o ícone (⌵/>)', async ({ page }) => {
     await entrarNoPainel(page, {
       status: 'ativo',
       plano: 'profissional',
@@ -165,16 +166,20 @@ test.describe('Pagamentos (US32)', () => {
     });
 
     const painel = page.locator('#pagamento-detalhes-conteudo');
+    const btnToggle = page.locator('#btn-toggle-detalhes');
     await expect(painel).toBeHidden();
+    await expect(btnToggle).not.toHaveClass(/expandido/);
     await page.click('#btn-toggle-detalhes');
     await expect(painel).toBeVisible();
-    await expect(painel.locator('h4')).toHaveText('Alterar forma de pagamento');
+    await expect(painel.locator('#form-pagamento')).toBeVisible();
+    await expect(btnToggle).toHaveClass(/expandido/);
     await page.click('#btn-toggle-detalhes');
     await expect(painel).toBeHidden();
+    await expect(btnToggle).not.toHaveClass(/expandido/);
   });
 
-  for (const [status, classeEsperada] of [['ativo', 'status-card-ativo'], ['inadimplente', 'status-card-pendente'], ['suspenso', 'status-card-inativo']]) {
-    test(`card de Status usa a cor certa pro status "${status}" (PR5)`, async ({ page }) => {
+  for (const [status, classeBadgeEsperada] of [['ativo', 'badge-status-ativo'], ['inadimplente', 'badge-status-inadimplente'], ['suspenso', 'badge-status-suspenso']]) {
+    test(`badge de Status usa a cor certa pro status "${status}" (redesenho "Plano")`, async ({ page }) => {
       await entrarNoPainel(page, {
         status,
         plano: 'profissional',
@@ -185,7 +190,7 @@ test.describe('Pagamentos (US32)', () => {
         proxima_cobranca: { data: '2026-08-01', valor: 247 },
         historico: [],
       });
-      await expect(page.locator(`.${classeEsperada}`)).toBeVisible();
+      await expect(page.locator(`.pagamento-plano-card .${classeBadgeEsperada}`)).toBeVisible();
     });
   }
 
@@ -616,7 +621,7 @@ test.describe('Cancelamento de assinatura (US35)', () => {
       historico: [],
     });
 
-    await expect(page.locator('.status-card-inativo .financeiro-resumo-linha2')).toHaveText('Cancelado');
+    await expect(page.locator('.pagamento-plano-card .badge-status-inativo')).toHaveText('Cancelado');
     await expect(page.locator('.modal-texto')).toContainText('01/08/2026');
     await expect(page.locator('#btn-reativar-pagamento')).toHaveText('Reativar assinatura');
     await expect(page.locator('#btn-cadastrar-pagamento')).toHaveCount(0);

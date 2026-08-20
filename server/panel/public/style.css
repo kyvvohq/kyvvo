@@ -336,7 +336,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 .menu-item-grupo {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
   padding: 10px 14px;
   cursor: pointer;
   color: #a1a5c4;
@@ -349,12 +349,15 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 .menu-item-grupo:hover { color: #f2f2f7; background: rgba(124, 92, 252, 0.08); }
 .menu-item-grupo.tem-filho-ativo { color: #f2f2f7; background: rgba(124, 92, 252, 0.15); border-left-color: var(--accent); }
 
-/* Seta pra baixo (recolhido) / pra cima (expandido) — glifo trocado de
-   verdade via ::before em vez de rotacionar um triângulo só, pedido
-   explícito do Bruno (⌵ / ⌃, não mais o "ponto" ▾ girando). */
-.menu-chevron { font-size: 13px; line-height: 1; }
-.menu-chevron::before { content: '⌵'; }
-.menu-item-grupo.expandido .menu-chevron::before { content: '⌃'; }
+/* Ícone antes do texto, glifo trocado de verdade via ::before (não rotação
+   de triângulo): ">" recolhido / "⌵" expandido — pedido explícito do
+   Bruno. Convenção reaproveitada em qualquer expansor do painel (não só
+   o menu lateral): quem controla o estado só alterna `.expandido` no
+   elemento pai do `.menu-chevron` (ver "Alterar forma de pagar" em
+   pagamentos). */
+.menu-chevron { font-size: 13px; line-height: 1; width: 12px; text-align: center; display: inline-block; }
+.menu-chevron::before { content: '>'; }
+.expandido .menu-chevron::before { content: '⌵'; }
 
 .menu-submenu {
   display: none;
@@ -1291,6 +1294,9 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 .pagamento-detalhes { margin-bottom: 16px; }
 .pagamento-detalhes-toggle {
   width: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   background: transparent;
   border: 1px solid #2a2f52;
   color: #a688ff;
@@ -1308,6 +1314,34 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 .pagamento-detalhes-conteudo h4 { margin: 0 0 12px; font-size: 14px; }
 .pagamento-historico-titulo { margin: 20px 0 10px; font-size: 14px; }
+
+/* Redesenho "Plano" — card único com as 3 linhas (plano+valor / meio+ciclo /
+   status+ação) no lugar dos 3 cards lado a lado de antes; status agora é
+   badge (mesmo padrão do histórico) em vez de tingir o card inteiro. */
+.pagamento-plano-card {
+  background: #12162a;
+  border: 1px solid #232847;
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+.pagamento-plano-linha {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.pagamento-plano-linha + .pagamento-plano-linha { margin-top: 10px; padding-top: 10px; border-top: 1px solid #232847; }
+.pagamento-plano-linha button { width: auto; margin: 0; }
+.pagamento-plano-nome, .pagamento-plano-valor { font-size: 17px; font-weight: 700; color: #f2f2f7; }
+.pagamento-plano-linha-secundaria { font-size: 13px; color: #a1a5c4; }
+.pagamento-plano-linha-secundaria .badge { margin-left: 0; }
+
+.pagamento-secao-divisor { border-top: 1px solid #232847; margin: 24px 0 20px; }
+
+/* Botões menores lado a lado abaixo do formulário de forma de pagamento
+   (redesenho "Plano") — cabem dentro de .modal-acoes, que já é flex+gap. */
+.btn-pequeno { padding: 7px 16px; font-size: 12.5px; }
 
 .dia-cel {
   position: relative;
@@ -1631,6 +1665,22 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   .pagamento-grid-2col,
   .pagamento-grid-3col { grid-template-columns: 1fr; }
   .pagamento-span-3 { grid-column: auto; }
+}
+
+/* Endereço de cobrança compacto (redesenho "Plano") — enquanto o checkbox
+   "Atualizar endereço de cobrança" não está marcado, os campos ficam
+   desabilitados (somente leitura); nesse estado, comprime pra 2 linhas em
+   vez das 3 do layout normal (4 colunas: Logradouro ocupa 2, CEP+Número
+   fecham a primeira linha, os outros 4 campos fecham a segunda). Classe
+   alternada via JS junto com o disabled (ver wireFormPagamento). */
+.pagamento-secao-endereco-compacta { grid-template-columns: repeat(4, 1fr); gap: 0 10px; }
+.pagamento-secao-endereco-compacta .pagamento-span-3 { grid-column: span 2; }
+.pagamento-secao-endereco-compacta label { font-size: 10px; margin-top: 0; }
+.pagamento-secao-endereco-compacta input,
+.pagamento-secao-endereco-compacta select { padding: 5px 8px; font-size: 12px; }
+@media (max-width: 640px) {
+  .pagamento-secao-endereco-compacta { grid-template-columns: 1fr 1fr; }
+  .pagamento-secao-endereco-compacta .pagamento-span-3 { grid-column: 1 / -1; }
 }
 
 /* Variante larga genérica de .modal-card — formulários com muitos campos

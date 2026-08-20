@@ -4690,6 +4690,12 @@ async function start() {
       meio_pagamento: tenant.asaas_meio_pagamento,
       meio_pagamento_alterado_em: tenant.asaas_meio_pagamento_alterado_em,
       cartao_final: tenant.asaas_cartao_final,
+      // `ciclo` — hoje toda subscription nasce mensal (asaas-service.js
+      // criarSubscription hardcoda `cycle: 'MONTHLY'`, não existe fluxo de
+      // contratação anual ainda), mas lê de `subscription.cycle` em vez de
+      // hardcodar aqui pra já ficar certo no dia em que a Asaas devolver
+      // YEARLY (troca de ciclo direto no painel deles, por exemplo).
+      ciclo: subscription && subscription.cycle === 'YEARLY' ? 'Anual' : 'Mensal',
       cpf_cnpj: tenant.cpf_cnpj,
       endereco_cep: tenant.endereco_cep,
       endereco_logradouro: tenant.endereco_logradouro,
@@ -4705,13 +4711,21 @@ async function start() {
       // configurações já usadas em GET /api/tenant/status.
       suporte_email: EMAIL_SUPORTE,
       suporte_whatsapp: WHATSAPP_SUPORTE,
-      proxima_cobranca: subscription ? { data: subscription.nextDueDate, valor: subscription.value } : null,
+      proxima_cobranca: subscription
+        ? { plano_nome: planoInfo ? planoInfo.nome : null, data: subscription.nextDueDate, valor: subscription.value }
+        : null,
       // `meio` (PR5) — a Asaas já devolve billingType (PIX/CREDIT_CARD) em
       // cada cobrança do histórico; não precisa de coluna nova nem de nova
       // integração, só repassar o campo que já vinha no payload bruto.
+      // `plano_nome`/`ciclo` por linha — a Asaas não guarda o plano Kyvvo por
+      // cobrança histórica (troca de plano reaproveita a mesma subscription,
+      // ver PATCH /api/pagamentos/plano), então usa o plano/ciclo *atuais*
+      // pra todo o histórico — simplificação documentada, não um bug.
       historico: historico.map((p) => ({
         data: p.dueDate,
+        plano_nome: planoInfo ? planoInfo.nome : null,
         valor: p.value,
+        ciclo: subscription && subscription.cycle === 'YEARLY' ? 'Anual' : 'Mensal',
         status: p.status,
         meio: p.billingType,
       })),
