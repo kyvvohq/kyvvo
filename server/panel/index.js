@@ -226,6 +226,69 @@ function diaDaSemanaBrasilia(dataISO) {
   return new Date(new Date(dataISO).getTime() - OFFSET_BRASILIA_MINUTOS * 60000).getUTCDay();
 }
 
+// ---------- Feriados nacionais (Configurações > Bloqueio de agenda) ----------
+// Calcula o domingo de Páscoa pelo algoritmo Anônimo Gregoriano (Meeus/Jones/
+// Butcher) — os 3 feriados móveis (Carnaval seg/ter, Sexta-feira Santa,
+// Corpus Christi) são deslocamentos fixos em dias a partir dela. Puro cálculo
+// de calendário, sem tabela nem chamada externa — por isso o switch em
+// tenants.feriados_bloqueados (migration 062) nunca "vence": o ano é sempre
+// derivado da própria data checada.
+function calcularPascoa(ano) {
+  const a = ano % 19;
+  const b = Math.floor(ano / 100);
+  const c = ano % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const mes = Math.floor((h + l - 7 * m + 114) / 31); // 3=março, 4=abril
+  const dia = ((h + l - 7 * m + 114) % 31) + 1;
+  return { mes, dia };
+}
+
+// Lista dos feriados nacionais do Brasil pro ano dado: os 8 fixos por lei
+// (Lei 6.802/80 + 10.607/2002) + os 4 móveis de uso comercial consolidado
+// (Carnaval, embora seja ponto facultativo e não feriado decretado por lei
+// federal, entra porque é assim que qualquer calendário/comércio brasileiro
+// trata). `mes` é 1-indexado (1=janeiro), pra bater com o formato DD/MM
+// exibido no frontend.
+function listarFeriadosNacionais(ano) {
+  const pascoa = calcularPascoa(ano);
+  const pascoaUtc = Date.UTC(ano, pascoa.mes - 1, pascoa.dia);
+  const deslocarDaPascoa = (offsetDias) => {
+    const d = new Date(pascoaUtc + offsetDias * 86400000);
+    return { mes: d.getUTCMonth() + 1, dia: d.getUTCDate() };
+  };
+  const carnavalSegunda = deslocarDaPascoa(-48);
+  const carnavalTerca = deslocarDaPascoa(-47);
+  const sextaSanta = deslocarDaPascoa(-2);
+  const corpusChristi = deslocarDaPascoa(60);
+
+  return [
+    { nome: 'Confraternização Universal', mes: 1, dia: 1 },
+    { nome: 'Carnaval', mes: carnavalSegunda.mes, dia: carnavalSegunda.dia },
+    { nome: 'Carnaval', mes: carnavalTerca.mes, dia: carnavalTerca.dia },
+    { nome: 'Sexta-feira Santa', mes: sextaSanta.mes, dia: sextaSanta.dia },
+    { nome: 'Tiradentes', mes: 4, dia: 21 },
+    { nome: 'Dia do Trabalho', mes: 5, dia: 1 },
+    { nome: 'Corpus Christi', mes: corpusChristi.mes, dia: corpusChristi.dia },
+    { nome: 'Independência do Brasil', mes: 9, dia: 7 },
+    { nome: 'Nossa Senhora Aparecida', mes: 10, dia: 12 },
+    { nome: 'Finados', mes: 11, dia: 2 },
+    { nome: 'Proclamação da República', mes: 11, dia: 15 },
+    { nome: 'Natal', mes: 12, dia: 25 },
+  ].sort((x, y) => x.mes - y.mes || x.dia - y.dia);
+}
+
+function ehFeriadoNacional(ano, mes, dia) {
+  return listarFeriadosNacionais(ano).some((f) => f.mes === mes && f.dia === dia);
+}
+
 // Valida um agendamento (dia da semana + intervalo abertura/fechamento +
 // intervalo de almoço, se ativo) contra a configuração de horário do tenant.
 // `duracaoMinutos` (padrão 0) deixa o fim do agendamento também respeitar o
@@ -235,6 +298,16 @@ function dentroDoHorarioFuncionamento(tenant, dataHoraISO, duracaoMinutos = 0) {
   const diasFuncionamento = tenant.dias_funcionamento || [1, 2, 3, 4, 5, 6];
   if (!diasFuncionamento.includes(diaDaSemanaBrasilia(dataHoraISO))) {
     return { valido: false, motivo: 'O estabelecimento não abre nesse dia.' };
+  }
+
+  // componentesBrasilia é declarada mais abaixo no arquivo, mas function
+  // declaration é hoisted — chamada aqui é segura (só roda em tempo de
+  // request, bem depois do módulo inteiro já ter carregado).
+  if (tenant.feriados_bloqueados) {
+    const { ano, mes, dia } = componentesBrasilia(dataHoraISO);
+    if (ehFeriadoNacional(ano, mes + 1, dia)) {
+      return { valido: false, motivo: 'Essa data é feriado nacional — agenda fechada.' };
+    }
   }
 
   const inicioMinutos = minutosNoDia(dataHoraISO);
@@ -325,19 +398,26 @@ function proximaOcorrenciaRecorrencia(ancora, tipo, n) {
   return { ...ancora, ano: normalizado.getUTCFullYear(), mes: normalizado.getUTCMonth(), dia: normalizado.getUTCDate() };
 }
 
-// Empurra pro primeiro dia seguinte presente em `dias_funcionamento`,
-// mantendo o mesmo horário — mesma regra já usada em PATCH
-// /api/configuracoes quando o expediente muda e um agendamento existente
-// cai num dia que deixou de funcionar. Limite de 14 tentativas (uma volta
-// completa da semana): trava de segurança contra loop infinito se
-// dias_funcionamento vier vazio. Não precisa reconferir abertura/fechamento/
-// almoço — esses três são fixos pro tenant inteiro (não variam por dia da
-// semana), então se o horário da âncora já passou nessa validação, continua
-// válido em qualquer outro dia, só o dia em si pode estar fechado.
-function empurrarProximoDiaAberto(componentes, diasFuncionamento) {
+// Empurra pro primeiro dia seguinte presente em `dias_funcionamento` (e, se
+// `feriadosBloqueados`, que também não seja feriado nacional), mantendo o
+// mesmo horário — mesma regra já usada em PATCH /api/configuracoes quando o
+// expediente muda e um agendamento existente cai num dia que deixou de
+// funcionar; reaproveitada pelo switch de feriados (bloqueio de agenda) pra
+// mover pro primeiro dia útil quem já estava marcado num feriado. Limite de
+// 14 tentativas (uma volta completa da semana): trava de segurança contra
+// loop infinito se dias_funcionamento vier vazio. Não precisa reconferir
+// abertura/fechamento/almoço — esses três são fixos pro tenant inteiro (não
+// variam por dia da semana), então se o horário da âncora já passou nessa
+// validação, continua válido em qualquer outro dia, só o dia em si pode
+// estar fechado/feriado.
+function empurrarProximoDiaAberto(componentes, diasFuncionamento, feriadosBloqueados = false) {
   let atual = componentes;
   let tentativas = 0;
-  while (!diasFuncionamento.includes(diaDaSemanaBrasilia(isoDeComponentesBrasilia(atual))) && tentativas < 14) {
+  const fechado = (c) => {
+    if (!diasFuncionamento.includes(diaDaSemanaBrasilia(isoDeComponentesBrasilia(c)))) return true;
+    return feriadosBloqueados && ehFeriadoNacional(c.ano, c.mes + 1, c.dia);
+  };
+  while (fechado(atual) && tentativas < 14) {
     const proximoDia = new Date(Date.UTC(atual.ano, atual.mes, atual.dia + 1));
     atual = { ...atual, ano: proximoDia.getUTCFullYear(), mes: proximoDia.getUTCMonth(), dia: proximoDia.getUTCDate() };
     tentativas += 1;
@@ -1484,7 +1564,7 @@ async function start() {
   const TENANT_CAMPOS_WEBHOOK = `id, nome, telefone, instancia_whatsapp, meta_phone_number_id, tecnologia,
                 dias_funcionamento, horario_abertura, horario_fechamento,
                 horario_almoco_ativo, horario_almoco_inicio, horario_almoco_fim,
-                onboarding_horario_revisado`;
+                onboarding_horario_revisado, feriados_bloqueados`;
 
   // US68.2 — handshake de verificação do webhook da Meta (App Dashboard →
   // WhatsApp → Configuração → Webhook, chamado uma vez ao salvar a URL e
@@ -2120,7 +2200,7 @@ async function start() {
       // salão (dias/abertura/fechamento/almoço), igual ao POST /agendamentos.
       const { rows: tenantRows } = await pool.query(
         `SELECT dias_funcionamento, horario_abertura, horario_fechamento,
-                horario_almoco_ativo, horario_almoco_inicio, horario_almoco_fim
+                horario_almoco_ativo, horario_almoco_inicio, horario_almoco_fim, feriados_bloqueados
          FROM tenants WHERE id = $1`,
         [tenantId]
       );
@@ -2225,7 +2305,7 @@ async function start() {
 
     const { rows: tenantRows } = await pool.query(
       `SELECT dias_funcionamento, horario_abertura, horario_fechamento,
-              horario_almoco_ativo, horario_almoco_inicio, horario_almoco_fim
+              horario_almoco_ativo, horario_almoco_inicio, horario_almoco_fim, feriados_bloqueados
        FROM tenants WHERE id = $1`,
       [tenantId]
     );
@@ -2237,6 +2317,12 @@ async function start() {
     // data em si, já que `data` já vem como "YYYY-MM-DD").
     if (!diasFuncionamento.includes(diaDaSemanaBrasilia(`${data}T12:00:00-03:00`))) {
       return { data, profissional, servico, duracaoMinutos: servicoInfo.duracao_minutos, slots: [] };
+    }
+    if (tenant.feriados_bloqueados) {
+      const [anoData, mesData, diaData] = data.split('-').map(Number);
+      if (ehFeriadoNacional(anoData, mesData, diaData)) {
+        return { data, profissional, servico, duracaoMinutos: servicoInfo.duracao_minutos, slots: [] };
+      }
     }
 
     const horarioAberturaMinutos = horarioParaMinutos(tenant.horario_abertura);
@@ -2862,6 +2948,73 @@ async function start() {
     return { ok: true };
   });
 
+  // ---------- Feriados nacionais (Configurações > Bloqueio de agenda) ----------
+  // Um switch só (não um bloqueio por feriado): a lista em si não é editável
+  // (calculada, não persistida — ver listarFeriadosNacionais), só o
+  // habilitado/desabilitado por tenant.
+  fastify.get('/api/feriados', { preHandler: [fastify.authenticate] }, async (request) => {
+    const { tenantId } = request.user;
+    const { rows } = await pool.query('SELECT feriados_bloqueados FROM tenants WHERE id = $1', [tenantId]);
+    const anoAtual = componentesBrasilia(new Date().toISOString()).ano;
+    return {
+      habilitado: rows[0] ? rows[0].feriados_bloqueados : false,
+      feriados: listarFeriadosNacionais(anoAtual),
+    };
+  });
+
+  fastify.patch('/api/feriados', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const { tenantId } = request.user;
+    const { habilitado } = request.body || {};
+    if (typeof habilitado !== 'boolean') {
+      return reply.code(400).send({ error: 'Campo "habilitado" é obrigatório (true/false).' });
+    }
+
+    let agendamentosMovidos = 0;
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      if (habilitado) {
+        const { rows: tenantRows } = await client.query(
+          'SELECT dias_funcionamento FROM tenants WHERE id = $1 FOR UPDATE',
+          [tenantId]
+        );
+        const diasFuncionamento = tenantRows[0].dias_funcionamento || [1, 2, 3, 4, 5, 6];
+
+        // Mesmo raciocínio do reagendamento em cascata de PATCH
+        // /api/configuracao (dias_funcionamento mudando): só agendamentos
+        // futuros e confirmados que caem num feriado são movidos, pro mesmo
+        // horário no primeiro dia útil seguinte, sem checar colisão com
+        // outro agendamento já existente nesse dia — comportamento simples,
+        // equivalente a um reagendamento manual apressado (mesma decisão já
+        // tomada pro caso de dias_funcionamento). O frontend já confirmou
+        // essa consequência num popup antes de chamar este PATCH.
+        const { rows: futuros } = await client.query(
+          `SELECT id, data_hora FROM agendamentos WHERE tenant_id = $1 AND status = 'confirmado' AND data_hora > now()`,
+          [tenantId]
+        );
+        for (const ag of futuros) {
+          const comp = componentesBrasilia(ag.data_hora);
+          if (!ehFeriadoNacional(comp.ano, comp.mes + 1, comp.dia)) continue;
+          const resolvido = empurrarProximoDiaAberto(comp, diasFuncionamento, true);
+          if (!resolvido) continue; // trava de segurança (dias_funcionamento vazio) — não deveria acontecer na prática
+          await client.query('UPDATE agendamentos SET data_hora = $1 WHERE id = $2', [isoDeComponentesBrasilia(resolvido), ag.id]);
+          agendamentosMovidos++;
+        }
+      }
+
+      await client.query('UPDATE tenants SET feriados_bloqueados = $2 WHERE id = $1', [tenantId, habilitado]);
+      await client.query('COMMIT');
+    } catch (erro) {
+      await client.query('ROLLBACK');
+      throw erro;
+    } finally {
+      client.release();
+    }
+
+    return { habilitado, agendamentos_movidos: agendamentosMovidos };
+  });
+
   fastify.post('/api/agendamentos', { preHandler: [fastify.authenticate] }, async (request, reply) => {
     const { tenantId } = request.user;
     const {
@@ -2938,7 +3091,7 @@ async function start() {
     // sobrepor um horário já ocupado, não funcionar fora do expediente.
     const { rows: tenantRows } = await pool.query(
       `SELECT dias_funcionamento, horario_abertura, horario_fechamento,
-              horario_almoco_ativo, horario_almoco_inicio, horario_almoco_fim
+              horario_almoco_ativo, horario_almoco_inicio, horario_almoco_fim, feriados_bloqueados
        FROM tenants WHERE id = $1`,
       [tenantId]
     );
@@ -3010,7 +3163,7 @@ async function start() {
         const bruto = proximaOcorrenciaRecorrencia(ancoraComponentes, recorrencia.tipo, n);
         if (dataDiaISO(bruto) > recorrencia.ate) break;
 
-        const resolvido = empurrarProximoDiaAberto(bruto, diasFuncionamento);
+        const resolvido = empurrarProximoDiaAberto(bruto, diasFuncionamento, tenantRows[0].feriados_bloqueados);
         if (!resolvido) {
           ocorrenciasPuladas.push({ data: dataDiaISO(bruto), motivo: 'Nenhum dia de funcionamento disponível próximo a essa data.' });
           n += 1;
@@ -3313,6 +3466,38 @@ async function start() {
     }
 
     return buscarPerfil(userId);
+  });
+
+  // Alterar senha (Meu Perfil) — mesma validação de SENHA_REGEX do cadastro
+  // e do "esqueci minha senha" (POST /api/auth/redefinir-senha). Diferente
+  // daquele fluxo, aqui exige a senha atual (usuário já está autenticado,
+  // não veio de um código por e-mail). token_version++ derruba a sessão
+  // atual e qualquer outra aberta — mesmo efeito de segurança da
+  // redefinição por e-mail: depois de trocar a senha, precisa logar de novo.
+  fastify.patch('/api/perfil/senha', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const { userId } = request.user;
+    const { senha_atual: senhaAtual, senha_nova: senhaNova } = request.body || {};
+
+    if (!SENHA_REGEX.test(senhaNova || '')) {
+      return reply.code(400).send({
+        error: 'A senha deve ter no mínimo 8 caracteres, 1 número e 1 letra maiúscula.',
+      });
+    }
+
+    const { rows } = await pool.query('SELECT senha_hash FROM usuarios WHERE id = $1', [userId]);
+    const usuario = rows[0];
+    const senhaValida = usuario && (await bcrypt.compare(senhaAtual || '', usuario.senha_hash));
+    if (!senhaValida) {
+      return reply.code(400).send({ error: 'Senha atual incorreta.' });
+    }
+
+    const hash = await bcrypt.hash(senhaNova, 10);
+    await pool.query(
+      'UPDATE usuarios SET senha_hash = $1, token_version = token_version + 1 WHERE id = $2',
+      [hash, userId]
+    );
+
+    return { ok: true };
   });
 
   // ---------- Equipe (US62) ----------
@@ -3671,6 +3856,38 @@ async function start() {
       status.erro = `Falha ao contatar a Meta: ${err.message}`;
     }
     return status;
+  });
+
+  // Lista de conversas do WhatsApp (submenu Configurações > WhatsApp) — um
+  // registro por cliente, com a atividade mais recente em `conversas_ia`.
+  // Só tem dados reais pra tenants em modo IA (conversas_ia só é populada
+  // por processarMensagemIA); tenants em modo bot (menus) devolvem lista
+  // vazia, o que é esperado, não um bug — o bot de menus não guarda
+  // transcript de conversa nesse formato.
+  fastify.get('/api/whatsapp/conversas', { preHandler: [fastify.authenticate] }, async (request) => {
+    const { tenantId } = request.user;
+    const { rows: tenantRows } = await pool.query('SELECT nome FROM tenants WHERE id = $1', [tenantId]);
+    const tenantNome = tenantRows[0] ? tenantRows[0].nome : null;
+
+    const { rows } = await pool.query(
+      `SELECT c.nome, c.telefone, c.status_conversa, MAX(ci.criado_em) AS ultima_mensagem_em
+       FROM clientes c
+       JOIN conversas_ia ci ON ci.cliente_id = c.id
+       WHERE c.tenant_id = $1
+       GROUP BY c.id, c.nome, c.telefone, c.status_conversa
+       ORDER BY ultima_mensagem_em DESC
+       LIMIT 50`,
+      [tenantId]
+    );
+
+    return {
+      tenant_nome: tenantNome,
+      conversas: rows.map((r) => ({
+        cliente_nome: r.nome,
+        telefone: r.telefone,
+        status_conversa: r.status_conversa,
+      })),
+    };
   });
 
   // CA (US39.1) — pedido de "Novo número": passos 2/3 da jornada (coleta de

@@ -20,6 +20,9 @@ async function entrarNoWhatsapp(page, { status, config = { appId: null, configId
     return route.fulfill({ json: status });
   });
   await page.route('**/api/whatsapp/config-publica', (route) => route.fulfill({ json: config }));
+  // Lista de conversas (redesenho "WhatsApp") — mock padrão vazio, os testes
+  // desta suíte não exercitam essa seção, só a de conexão/número novo.
+  await page.route('**/api/whatsapp/conversas', (route) => route.fulfill({ json: { tenant_nome: 'Salão Kyvvo Teste', conversas: [] } }));
   await page.addInitScript(() => {
     window.localStorage.setItem('kyvvo_token', 'fake-jwt-token');
     window.localStorage.setItem('kyvvo_nome', 'Ana');
@@ -111,5 +114,46 @@ test.describe('WhatsApp — pedido de número pronto (US39.1)', () => {
 
     await expect(page.locator('.whatsapp-planos-info')).toHaveCount(0);
     await expect(page.locator('#btn-pedir-numero-novo')).toHaveCount(0);
+  });
+});
+
+test.describe('WhatsApp — status em linha única e lista de conversas (redesenho)', () => {
+  test('status conectado aparece numa única linha, sem os 3 cards de antes', async ({ page }) => {
+    await entrarNoWhatsapp(page, {
+      status: { conectado: true, phoneNumberId: '123456', numeroExibido: '+55 34 98888-7777', nomeVerificado: 'Salão Kyvvo', qualidade: 'GREEN', pedidoNumeroNovo: null },
+    });
+
+    await expect(page.locator('.pagamento-plano-card .pagamento-plano-linha')).toHaveCount(1);
+    await expect(page.locator('.pagamento-plano-card')).toContainText('+55 34 98888-7777');
+    await expect(page.locator('.pagamento-plano-card')).toContainText('Salão Kyvvo');
+    await expect(page.locator('.pagamento-plano-card')).toContainText('GREEN');
+  });
+
+  test('lista as conversas com as 4 colunas (Conversa/Whatsapp/Status/Atendimento)', async ({ page }) => {
+    await entrarNoWhatsapp(page, { status: { conectado: false, phoneNumberId: null, pedidoNumeroNovo: null } });
+    await page.route('**/api/whatsapp/conversas', (route) => route.fulfill({
+      json: {
+        tenant_nome: 'Salão Kyvvo Teste',
+        conversas: [
+          { cliente_nome: 'Ana Souza', telefone: '34999998888', status_conversa: 'ativo' },
+          { cliente_nome: 'Bia Lima', telefone: '34988887777', status_conversa: 'aguardando_humano' },
+        ],
+      },
+    }));
+    await page.goto('/painel.html');
+    await page.click('#menu-config-toggle');
+    await page.click('.menu-item[data-menu="whatsapp"]');
+
+    const linhas = page.locator('.tabela-tenants tbody tr');
+    await expect(linhas).toHaveCount(2);
+    await expect(linhas.nth(0)).toContainText('Ana Souza');
+    await expect(linhas.nth(0)).toContainText('🤖 Kyvvo');
+    await expect(linhas.nth(1)).toContainText('Bia Lima');
+    await expect(linhas.nth(1)).toContainText('Salão Kyvvo Teste');
+  });
+
+  test('sem conversas registradas, mostra mensagem vazia na tabela', async ({ page }) => {
+    await entrarNoWhatsapp(page, { status: { conectado: false, phoneNumberId: null, pedidoNumeroNovo: null } });
+    await expect(page.locator('.tabela-tenants tbody')).toContainText('Nenhuma conversa registrada ainda.');
   });
 });

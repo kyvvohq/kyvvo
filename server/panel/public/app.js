@@ -3308,8 +3308,11 @@ function renderBloqueioItem(b) {
 
 async function renderBloqueios() {
   conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
-  const dataBloqueios = await api('/api/bloqueios');
-  if (!dataBloqueios) return;
+  const [dataBloqueios, dataFeriados] = await Promise.all([
+    api('/api/bloqueios'),
+    api('/api/feriados'),
+  ]);
+  if (!dataBloqueios || !dataFeriados) return;
   bloqueiosAtuais = dataBloqueios.bloqueios;
 
   let html = `
@@ -3317,6 +3320,31 @@ async function renderBloqueios() {
       <strong>Bloqueio de agenda</strong>
       <button class="btn-novo-agendamento" id="btn-novo-bloqueio">+ Novo bloqueio</button>
     </div>
+
+    <h3 class="inicio-secao-titulo">Feriados nacionais</h3>
+    <div class="pagamento-plano-card" style="margin-bottom:16px">
+      <div class="pagamento-plano-linha">
+        <span>Bloquear feriados nacionais para agendamento</span>
+        <label class="toggle-linha">
+          <span class="toggle-switch">
+            <input type="checkbox" id="toggle-feriados" ${dataFeriados.habilitado ? 'checked' : ''}>
+            <span class="toggle-switch-trilho"></span>
+          </span>
+          <span id="toggle-feriados-texto">${dataFeriados.habilitado ? 'Desabilitar' : 'Habilitar'}</span>
+        </label>
+      </div>
+    </div>
+    <div class="relatorios-status-lista" style="margin-bottom:24px">
+      ${dataFeriados.feriados.map((f) => `
+        <div class="relatorios-status-linha">
+          <span>${escapeHtml(f.nome)}</span>
+          <span>${String(f.dia).padStart(2, '0')}/${String(f.mes).padStart(2, '0')}</span>
+        </div>
+      `).join('')}
+    </div>
+
+    <div class="pagamento-secao-divisor"></div>
+    <h3 class="inicio-secao-titulo">Bloqueios manuais</h3>
   `;
   html += bloqueiosAtuais.length
     ? bloqueiosAtuais.map(renderBloqueioItem).join('')
@@ -3324,6 +3352,66 @@ async function renderBloqueios() {
 
   conteudo.innerHTML = html;
   document.getElementById('btn-novo-bloqueio').addEventListener('click', () => abrirModalBloqueio());
+  wireToggleFeriados();
+}
+
+// Feriados nacionais não são editáveis (calculados, ver listarFeriadosNacionais
+// no backend) — só o switch. Habilitar pede confirmação num modal (não
+// window.confirm nativo, pra ficar no mesmo visual do resto do app) porque
+// move agendamentos já marcados num feriado pro primeiro dia útil seguinte;
+// desabilitar não precisa de confirmação (não é destrutivo, só libera as
+// datas de novo).
+function wireToggleFeriados() {
+  const toggle = document.getElementById('toggle-feriados');
+  const textoToggle = document.getElementById('toggle-feriados-texto');
+
+  async function salvarFeriados(habilitado) {
+    toggle.disabled = true;
+    const resultado = await api('/api/feriados', {
+      method: 'PATCH',
+      body: JSON.stringify({ habilitado }),
+    });
+    if (resultado && !resultado.error) {
+      const mensagem = habilitado
+        ? (resultado.agendamentos_movidos > 0
+          ? `Feriados nacionais bloqueados. ${resultado.agendamentos_movidos} agendamento(s) movido(s) para o primeiro dia útil disponível.`
+          : 'Feriados nacionais bloqueados para agendamento.')
+        : 'Feriados nacionais liberados para agendamento novamente.';
+      mostrarToast(mensagem, 'sucesso');
+      textoToggle.textContent = habilitado ? 'Desabilitar' : 'Habilitar';
+      toggle.disabled = false;
+    } else {
+      toggle.checked = !habilitado;
+      toggle.disabled = false;
+      mostrarToast((resultado && resultado.error) || 'Erro ao salvar. Tente novamente.', 'erro');
+    }
+  }
+
+  toggle.addEventListener('change', () => {
+    const vaiHabilitar = toggle.checked;
+    if (!vaiHabilitar) {
+      salvarFeriados(false);
+      return;
+    }
+    abrirModal(
+      '<h3>Bloquear feriados nacionais</h3>',
+      `
+        <p class="modal-texto">Nenhum cliente vai conseguir marcar horário em feriado nacional. Se já existir algum agendamento confirmado numa dessas datas, ele será movido automaticamente para o primeiro dia útil disponível, no mesmo horário.</p>
+        <div class="modal-acoes">
+          <button class="btn-secundario" id="btn-cancelar-feriados">Cancelar</button>
+          <button class="btn-primario" id="btn-confirmar-feriados">Confirmar</button>
+        </div>
+      `
+    );
+    document.getElementById('btn-cancelar-feriados').addEventListener('click', () => {
+      toggle.checked = false;
+      fecharModal();
+    });
+    document.getElementById('btn-confirmar-feriados').addEventListener('click', async () => {
+      fecharModal();
+      await salvarFeriados(true);
+    });
+  });
 }
 
 function abrirModalBloqueio() {
@@ -4290,10 +4378,33 @@ function formatarCepMascara(valor) {
   return digitos.length > 5 ? `${digitos.slice(0, 5)}-${digitos.slice(5)}` : digitos;
 }
 
+// Mesma regra validada no backend (index.js SENHA_REGEX) — mantida em
+// sincronia. Reaproveita o checklist visual de requisitos já usado no
+// cadastro (cadastro.html) pra "Alterar senha" em Meu Perfil.
+const SENHA_REGEX = /^(?=.*[A-Z])(?=.*\d).{8,}$/;
+const REQUISITOS_SENHA = {
+  tamanho: (v) => v.length >= 8,
+  maiuscula: (v) => /[A-Z]/.test(v),
+  numero: (v) => /\d/.test(v),
+};
+
+function wireToggleSenha(inputId, botaoId) {
+  const input = document.getElementById(inputId);
+  const botao = document.getElementById(botaoId);
+  botao.addEventListener('click', () => {
+    const oculta = input.type === 'password';
+    input.type = oculta ? 'text' : 'password';
+    botao.textContent = oculta ? '🙈' : '👁';
+    botao.setAttribute('aria-label', oculta ? 'Ocultar senha' : 'Mostrar senha');
+  });
+}
+
 // Meu Perfil (dados pessoais, PR12) — Nome do Responsável, Telefone+WhatsApp,
 // E-mail. Nome do negócio/Endereço saíram pra renderMinhaEmpresa() logo
 // abaixo; as duas telas salvam via PATCH /api/perfil, cada uma enviando só
 // o grupo de campo que lhe cabe (o backend trata cada grupo como opcional).
+// "Alterar senha" é um terceiro formulário independente, próprio botão de
+// salvar, salvando via PATCH /api/perfil/senha (exige senha atual).
 async function renderPerfil() {
   conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
   const perfil = await api('/api/perfil');
@@ -4327,6 +4438,38 @@ async function renderPerfil() {
       <input type="text" value="${perfil.email || ''}" disabled>
 
       <button type="submit" id="btn-salvar-perfil">Salvar alterações</button>
+    </form>
+
+    <div class="pagamento-secao-divisor"></div>
+    <h3 class="inicio-secao-titulo">Alterar senha</h3>
+    <form class="perfil-form" id="form-alterar-senha" novalidate>
+      <label for="senha_atual">Senha atual <span class="obrigatorio">*</span></label>
+      <div class="senha-wrapper">
+        <input type="password" id="senha_atual" autocomplete="current-password">
+        <button type="button" id="btn-toggle-senha_atual" class="toggle-senha" aria-label="Mostrar senha" tabindex="-1">👁</button>
+      </div>
+      <div class="field-error" id="erro-senha_atual"></div>
+
+      <label for="senha_nova">Senha nova <span class="obrigatorio">*</span></label>
+      <div class="senha-wrapper">
+        <input type="password" id="senha_nova" autocomplete="new-password">
+        <button type="button" id="btn-toggle-senha_nova" class="toggle-senha" aria-label="Mostrar senha" tabindex="-1">👁</button>
+      </div>
+      <ul class="senha-requisitos" id="senha-requisitos">
+        <li id="req-tamanho" role="checkbox" aria-checked="false">Mínimo de 8 caracteres</li>
+        <li id="req-maiuscula" role="checkbox" aria-checked="false">1 letra maiúscula</li>
+        <li id="req-numero" role="checkbox" aria-checked="false">1 número</li>
+      </ul>
+      <div class="field-error" id="erro-senha_nova"></div>
+
+      <label for="senha_repetir">Repetir senha nova <span class="obrigatorio">*</span></label>
+      <div class="senha-wrapper">
+        <input type="password" id="senha_repetir" autocomplete="new-password">
+        <button type="button" id="btn-toggle-senha_repetir" class="toggle-senha" aria-label="Mostrar senha" tabindex="-1">👁</button>
+      </div>
+      <div class="field-error" id="erro-senha_repetir"></div>
+
+      <button type="submit" id="btn-salvar-senha">Salvar</button>
     </form>
   `;
 
@@ -4384,6 +4527,85 @@ async function renderPerfil() {
       mostrarToast((resultado && resultado.error) || 'Erro ao salvar. Tente novamente.', 'erro');
       btn.disabled = false;
       btn.textContent = 'Salvar alterações';
+    }
+  });
+
+  // ---------- Alterar senha ----------
+  wireToggleSenha('senha_atual', 'btn-toggle-senha_atual');
+  wireToggleSenha('senha_nova', 'btn-toggle-senha_nova');
+  wireToggleSenha('senha_repetir', 'btn-toggle-senha_repetir');
+
+  const senhaAtualInput = document.getElementById('senha_atual');
+  const senhaNovaInput = document.getElementById('senha_nova');
+  const senhaRepetirInput = document.getElementById('senha_repetir');
+
+  function atualizarChecklistSenha(valor) {
+    Object.keys(REQUISITOS_SENHA).forEach((chave) => {
+      const atendido = REQUISITOS_SENHA[chave](valor);
+      const item = document.getElementById('req-' + chave);
+      item.classList.toggle('atendido', atendido);
+      item.setAttribute('aria-checked', String(atendido));
+    });
+  }
+  senhaNovaInput.addEventListener('input', () => atualizarChecklistSenha(senhaNovaInput.value));
+
+  // As duas senhas são comparadas ao vivo (não só no submit) — mensagem some
+  // assim que voltam a bater, sem esperar perder o foco.
+  function validarRepeticaoSenha() {
+    const erroEl = document.getElementById('erro-senha_repetir');
+    if (!senhaRepetirInput.value) {
+      erroEl.textContent = '';
+      return true;
+    }
+    const bate = senhaRepetirInput.value === senhaNovaInput.value;
+    erroEl.textContent = bate ? '' : 'As duas senhas estão diferentes.';
+    return bate;
+  }
+  senhaRepetirInput.addEventListener('input', validarRepeticaoSenha);
+  senhaNovaInput.addEventListener('input', validarRepeticaoSenha);
+
+  document.getElementById('form-alterar-senha').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const erros = {
+      senha_atual: senhaAtualInput.value ? '' : 'Informe sua senha atual.',
+      senha_nova: SENHA_REGEX.test(senhaNovaInput.value) ? '' : 'A senha deve ter no mínimo 8 caracteres, 1 número e 1 letra maiúscula.',
+      senha_repetir: senhaRepetirInput.value === senhaNovaInput.value ? '' : 'As duas senhas estão diferentes.',
+    };
+
+    let primeiroInvalido = null;
+    Object.keys(erros).forEach((campo) => {
+      document.getElementById('erro-' + campo).textContent = erros[campo];
+      if (erros[campo] && !primeiroInvalido) primeiroInvalido = document.getElementById(campo);
+    });
+
+    if (Object.values(erros).some(Boolean)) {
+      if (primeiroInvalido) primeiroInvalido.focus();
+      return;
+    }
+
+    const btnSenha = document.getElementById('btn-salvar-senha');
+    btnSenha.disabled = true;
+    btnSenha.innerHTML = '<span class="spinner"></span>';
+
+    const resultadoSenha = await api('/api/perfil/senha', {
+      method: 'PATCH',
+      body: JSON.stringify({
+        senha_atual: senhaAtualInput.value,
+        senha_nova: senhaNovaInput.value,
+      }),
+    });
+
+    if (resultadoSenha && !resultadoSenha.error) {
+      // token_version++ no backend já invalidou a sessão atual — desloga de
+      // verdade em vez de deixar a SPA rodando com um JWT que vai cair em
+      // 401 na próxima chamada qualquer.
+      localStorage.removeItem('kyvvo_token');
+      window.location.href = '/login?senha_redefinida=1';
+    } else {
+      document.getElementById('erro-senha_atual').textContent = (resultadoSenha && resultadoSenha.error) || 'Erro ao salvar. Tente novamente.';
+      btnSenha.disabled = false;
+      btnSenha.textContent = 'Salvar';
     }
   });
 }
@@ -4815,23 +5037,30 @@ function carregarFacebookSdk(appId) {
 // popup de login do Facebook pra o tenant escolher/criar a WhatsApp Business
 // Account dele. Ver plano em .claude/plans — nenhum token de tenant é salvo
 // aqui, só waba_id/phone_number_id (POST /api/whatsapp/conectar).
+// Status/atendimento de cada conversa (submenu Configurações > WhatsApp) —
+// só 2 estados possíveis hoje (migration 052): 'ativo' (a IA está
+// conduzindo) e 'aguardando_humano' (handoff pedido, ver US68.6).
+const CONVERSA_STATUS_LABEL = { ativo: 'Em atendimento', aguardando_humano: 'Aguardando atendente' };
+const CONVERSA_STATUS_BADGE = { ativo: 'badge-status-ativo', aguardando_humano: 'badge-status-suspenso' };
+
 async function renderWhatsapp() {
   conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
-  const status = await api('/api/whatsapp/status');
-  if (!status) return;
+  const [status, conversas] = await Promise.all([
+    api('/api/whatsapp/status'),
+    api('/api/whatsapp/conversas'),
+  ]);
+  if (!status || !conversas) return;
 
-  let cardClasse = 'status-card-inativo';
-  let linha2 = 'Não conectado';
-  let linha3 = 'Conecte o WhatsApp do seu negócio pra ativar o agendamento automático pelo bot.';
-
+  // Redesenho: as 3 linhas de antes (label/número/detalhe) viram uma linha
+  // única de texto — pedido explícito do Bruno pra reduzir a altura do
+  // card, já que a WhatsApp é a primeira coisa da tela.
+  let statusTexto;
   if (status.conectado) {
-    cardClasse = 'status-card-ativo';
-    linha2 = status.numeroExibido || 'Conectado';
-    linha3 = [status.nomeVerificado, status.qualidade ? `Qualidade: ${status.qualidade}` : null].filter(Boolean).join(' · ') || 'Sem detalhes adicionais.';
+    statusTexto = `🟢 WhatsApp conectado — ${status.numeroExibido || 'número não informado'}${[status.nomeVerificado, status.qualidade ? `Qualidade: ${status.qualidade}` : null].filter(Boolean).length ? ` · ${[status.nomeVerificado, status.qualidade ? `Qualidade: ${status.qualidade}` : null].filter(Boolean).join(' · ')}` : ''}`;
   } else if (status.erro) {
-    cardClasse = 'status-card-pendente';
-    linha2 = 'Erro de conexão';
-    linha3 = status.erro;
+    statusTexto = `🟡 Erro de conexão — ${status.erro}`;
+  } else {
+    statusTexto = '⚪ WhatsApp não conectado — conecte pra ativar o agendamento automático pelo bot.';
   }
 
   // US46.1 — antes de mostrar o botão de self-service, explica que ele é uma
@@ -4853,15 +5082,32 @@ async function renderWhatsapp() {
 
   conteudo.innerHTML = `
     <h2 class="titulo-detalhe">WhatsApp</h2>
-    <div class="financeiro-resumo" style="grid-template-columns: 1fr">
-      <div class="financeiro-resumo-card financeiro-resumo-card-3linhas ${cardClasse}">
-        <div class="financeiro-resumo-label">${status.conectado ? 'WhatsApp conectado' : 'WhatsApp'}</div>
-        <div class="financeiro-resumo-linha2">${escapeHtml(linha2)}</div>
-        <div class="financeiro-resumo-linha3">${escapeHtml(linha3)}</div>
+    <div class="pagamento-plano-card">
+      <div class="pagamento-plano-linha">
+        <span>${escapeHtml(statusTexto)}</span>
       </div>
     </div>
     ${planosInfo}
     ${status.conectado ? '' : '<button class="btn-primario" id="btn-conectar-whatsapp" disabled style="margin-top:16px">Carregando conexão...</button>'}
+
+    <h3 class="inicio-secao-titulo" style="margin-top:24px">Conversas</h3>
+    <div class="tabela-wrapper">
+      <table class="tabela-tenants">
+        <thead><tr><th>Conversa</th><th>Whatsapp</th><th>Status</th><th>Atendimento</th></tr></thead>
+        <tbody>
+          ${conversas.conversas.length
+            ? conversas.conversas.map((c) => `
+              <tr>
+                <td>${escapeHtml(c.cliente_nome || '—')}</td>
+                <td>${escapeHtml(formatarTelefoneMascara(c.telefone || ''))}</td>
+                <td><span class="badge ${CONVERSA_STATUS_BADGE[c.status_conversa] || 'badge-status-inativo'}">${CONVERSA_STATUS_LABEL[c.status_conversa] || c.status_conversa}</span></td>
+                <td>${c.status_conversa === 'ativo' ? '🤖 Kyvvo' : escapeHtml(conversas.tenant_nome || 'Salão')}</td>
+              </tr>
+            `).join('')
+            : '<tr><td colspan="4">Nenhuma conversa registrada ainda.</td></tr>'}
+        </tbody>
+      </table>
+    </div>
   `;
 
   if (!status.conectado) {
@@ -5003,7 +5249,6 @@ async function renderConfiguracao() {
   conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
   await carregarConfiguracao();
   const dias = configuracao.dias_funcionamento || [1, 2, 3, 4, 5, 6];
-  const formato = configuracao.formato_hora || '24h';
   // "time" do Postgres vem com segundos ("08:00:00"); <input type="time">
   // espera "HH:MM".
   const horarioAbertura = (configuracao.horario_abertura || '08:00').slice(0, 5);
@@ -5011,22 +5256,6 @@ async function renderConfiguracao() {
   const almocoAtivo = !!configuracao.horario_almoco_ativo;
   const almocoInicio = (configuracao.horario_almoco_inicio || '12:00').slice(0, 5);
   const almocoFim = (configuracao.horario_almoco_fim || '13:00').slice(0, 5);
-
-  // US69/CA06 — modo de atendimento é somente leitura aqui: quem altera é o
-  // admin Kyvvo (vinculado ao plano contratado), não o dono do salão.
-  const modoIa = configuracao.tecnologia === 'ia';
-  const modoAtendimentoHtml = `
-    <div class="perfil-form" style="margin-bottom:24px">
-      <label>Modo de atendimento</label>
-      <div class="modal-texto">
-        <span class="badge ${modoIa ? 'badge-modo-ia' : 'badge-modo-bot'}">
-          ${modoIa ? '✨ IA — Linguagem natural' : '🤖 Bot — Menus numerados'}
-        </span>
-      </div>
-      <div class="modal-texto">${escapeHtml(configuracao.plano_atual || '')}</div>
-      ${modoIa ? '' : '<div class="modal-texto"><a href="mailto:suporte@kyvvo.com.br">Fale conosco para fazer upgrade</a></div>'}
-    </div>
-  `;
 
   const toggleDias = NOMES_DIAS.map((nome, idx) => `
     <label class="dia-toggle-cel">
@@ -5039,22 +5268,10 @@ async function renderConfiguracao() {
   `).join('');
 
   conteudo.innerHTML = `
-    ${modoAtendimentoHtml}
+    <h2>Preferências</h2>
     <form class="perfil-form" id="form-config">
       <label>Dias em que ${infoSegmento(configuracao.segmento).dias} funciona (aparecem na agenda)</label>
       <div class="dias-grid">${toggleDias}</div>
-
-      <label>Formato de hora</label>
-      <div class="formato-hora-opcoes">
-        <label class="dia-checkbox">
-          <input type="radio" name="formato" value="24h" ${formato === '24h' ? 'checked' : ''}>
-          24h (ex: 14:00)
-        </label>
-        <label class="dia-checkbox">
-          <input type="radio" name="formato" value="12h" ${formato === '12h' ? 'checked' : ''}>
-          AM/PM (ex: 2:00 PM)
-        </label>
-      </div>
 
       <label>Horário de funcionamento</label>
       <div class="formato-hora-opcoes">
@@ -5087,8 +5304,7 @@ async function renderConfiguracao() {
         </div>
       </div>
 
-      <button type="submit">Salvar</button>
-      <div class="erro" id="config-msg"></div>
+      <button type="submit" id="btn-salvar-config">Salvar</button>
     </form>
   `;
 
@@ -5098,30 +5314,36 @@ async function renderConfiguracao() {
     almocoCampos.style.display = almocoAtivoInput.checked ? '' : 'none';
   });
 
+  // Feedback de salvamento via toast (US...) — mesmo padrão do resto do
+  // app (renderPerfil, renderPagamentos etc.); esta tela usava uma mensagem
+  // de texto inline própria (#config-msg), inconsistente com todas as
+  // outras telas de configuração/formulário do painel.
   async function salvarConfiguracao(payload) {
-    const msg = document.getElementById('config-msg');
-    msg.style.color = '';
-    msg.textContent = 'Salvando...';
+    const btn = document.getElementById('btn-salvar-config');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
 
     const resultado = await api('/api/configuracao', { method: 'PATCH', body: JSON.stringify(payload) });
 
     if (resultado && !resultado.error) {
       configuracao = resultado;
-      msg.style.color = '#4ade80';
-      msg.textContent = resultado.agendamentos_movidos > 0
-        ? `Salvo com sucesso! ${resultado.agendamentos_movidos} agendamento(s) movido(s) para o próximo dia disponível.`
-        : 'Salvo com sucesso!';
+      mostrarToast(
+        resultado.agendamentos_movidos > 0
+          ? `Salvo com sucesso! ${resultado.agendamentos_movidos} agendamento(s) movido(s) para o próximo dia disponível.`
+          : 'Salvo com sucesso!',
+        'sucesso'
+      );
     } else {
-      msg.style.color = '#ff6b6b';
-      msg.textContent = (resultado && resultado.error) || 'Erro ao salvar configuração.';
+      mostrarToast((resultado && resultado.error) || 'Erro ao salvar configuração.', 'erro');
     }
+    btn.disabled = false;
+    btn.textContent = 'Salvar';
   }
 
   document.getElementById('form-config').addEventListener('submit', (e) => {
     e.preventDefault();
 
     const diasFuncionamento = Array.from(document.querySelectorAll('.dias-grid input:checked')).map((el) => parseInt(el.value, 10));
-    const formatoHora = document.querySelector('input[name="formato"]:checked').value;
     const horarioAbertura = document.getElementById('config-horario-abertura').value;
     const horarioFechamento = document.getElementById('config-horario-fechamento').value;
     const horarioAlmocoAtivo = almocoAtivoInput.checked;
@@ -5129,7 +5351,7 @@ async function renderConfiguracao() {
     const horarioAlmocoFim = horarioAlmocoAtivo ? document.getElementById('config-almoco-fim').value : null;
 
     const payload = {
-      diasFuncionamento, formatoHora, horarioAbertura, horarioFechamento,
+      diasFuncionamento, horarioAbertura, horarioFechamento,
       horarioAlmocoAtivo, horarioAlmocoInicio, horarioAlmocoFim,
     };
 

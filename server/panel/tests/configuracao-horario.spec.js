@@ -62,7 +62,7 @@ test.describe('Configuração — horário de funcionamento', () => {
     await page.fill('#config-horario-fechamento', '19:00');
     await page.click('#form-config button[type="submit"]');
 
-    await expect(page.locator('#config-msg')).toHaveText('Salvo com sucesso!');
+    await expect(page.locator('.toast-sucesso')).toContainText('Salvo com sucesso!');
     expect(corpoEnviado).toMatchObject({ horarioAbertura: '09:00', horarioFechamento: '19:00' });
   });
 
@@ -86,7 +86,7 @@ test.describe('Configuração — horário de funcionamento', () => {
     await page.fill('#config-horario-fechamento', '20:00');
     await page.click('#form-config button[type="submit"]');
 
-    await expect(page.locator('#config-msg')).toHaveText('Horário de abertura precisa ser antes do horário de fechamento');
+    await expect(page.locator('.toast-erro')).toContainText('Horário de abertura precisa ser antes do horário de fechamento');
   });
 });
 
@@ -126,7 +126,7 @@ test.describe('Configuração — dias de funcionamento (grid de 7 colunas)', ()
     await page.click('.dias-grid input[value="6"]');
     await page.click('#form-config button[type="submit"]');
 
-    await expect(page.locator('#config-msg')).toHaveText('Salvo com sucesso!');
+    await expect(page.locator('.toast-sucesso')).toContainText('Salvo com sucesso!');
     expect(corpoEnviado.diasFuncionamento.sort()).toEqual([0, 1, 2, 3, 4, 5, 6]);
   });
 });
@@ -209,7 +209,7 @@ test.describe('Configuração — horário de almoço', () => {
     await page.fill('#config-almoco-fim', '13:00');
     await page.click('#form-config button[type="submit"]');
 
-    await expect(page.locator('#config-msg')).toHaveText('Salvo com sucesso!');
+    await expect(page.locator('.toast-sucesso')).toContainText('Salvo com sucesso!');
     expect(corpoEnviado).toMatchObject({ horarioAlmocoAtivo: true, horarioAlmocoInicio: '12:00', horarioAlmocoFim: '13:00' });
   });
 
@@ -244,7 +244,7 @@ test.describe('Configuração — horário de almoço', () => {
     await page.click('#config-almoco-ativo');
     await page.click('#form-config button[type="submit"]');
 
-    await expect(page.locator('#config-msg')).toHaveText('Salvo com sucesso!');
+    await expect(page.locator('.toast-sucesso')).toContainText('Salvo com sucesso!');
     expect(corpoEnviado).toMatchObject({ horarioAlmocoAtivo: false, horarioAlmocoInicio: null, horarioAlmocoFim: null });
   });
 });
@@ -286,7 +286,7 @@ test.describe('Configuração — confirmação ao desabilitar dia de funcioname
     await page.click('.dias-grid input[value="0"]'); // marca domingo (não desmarca nada)
     await page.click('#form-config button[type="submit"]');
 
-    await expect(page.locator('#config-msg')).toHaveText('Salvo com sucesso!');
+    await expect(page.locator('.toast-sucesso')).toContainText('Salvo com sucesso!');
     await expect(page.locator('.modal-overlay')).toHaveCount(0);
   });
 
@@ -311,7 +311,7 @@ test.describe('Configuração — confirmação ao desabilitar dia de funcioname
 
     await expect(page.locator('.modal-overlay')).toHaveCount(0);
     expect(patchChamado).toBe(false);
-    await expect(page.locator('#config-msg')).toHaveText('');
+    await expect(page.locator('.toast-sucesso, .toast-erro')).toHaveCount(0);
   });
 
   test('Continuar no popup salva e mostra quantos agendamentos foram movidos', async ({ page }) => {
@@ -337,7 +337,7 @@ test.describe('Configuração — confirmação ao desabilitar dia de funcioname
     await page.click('#form-config button[type="submit"]');
     await page.click('#btn-continuar-dias-fechados');
 
-    await expect(page.locator('#config-msg')).toHaveText('Salvo com sucesso! 2 agendamento(s) movido(s) para o próximo dia disponível.');
+    await expect(page.locator('.toast-sucesso')).toContainText('Salvo com sucesso! 2 agendamento(s) movido(s) para o próximo dia disponível.');
     expect(corpoEnviado.diasFuncionamento.sort()).toEqual([1, 2, 3, 4, 5]);
   });
 
@@ -362,6 +362,6 @@ test.describe('Configuração — confirmação ao desabilitar dia de funcioname
     await page.click('#form-config button[type="submit"]');
     await page.click('#btn-continuar-dias-fechados');
 
-    await expect(page.locator('#config-msg')).toHaveText('Salvo com sucesso!');
+    await expect(page.locator('.toast-sucesso')).toContainText('Salvo com sucesso!');
   });
 });

@@ -156,3 +156,91 @@ test.describe('Meu Perfil (US33/PR12)', () => {
     await expect(page.locator('.toast-erro')).toHaveText(/Erro ao salvar/);
   });
 });
+
+test.describe('Alterar senha (Meu Perfil)', () => {
+  test('olhinho alterna entre texto oculto e visível nos 3 campos', async ({ page }) => {
+    await entrarNoPainel(page);
+    await expect(page.locator('#senha_atual')).toHaveAttribute('type', 'password');
+    await page.click('#btn-toggle-senha_atual');
+    await expect(page.locator('#senha_atual')).toHaveAttribute('type', 'text');
+    await page.click('#btn-toggle-senha_atual');
+    await expect(page.locator('#senha_atual')).toHaveAttribute('type', 'password');
+  });
+
+  test('senha nova fraca mostra erro e não chama a API', async ({ page }) => {
+    await entrarNoPainel(page);
+    let chamou = false;
+    await page.route('**/api/perfil/senha', (route) => {
+      chamou = true;
+      return route.fulfill({ json: { ok: true } });
+    });
+
+    await page.fill('#senha_atual', 'SenhaAtual123');
+    await page.fill('#senha_nova', 'fraca');
+    await page.fill('#senha_repetir', 'fraca');
+    await page.click('#btn-salvar-senha');
+
+    await expect(page.locator('#erro-senha_nova')).toContainText('no mínimo 8 caracteres');
+    expect(chamou).toBe(false);
+  });
+
+  test('senhas diferentes mostram "as duas senhas estão diferentes" embaixo de repetir, ao vivo', async ({ page }) => {
+    await entrarNoPainel(page);
+    await page.fill('#senha_nova', 'SenhaNova123');
+    await page.fill('#senha_repetir', 'SenhaDiferente123');
+    await expect(page.locator('#erro-senha_repetir')).toHaveText('As duas senhas estão diferentes.');
+
+    await page.fill('#senha_repetir', 'SenhaNova123');
+    await expect(page.locator('#erro-senha_repetir')).toHaveText('');
+  });
+
+  test('senhas diferentes bloqueiam o envio mesmo sem ter perdido o foco', async ({ page }) => {
+    await entrarNoPainel(page);
+    let chamou = false;
+    await page.route('**/api/perfil/senha', (route) => {
+      chamou = true;
+      return route.fulfill({ json: { ok: true } });
+    });
+
+    await page.fill('#senha_atual', 'SenhaAtual123');
+    await page.fill('#senha_nova', 'SenhaNova123');
+    await page.fill('#senha_repetir', 'Outra123');
+    await page.click('#btn-salvar-senha');
+
+    await expect(page.locator('#erro-senha_repetir')).toHaveText('As duas senhas estão diferentes.');
+    expect(chamou).toBe(false);
+  });
+
+  test('senha atual incorreta mostra o erro do backend embaixo do campo', async ({ page }) => {
+    await entrarNoPainel(page);
+    await page.route('**/api/perfil/senha', (route) =>
+      route.fulfill({ status: 400, json: { error: 'Senha atual incorreta.' } })
+    );
+
+    await page.fill('#senha_atual', 'SenhaErrada123');
+    await page.fill('#senha_nova', 'SenhaNova123');
+    await page.fill('#senha_repetir', 'SenhaNova123');
+    await page.click('#btn-salvar-senha');
+
+    await expect(page.locator('#erro-senha_atual')).toHaveText('Senha atual incorreta.');
+  });
+
+  test('sucesso desloga (limpa o token) e redireciona pra /login?senha_redefinida=1', async ({ page }) => {
+    await entrarNoPainel(page);
+    let corpoEnviado = null;
+    await page.route('**/api/perfil/senha', (route) => {
+      corpoEnviado = route.request().postDataJSON();
+      return route.fulfill({ json: { ok: true } });
+    });
+    await page.route('**/login*', (route) => route.fulfill({ status: 200, contentType: 'text/html', body: '<h1>login</h1>' }));
+
+    await page.fill('#senha_atual', 'SenhaAtual123');
+    await page.fill('#senha_nova', 'SenhaNova123');
+    await page.fill('#senha_repetir', 'SenhaNova123');
+    await page.click('#btn-salvar-senha');
+
+    await expect(page).toHaveURL(/\/login\?senha_redefinida=1/);
+    expect(corpoEnviado).toMatchObject({ senha_atual: 'SenhaAtual123', senha_nova: 'SenhaNova123' });
+    expect(await page.evaluate(() => window.localStorage.getItem('kyvvo_token'))).toBeNull();
+  });
+});

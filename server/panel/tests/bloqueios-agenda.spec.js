@@ -31,6 +31,15 @@ async function entrarNoPainel(page, { bloqueios = [], profissionais = [], plano 
     if (route.request().method() !== 'GET') return route.fallback();
     return route.fulfill({ json: { bloqueios } });
   });
+  // Feriados nacionais (switch de bloqueio) — mock padrão desabilitado com
+  // lista fixa de 2 itens, suficiente pros testes de CRUD de bloqueio manual
+  // que não mexem nessa seção; os testes dedicados abaixo sobrescrevem.
+  await page.route('**/api/feriados', (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    return route.fulfill({
+      json: { habilitado: false, feriados: [{ nome: 'Confraternização Universal', mes: 1, dia: 1 }, { nome: 'Natal', mes: 12, dia: 25 }] },
+    });
+  });
   await page.route('**/api/profissionais', (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
     return route.fulfill({ json: { profissionais } });
@@ -258,5 +267,106 @@ test.describe('Bloqueios de agenda — CRUD (US61)', () => {
     await entrarNoPainel(page, { bloqueios: [] });
     await abrirTelaBloqueios(page);
     await expect(page.locator('#menu-config-toggle')).toHaveClass(/tem-filho-ativo/);
+  });
+});
+
+test.describe('Feriados nacionais — switch de bloqueio', () => {
+  test('lista os feriados com nome e data DD/MM', async ({ page }) => {
+    await entrarNoPainel(page, { bloqueios: [] });
+    await page.route('**/api/feriados', (route) => {
+      if (route.request().method() !== 'GET') return route.fallback();
+      return route.fulfill({
+        json: {
+          habilitado: false,
+          feriados: [
+            { nome: 'Confraternização Universal', mes: 1, dia: 1 },
+            { nome: 'Tiradentes', mes: 4, dia: 21 },
+            { nome: 'Natal', mes: 12, dia: 25 },
+          ],
+        },
+      });
+    });
+    await abrirTelaBloqueios(page);
+
+    const linhas = page.locator('.relatorios-status-linha');
+    await expect(linhas).toHaveCount(3);
+    await expect(linhas.nth(0)).toContainText('Confraternização Universal');
+    await expect(linhas.nth(0)).toContainText('01/01');
+    await expect(linhas.nth(2)).toContainText('Natal');
+    await expect(linhas.nth(2)).toContainText('25/12');
+  });
+
+  test('desabilitado por padrão mostra o texto "Habilitar" no switch', async ({ page }) => {
+    await entrarNoPainel(page, { bloqueios: [] });
+    await abrirTelaBloqueios(page);
+    await expect(page.locator('#toggle-feriados')).not.toBeChecked();
+    await expect(page.locator('#toggle-feriados-texto')).toHaveText('Habilitar');
+  });
+
+  test('habilitar pede confirmação antes de chamar a API', async ({ page }) => {
+    await entrarNoPainel(page, { bloqueios: [] });
+    let chamou = false;
+    await page.route('**/api/feriados', (route) => {
+      if (route.request().method() !== 'PATCH') return route.fallback();
+      chamou = true;
+      return route.fulfill({ json: { habilitado: true, agendamentos_movidos: 0 } });
+    });
+
+    await abrirTelaBloqueios(page);
+    await page.click('#toggle-feriados');
+    await expect(page.locator('.modal-card')).toContainText('movido automaticamente para o primeiro dia útil disponível');
+    expect(chamou).toBe(false);
+
+    await page.click('#btn-confirmar-feriados');
+    await expect(page.locator('.toast-sucesso')).toContainText('Feriados nacionais bloqueados');
+    expect(chamou).toBe(true);
+  });
+
+  test('cancelar a confirmação desmarca o switch de novo sem chamar a API', async ({ page }) => {
+    await entrarNoPainel(page, { bloqueios: [] });
+    let chamou = false;
+    await page.route('**/api/feriados', (route) => {
+      if (route.request().method() !== 'PATCH') return route.fallback();
+      chamou = true;
+      return route.fulfill({ json: { habilitado: true, agendamentos_movidos: 0 } });
+    });
+
+    await abrirTelaBloqueios(page);
+    await page.click('#toggle-feriados');
+    await page.click('#btn-cancelar-feriados');
+
+    await expect(page.locator('.modal-overlay')).toHaveCount(0);
+    await expect(page.locator('#toggle-feriados')).not.toBeChecked();
+    expect(chamou).toBe(false);
+  });
+
+  test('habilitar com agendamentos movidos mostra a contagem no toast', async ({ page }) => {
+    await entrarNoPainel(page, { bloqueios: [] });
+    await page.route('**/api/feriados', (route) => {
+      if (route.request().method() !== 'PATCH') return route.fallback();
+      return route.fulfill({ json: { habilitado: true, agendamentos_movidos: 3 } });
+    });
+
+    await abrirTelaBloqueios(page);
+    await page.click('#toggle-feriados');
+    await page.click('#btn-confirmar-feriados');
+
+    await expect(page.locator('.toast-sucesso')).toContainText('3 agendamento(s) movido(s) para o primeiro dia útil disponível');
+  });
+
+  test('desabilitar não pede confirmação', async ({ page }) => {
+    await entrarNoPainel(page, { bloqueios: [] });
+    await page.route('**/api/feriados', (route) => {
+      if (route.request().method() === 'GET') return route.fulfill({ json: { habilitado: true, feriados: [] } });
+      if (route.request().method() !== 'PATCH') return route.fallback();
+      return route.fulfill({ json: { habilitado: false, agendamentos_movidos: 0 } });
+    });
+
+    await abrirTelaBloqueios(page);
+    await expect(page.locator('#toggle-feriados')).toBeChecked();
+    await page.click('#toggle-feriados');
+
+    await expect(page.locator('.modal-overlay')).toHaveCount(0);
+    await expect(page.locator('.toast-sucesso')).toContainText('Feriados nacionais liberados');
   });
 });
