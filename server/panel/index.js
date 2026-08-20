@@ -54,6 +54,7 @@ const asaasService = require('./asaas-service');
 const metaWhatsappService = require('./meta-whatsapp-service');
 const evolutionService = require('./evolution-service');
 const anthropicService = require('./anthropic-service');
+const { parsearIntentIA, escolherAgendamentoAlvoIA, IA_INTENTS_VALIDOS } = require('./ia-intent-parser');
 
 // ---------- Cadastro self-service (US20) ----------
 // `let` (não `const`) porque a US38 permite um admin da Kyvvo sobrescrever
@@ -454,12 +455,20 @@ async function registrarEventoTrialExpiradoUmaVez(tenantId) {
 // alteração (n8n continua funcionando exatamente como hoje); tenants 'ia'
 // são processados por este bloco.
 
-const IA_INTENTS_VALIDOS = new Set(['agendar', 'reagendar', 'cancelar', 'consultar', 'unknown', 'fallback_humano', 'informar_nascimento']);
+// IA_INTENTS_VALIDOS agora vem de ./ia-intent-parser (extraído numa
+// avaliação do bot, 2026-08-19, pra poder testar parsearIntentIA/
+// escolherAgendamentoAlvoIA sem subir o app inteiro).
 // Mesma mensagem/critério do fluxo n8n (workflow v4, nó "Formatar lista de
 // serviços"): tenant sem serviço ativo ou sem confirmar o horário de
 // funcionamento (onboarding_horario_revisado) ainda não está pronto pra
 // atender — resposta fixa, não deixa a IA decidir o que dizer.
 const MENSAGEM_TENANT_NAO_PRONTO_IA = 'Estamos finalizando os últimos ajustes por aqui! 🛠️\n\nEm breve vamos te atender com muito carinho — tente novamente mais tarde.';
+// Achado numa avaliação do bot (2026-08-19): antes, qualquer exceção não
+// tratada no pipeline (Anthropic fora do ar, timeout, erro de banco) só
+// era logada — o cliente nunca recebia nada de volta, parecendo que o
+// salão tinha ignorado a mensagem dele. Ver uso no handler POST
+// /webhook/whatsapp.
+const MENSAGEM_ERRO_GENERICO_IA = 'Desculpa, tive um probleminha aqui agora. Pode mandar sua mensagem de novo em instantes? 🙏';
 const IA_HISTORICO_MENSAGENS = 10;
 // Depois desse intervalo sem nenhuma mensagem (de qualquer papel), a
 // próxima mensagem do cliente conta como abertura de conversa nova pra fins
@@ -640,21 +649,31 @@ async function montarContextoIA(tenant, cliente, primeiraMensagem) {
   // profissional (pedido explícito: não aparecer no bot fora do Custom).
   const { unico: profissionalUnico } = await garantirProfissionalPadrao(tenant.id);
 
-  // Atendimento atual (se houver) — usado tanto pra IA confirmar QUAL
-  // atendimento reagendar/cancelar antes de executar, quanto pra perguntar
-  // se um pedido de "agendar" é um atendimento A MAIS (não confundir com
-  // reagendamento do que já existe).
-  const { rows: atendimentoAtualRows } = await pool.query(
+  // Atendimentos futuros (não só o mais próximo) — usado tanto pra IA
+  // confirmar QUAL atendimento reagendar/cancelar antes de executar, quanto
+  // pra perguntar se um pedido de "agendar" é um atendimento A MAIS (não
+  // confundir com reagendamento do que já existe). Corrigido numa avaliação
+  // do bot (2026-08-19): antes só trazia o mais próximo (LIMIT 1) — com a
+  // recorrência de agendamento (Novo agendamento > Recorrência) um cliente
+  // pode ter vários atendimentos confirmados ao mesmo tempo, e "o mais
+  // próximo" deixava de ser necessariamente o que o cliente quis dizer.
+  // Limite de 10 é só uma trava de bom senso.
+  const { rows: atendimentosFuturosRows } = await pool.query(
     `SELECT a.data_hora, s.nome AS servico_nome
        FROM agendamentos a
        LEFT JOIN servicos s ON s.id = a.servico_id
       WHERE a.tenant_id = $1 AND a.cliente_id = $2 AND a.status = 'confirmado' AND a.data_hora > now()
-      ORDER BY a.data_hora ASC LIMIT 1`,
+      ORDER BY a.data_hora ASC LIMIT 10`,
     [tenant.id, cliente.id]
   );
-  const atendimentoAtual = atendimentoAtualRows[0] || null;
-  const textoAtendimentoAtual = atendimentoAtual
-    ? `${atendimentoAtual.servico_nome || 'Atendimento'} em ${new Date(atendimentoAtual.data_hora).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`
+  // Mesmo padrão de HORÁRIOS LIVRES: texto amigável + ISO exato entre
+  // colchetes, pra IA copiar em "dataHoraAlvoISO" sem nunca reconstruir a
+  // data sozinha.
+  const textoAtendimentosFuturos = atendimentosFuturosRows.length
+    ? atendimentosFuturosRows.map((a) => {
+        const texto = new Date(a.data_hora).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+        return `- ${a.servico_nome || 'Atendimento'} em ${texto} [${new Date(a.data_hora).toISOString()}]`;
+      }).join('\n')
     : '(nenhum)';
 
   const listaServicos = servicos.length
@@ -691,7 +710,9 @@ Hoje é ${hojeFormatado}.
 DADOS DO CLIENTE:
 - Nome: ${cliente.nome || '(não informado ainda)'}
 - Data de nascimento: ${cliente.data_nascimento ? 'já informada' : 'não informada'}
-- Atendimento atual confirmado: ${textoAtendimentoAtual}
+
+ATENDIMENTOS FUTUROS CONFIRMADOS (cada um mostra o texto e, entre colchetes, o valor ISO exato — copie literalmente em "dataHoraAlvoISO" quando precisar identificar QUAL atendimento é; nunca invente):
+${textoAtendimentosFuturos}
 
 SERVIÇOS DISPONÍVEIS:
 ${listaServicos}
@@ -702,17 +723,21 @@ ${listaDisponibilidade}
 Sua tarefa é ajudar o cliente a AGENDAR, REAGENDAR ou CANCELAR um horário, CONSULTAR informações do salão, ou registrar a DATA DE NASCIMENTO dele. Você NUNCA executa a ação diretamente — você só entende a intenção do cliente e devolve um JSON estruturado; quem executa é o sistema.
 
 Responda SEMPRE e SOMENTE com um objeto JSON válido (sem texto antes/depois, sem markdown), no formato exato:
-{"intent": "agendar" | "reagendar" | "cancelar" | "consultar" | "informar_nascimento" | "unknown" | "fallback_humano", "params": {"servicoNome": string|null, "profissionalNome": string|null, "dataHoraISO": string|null, "dataNascimento": string|null}, "resposta": "texto natural pra enviar ao cliente"}
+{"intent": "agendar" | "reagendar" | "cancelar" | "consultar" | "informar_nascimento" | "unknown" | "fallback_humano", "params": {"servicoNome": string|null, "profissionalNome": string|null, "dataHoraISO": string|null, "dataHoraAlvoISO": string|null, "dataNascimento": string|null}, "resposta": "texto natural pra enviar ao cliente"}
 
 Regras:
 - Use intent "unknown" quando a mensagem não deixar clara a intenção — nesse caso "resposta" deve pedir o esclarecimento que falta.
 ${primeiraMensagem ? `- Esta é a PRIMEIRA mensagem da conversa. ${cliente.nome ? `Cumprimente o cliente pelo nome (${cliente.nome.split(' ')[0]}) logo no início da resposta.` : 'O nome do cliente ainda não é conhecido — cumprimente normalmente, sem inventar um nome.'}` : '- Já é uma conversa em andamento — não repita a saudação completa de novo, vá direto ao ponto.'}
-- Se o cliente pedir pra REAGENDAR ou CANCELAR e houver um "Atendimento atual confirmado" (acima), primeiro apresente esse atendimento (serviço, data e hora) e pergunte se é esse mesmo — use intent "unknown" nessa pergunta. SÓ USE intent "reagendar"/"cancelar" depois que o cliente confirmar explicitamente (ex.: "sim", "isso mesmo") que é esse atendimento.
-- Se o cliente pedir pra AGENDAR algo novo e já houver um "Atendimento atual confirmado", pergunte primeiro se é um atendimento A MAIS além do que já existe (não assuma que é reagendamento) — use intent "unknown" nessa pergunta, e só depois de confirmado siga coletando serviço/data/hora normalmente.
+- Se o cliente pedir pra REAGENDAR ou CANCELAR:
+  - Se ATENDIMENTOS FUTUROS CONFIRMADOS tiver só 1: apresente esse atendimento (serviço, data e hora) e pergunte se é esse mesmo — use intent "unknown" nessa pergunta. SÓ USE intent "reagendar"/"cancelar" depois que o cliente confirmar explicitamente (ex.: "sim", "isso mesmo").
+  - Se tiver MAIS DE 1: liste todos (data e serviço de cada) e pergunte qual deles o cliente quer — use intent "unknown" nessa pergunta. SÓ USE intent "reagendar"/"cancelar" depois que o cliente identificar claramente qual (por data, dia da semana ou serviço), e inclua o ISO exato desse atendimento (copiado literalmente da lista) em "dataHoraAlvoISO".
+  - Se não tiver nenhum: não há o que reagendar/cancelar — avise o cliente (intent "unknown").
+- Se o cliente pedir pra AGENDAR algo novo e já houver pelo menos 1 em ATENDIMENTOS FUTUROS CONFIRMADOS, pergunte primeiro se é um atendimento A MAIS além do(s) que já existe(m) (não assuma que é reagendamento) — use intent "unknown" nessa pergunta, e só depois de confirmado siga coletando serviço/data/hora normalmente.
 ${profissionalUnico
   ? '- Use intent "agendar"/"reagendar" SÓ quando já tiver serviço e data/hora confirmados pelo cliente na conversa — antes disso, pergunte o que falta usando intent "unknown". Este salão tem só 1 profissional: NUNCA pergunte "com quem" nem mencione nome de profissional, deixe "profissionalNome" sempre null.'
   : '- Use intent "agendar"/"reagendar" SÓ quando já tiver serviço, profissional (ou "qualquer um") e data/hora confirmados pelo cliente na conversa — antes disso, pergunte o que falta usando intent "unknown".'}
 - "dataHoraISO" deve ser exatamente um dos valores entre colchetes [ ] listados acima em HORÁRIOS LIVRES — copie o texto entre colchetes literalmente, nunca monte ou invente um ISO novo.
+- "dataHoraAlvoISO" só é necessário quando há MAIS DE 1 atendimento em ATENDIMENTOS FUTUROS CONFIRMADOS e o cliente está reagendando/cancelando um deles — copie o ISO exato entre colchetes daquela lista, nunca invente. Deixe null nos outros casos (só 1 atendimento confirmado, nenhum, ou intent diferente de "reagendar"/"cancelar").
 ${cliente.data_nascimento ? '' : `- IMPORTANTE — antes de usar intent "agendar" ou "reagendar" de verdade (com tudo já confirmado pelo cliente), se você ainda não perguntou a data de nascimento nesta conversa, pergunte primeiro (use intent "unknown"): deixe bem claro que é totalmente opcional, só pra cadastro, sem nenhum problema se ele não quiser informar. Se o cliente informar uma data, use intent "informar_nascimento" com "dataNascimento" no formato AAAA-MM-DD (calcule o ano a partir do que o cliente disser, usando o ano atual como referência quando ele não disser o ano). Se o cliente disser que prefere não informar (ou já tiver respondido isso antes nesta conversa, mesmo que só "não"), prossiga normalmente com intent "agendar"/"reagendar" sem perguntar de novo.`}
 - Use intent "cancelar" quando o cliente quiser cancelar um agendamento existente (não precisa de dataHoraISO nesse caso, e não precisa perguntar data de nascimento pra cancelar).
 - Use intent "fallback_humano" quando o cliente pedir explicitamente para falar com uma pessoa, reclamar de forma que a IA não deva resolver sozinha, ou quando a conversa estiver claramente travada após tentativas de esclarecimento.
@@ -741,40 +766,23 @@ async function salvarMensagemIA(tenantId, clienteId, role, conteudo, intent = nu
   );
 }
 
-// US68/CA03 — parser de intenção: só aceita o JSON estruturado da IA, nunca
-// deixa a IA executar ação direto. JSON inválido ou intent desconhecido
-// degrada pra "unknown" com uma resposta genérica — nunca lança erro pro
-// cliente ver.
-function parsearIntentIA(textoResposta) {
-  let bruto;
-  try {
-    // A IA às vezes envolve o JSON em ```json ... ``` mesmo sendo instruída a
-    // não fazer isso — extrai o primeiro objeto JSON encontrado por segurança.
-    const match = textoResposta.match(/\{[\s\S]*\}/);
-    bruto = JSON.parse(match ? match[0] : textoResposta);
-  } catch (erroParse) {
-    fastify.log.warn({ erro: erroParse.message, textoResposta }, 'Parser de intenção IA (US68.4) — resposta da IA não é JSON válido');
-    return { intent: 'unknown', params: {}, resposta: 'Desculpa, não entendi. Pode repetir de outro jeito?' };
-  }
-  const intent = IA_INTENTS_VALIDOS.has(bruto.intent) ? bruto.intent : 'unknown';
-  const params = (bruto.params && typeof bruto.params === 'object') ? bruto.params : {};
-  const respostaFaltando = !(typeof bruto.resposta === 'string' && bruto.resposta.trim());
-  if (respostaFaltando) {
-    fastify.log.warn({ bruto }, 'Parser de intenção IA (US68.4) — JSON válido mas sem campo "resposta"');
-  }
-  const resposta = respostaFaltando ? 'Desculpa, não entendi. Pode repetir de outro jeito?' : bruto.resposta.trim();
-  return { intent, params, resposta };
-}
+// parsearIntentIA/escolherAgendamentoAlvoIA agora vêm de
+// ./ia-intent-parser (extraído numa avaliação do bot, 2026-08-19) — ver
+// esse arquivo pro raciocínio completo de cada um.
 
 // US68/CA04 — executor de ação: só roda depois do parser validar o JSON.
 // Resolve nomes (serviço/profissional) recebidos em texto livre da IA pros
 // IDs reais do tenant; nunca deleta agendamento, só troca status (mesmo
 // padrão já usado no resto do sistema, ex. DELETE /api/agendamentos).
-async function executarAcaoIA({ intent, params, tenantId, clienteId }) {
+// Recebe o tenant inteiro (não só tenantId) — precisa validar horário de
+// funcionamento antes de agendar (ver abaixo), achado numa avaliação do bot.
+async function executarAcaoIA({ intent, params, tenant, clienteId }) {
+  const tenantId = tenant.id;
+
   if (intent === 'agendar' || intent === 'reagendar') {
     if (!params.dataHoraISO) throw new Error('HorarioNaoInformado');
     const { rows: servicoRows } = params.servicoNome
-      ? await pool.query('SELECT id, nome, preco FROM servicos WHERE tenant_id = $1 AND ativo = true AND nome ILIKE $2 LIMIT 1', [tenantId, `%${params.servicoNome}%`])
+      ? await pool.query('SELECT id, nome, preco, duracao_minutos FROM servicos WHERE tenant_id = $1 AND ativo = true AND nome ILIKE $2 LIMIT 1', [tenantId, `%${params.servicoNome}%`])
       : { rows: [] };
     const servico = servicoRows[0] || null;
     const { rows: profRows } = params.profissionalNome
@@ -788,12 +796,36 @@ async function executarAcaoIA({ intent, params, tenantId, clienteId }) {
     if (!profissional) throw new Error('SemProfissionalDisponivel');
 
     const duracao = servico ? servico.duracao_minutos : IA_DURACAO_PADRAO_MINUTOS;
+
+    // Defesa em profundidade (achado numa avaliação do bot, 2026-08-19): o
+    // prompt já instrui a IA a só copiar horários de HORÁRIOS LIVRES (que já
+    // respeitam expediente/dias abertos/almoço), mas uma decisão de negócio
+    // nunca pode depender só da palavra do modelo — mesma validação que
+    // POST/PATCH /api/agendamentos sempre fizeram, e que este caminho nunca
+    // tinha feito.
+    const validacaoHorario = dentroDoHorarioFuncionamento(tenant, params.dataHoraISO, duracao);
+    if (!validacaoHorario.valido) throw new Error('HorarioForaDoFuncionamento');
+
+    const bloqueioConflitante = await buscarBloqueioConflitante(tenantId, profissional.id, params.dataHoraISO, duracao);
+    if (bloqueioConflitante) throw new Error('HorarioIndisponivel');
+
+    // Bug corrigido numa avaliação do bot (2026-08-19): antes comparava a
+    // duração do agendamento NOVO ($4, correta) contra uma duração FIXA de
+    // 30min pro agendamento JÁ EXISTENTE (interpolada direto no SQL) — um
+    // serviço mais longo (ex.: Coloração, 90min) só "ocupava" 30min aos
+    // olhos da IA, permitindo encaixar outro cliente no meio de um
+    // atendimento em andamento. LEFT JOIN (não INNER) + COALESCE: um
+    // agendamento sem serviço vinculado (servico_id null, possível neste
+    // mesmo fluxo, linha do INSERT abaixo) cai no padrão de 30min em vez de
+    // sumir da checagem de conflito inteira.
     const { rows: conflito } = await pool.query(
-      `SELECT id FROM agendamentos
-       WHERE tenant_id = $1 AND profissional_id = $2 AND status = 'confirmado'
-         AND data_hora < $3::timestamptz + ($4 * interval '1 minute')
-         AND $3::timestamptz < data_hora + (${IA_DURACAO_PADRAO_MINUTOS} * interval '1 minute')`,
-      [tenantId, profissional.id, params.dataHoraISO, duracao]
+      `SELECT a.id
+         FROM agendamentos a
+         LEFT JOIN servicos s ON s.id = a.servico_id
+        WHERE a.tenant_id = $1 AND a.profissional_id = $2 AND a.status = 'confirmado'
+          AND a.data_hora < $3::timestamptz + ($4 * interval '1 minute')
+          AND $3::timestamptz < a.data_hora + (COALESCE(s.duracao_minutos, $5) * interval '1 minute')`,
+      [tenantId, profissional.id, params.dataHoraISO, duracao, IA_DURACAO_PADRAO_MINUTOS]
     );
     if (conflito.length) throw new Error('HorarioIndisponivel');
 
@@ -807,27 +839,31 @@ async function executarAcaoIA({ intent, params, tenantId, clienteId }) {
       await client.query('BEGIN');
 
       if (intent === 'reagendar') {
-        const { rows: existente } = await client.query(
-          `SELECT a.id, s.nome AS servico_nome, s.preco AS servico_preco
+        const { rows: candidatos } = await client.query(
+          `SELECT a.id, s.nome AS servico_nome, s.preco AS servico_preco, a.data_hora
              FROM agendamentos a
              LEFT JOIN servicos s ON s.id = a.servico_id
             WHERE a.tenant_id = $1 AND a.cliente_id = $2 AND a.status = 'confirmado' AND a.data_hora > now()
-            ORDER BY a.data_hora ASC LIMIT 1`,
+            ORDER BY a.data_hora ASC`,
           [tenantId, clienteId]
         );
-        if (existente[0]) {
-          await client.query('UPDATE agendamentos SET data_hora = $1, profissional_id = $2, updated_at = now() WHERE id = $3', [params.dataHoraISO, profissional.id, existente[0].id]);
+        const existente = escolherAgendamentoAlvoIA(candidatos, params.dataHoraAlvoISO);
+        if (existente) {
+          await client.query('UPDATE agendamentos SET data_hora = $1, profissional_id = $2, updated_at = now() WHERE id = $3', [params.dataHoraISO, profissional.id, existente.id]);
           await sincronizarLancamentoFinanceiro(client, {
             tenantId,
-            agendamentoId: existente[0].id,
-            servicoNome: existente[0].servico_nome,
-            servicoPreco: existente[0].servico_preco,
+            agendamentoId: existente.id,
+            servicoNome: existente.servico_nome,
+            servicoPreco: existente.servico_preco,
             dataHora: params.dataHoraISO,
             statusAgendamento: 'confirmado',
           });
           await client.query('COMMIT');
-          return { ok: true, agendamentoId: existente[0].id };
+          return { ok: true, agendamentoId: existente.id };
         }
+        // candidatos.length === 0: nenhum atendimento existente pra
+        // reagendar — segue pro INSERT abaixo, mesmo comportamento de
+        // "agendar" (já era assim antes desta revisão).
       }
 
       const { rows: novo } = await client.query(
@@ -855,32 +891,33 @@ async function executarAcaoIA({ intent, params, tenantId, clienteId }) {
   }
 
   if (intent === 'cancelar') {
-    const { rows: existente } = await pool.query(
+    const { rows: candidatos } = await pool.query(
       `SELECT a.id, a.data_hora, s.nome AS servico_nome, s.preco AS servico_preco
          FROM agendamentos a
          LEFT JOIN servicos s ON s.id = a.servico_id
         WHERE a.tenant_id = $1 AND a.cliente_id = $2 AND a.status = 'confirmado' AND a.data_hora > now()
-        ORDER BY a.data_hora ASC LIMIT 1`,
+        ORDER BY a.data_hora ASC`,
       [tenantId, clienteId]
     );
-    if (!existente[0]) throw new Error('NenhumAgendamentoParaCancelar');
+    if (!candidatos.length) throw new Error('NenhumAgendamentoParaCancelar');
+    const existente = escolherAgendamentoAlvoIA(candidatos, params.dataHoraAlvoISO);
 
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      await client.query("UPDATE agendamentos SET status = 'cancelado', updated_at = now() WHERE id = $1", [existente[0].id]);
+      await client.query("UPDATE agendamentos SET status = 'cancelado', updated_at = now() WHERE id = $1", [existente.id]);
       // Sincroniza o lançamento pra 'cancelado' (sai da soma de previsto/
       // realizado) — mesmo padrão de PATCH /api/agendamentos ao cancelar.
       await sincronizarLancamentoFinanceiro(client, {
         tenantId,
-        agendamentoId: existente[0].id,
-        servicoNome: existente[0].servico_nome,
-        servicoPreco: existente[0].servico_preco,
-        dataHora: existente[0].data_hora,
+        agendamentoId: existente.id,
+        servicoNome: existente.servico_nome,
+        servicoPreco: existente.servico_preco,
+        dataHora: existente.data_hora,
         statusAgendamento: 'cancelado',
       });
       await client.query('COMMIT');
-      return { ok: true, agendamentoId: existente[0].id };
+      return { ok: true, agendamentoId: existente.id };
     } catch (erro) {
       await client.query('ROLLBACK');
       throw erro;
@@ -988,20 +1025,28 @@ async function processarMensagemIA({ tenant, telefone, mensagem, pushName, envia
   const historico = await buscarHistoricoIA(tenant.id, cliente.id);
   const system = await montarContextoIA(tenant, cliente, primeiraMensagem);
   const { texto: respostaBruta, tokensEntrada, tokensSaida } = await anthropicService.chamarClaude({ system, mensagens: [...historico, { role: 'user', content: mensagem }] });
-  const { intent, params, resposta } = parsearIntentIA(respostaBruta);
+  const { intent, params, resposta } = parsearIntentIA(respostaBruta, { log: (obj, msg) => fastify.log.warn(obj, msg) });
 
   let textoFinal = resposta;
   if (intent === 'fallback_humano') {
     await acionarFallbackHumanoIA(tenant, cliente, enviarResposta);
   } else if (intent === 'agendar' || intent === 'reagendar' || intent === 'cancelar' || intent === 'informar_nascimento') {
     try {
-      await executarAcaoIA({ intent, params, tenantId: tenant.id, clienteId: cliente.id });
+      await executarAcaoIA({ intent, params, tenant, clienteId: cliente.id });
     } catch (erro) {
       const mensagensErro = {
         HorarioIndisponivel: 'Poxa, esse horário acabou de ficar indisponível. Pode escolher outro dos que te passei?',
         HorarioNaoInformado: 'Não peguei direito o horário — pode me dizer de novo, por favor?',
+        // Achado numa avaliação do bot (2026-08-19): antes não existia essa
+        // validação (só a instrução no prompt) — ver executarAcaoIA.
+        HorarioForaDoFuncionamento: 'Esse horário ficou fora do nosso expediente. Pode escolher um dos horários que te passei certinho?',
         SemProfissionalDisponivel: 'No momento não temos profissional disponível pra esse atendimento. Posso te ajudar de outra forma?',
         NenhumAgendamentoParaCancelar: 'Não encontrei nenhum agendamento seu pra cancelar. Confere pra mim o que você gostaria?',
+        // Achado numa avaliação do bot (2026-08-19): cliente com mais de 1
+        // atendimento confirmado (possível com a recorrência de
+        // agendamento) e a IA não conseguiu identificar qual — ver
+        // escolherAgendamentoAlvoIA.
+        AgendamentoAmbiguo: 'Vi que você tem mais de um agendamento marcado — pode me dizer a data ou o serviço de qual você quer, pra eu ter certeza?',
       };
       textoFinal = mensagensErro[erro.message] || 'Tive um problema pra confirmar isso agora. Pode tentar de novo em instantes?';
       if (!mensagensErro[erro.message]) {
@@ -1516,6 +1561,17 @@ async function start() {
         return reply.code(200).send({ ok: true });
       } catch (erro) {
         fastify.log.error({ erro: erro.message, tenantId: tenant.id }, 'Falha no IA Engine (US68) — mensagem não processada');
+        // Achado numa avaliação do bot (2026-08-19): antes esse catch só
+        // logava e respondia 200 pro webhook da Meta — o cliente nunca
+        // recebia nada de volta, parecendo que o salão tinha ignorado a
+        // mensagem dele. `enviarResposta` também pode falhar (token
+        // expirado, instância desconectada) — nunca deixa essa segunda
+        // falha derrubar a resposta do webhook.
+        try {
+          await enviarResposta(telefone, MENSAGEM_ERRO_GENERICO_IA);
+        } catch (erroEnvio) {
+          fastify.log.error({ erro: erroEnvio.message, tenantId: tenant.id }, 'Falha ao enviar mensagem de erro genérica da IA (US68)');
+        }
         return reply.code(200).send({ ok: true });
       }
     }
