@@ -66,6 +66,11 @@ const planos = require('./lib/planos');
 const { sincronizarLancamentoFinanceiro } = require('./lib/financeiro');
 const eventos = require('./lib/eventos');
 const { registerBloqueiosRoutes } = require('./routes/bloqueios');
+// Fase 2 da modularização
+const profissionaisLib = require('./lib/profissionais');
+const { registerServicosRoutes } = require('./routes/servicos');
+const { registerProfissionaisRoutes } = require('./routes/profissionais');
+const { garantirProfissionalPadrao } = profissionaisLib;
 const {
   horarioParaMinutos, minutosNoDia, diaDaSemanaBrasilia, componentesBrasilia,
   isoDeComponentesBrasilia, dataDiaISO, dataAtualBrasilia, mesAtualBrasilia,
@@ -155,6 +160,7 @@ horarioFuncionamento.init(pool);
 configSistema.init(pool);
 planos.init(pool);
 eventos.init(pool);
+profissionaisLib.init(pool);
 
 // ---------- Recorrência de agendamento (Novo agendamento > Recorrência) ----------
 // componentesBrasilia/isoDeComponentesBrasilia/dataDiaISO viraram lib/datetime.js
@@ -295,40 +301,9 @@ async function calcularDisponibilidadeIA(tenant) {
   return resultado;
 }
 
-// Garante que o tenant tenha ao menos 1 profissional. Tenants fora do plano
-// Custom nunca acessam o menu Profissionais (data-somente-plano-custom em
-// painel.html) — sem isso eles não teriam como criar o profissional exigido
-// por agendamentos.profissional_id (NOT NULL). Cria um profissional padrão
-// nomeado com o responsável pelo tenant (nome do admin em usuarios), já
-// vinculado a todos os serviços existentes, e devolve `unico: true` quando
-// esse é o único profissional do tenant — usado por quem chama pra decidir
-// se deve vincular novos serviços automaticamente e se deve pular a pergunta
-// "com quem?" no bot/IA (sem isso, ficam inagendáveis: profissionais_servicos
-// vazio, ou a IA pergunta um profissional que não faz diferença nenhuma).
-async function garantirProfissionalPadrao(tenantId) {
-  const { rows: existentes } = await pool.query(
-    'SELECT id, nome FROM profissionais WHERE tenant_id = $1 ORDER BY nome',
-    [tenantId]
-  );
-  if (existentes.length === 1) return { ...existentes[0], unico: true };
-  if (existentes.length > 1) return { ...existentes[0], unico: false };
-
-  const { rows: admin } = await pool.query(
-    `SELECT nome FROM usuarios WHERE tenant_id = $1 AND role = 'administrador' ORDER BY criado_em ASC LIMIT 1`,
-    [tenantId]
-  );
-  const nome = (admin[0] && admin[0].nome) || 'Atendimento';
-  const { rows: criado } = await pool.query(
-    'INSERT INTO profissionais (tenant_id, nome) VALUES ($1, $2) RETURNING id, nome',
-    [tenantId, nome]
-  );
-  await pool.query(
-    `INSERT INTO profissionais_servicos (profissional_id, servico_id)
-     SELECT $1, s.id FROM servicos s WHERE s.tenant_id = $2`,
-    [criado[0].id, tenantId]
-  );
-  return { ...criado[0], unico: true };
-}
+// garantirProfissionalPadrao virou lib/profissionais.js (fase 2 da
+// modularização) — fica lá, não em routes/profissionais.js, porque também é
+// chamada pelo IA Engine (logo abaixo) e por POST /api/agendamentos.
 
 // Conta o total de horários livres de um dia, somando todos os profissionais
 // do tenant — usado pelo card "horários livres" do Início (dashboard). Mesmo
@@ -2065,118 +2040,9 @@ async function start() {
     return { data, profissional, servico, duracaoMinutos, slots };
   });
 
-  fastify.get('/api/servicos', { preHandler: [fastify.authenticate] }, async (request) => {
-    const { tenantId } = request.user;
-    const { rows } = await pool.query(
-      `SELECT id, nome, duracao_minutos, preco, descricao, ativo, profissional_preferencial_id
-       FROM servicos WHERE tenant_id = $1 AND excluido_em IS NULL ORDER BY nome`,
-      [tenantId]
-    );
-    return { servicos: rows };
-  });
-
-  // Descrição curta do serviço (US60/CA02) — limite pra não virar um texto
-  // longo dentro do card da listagem.
-  const DESCRICAO_SERVICO_MAX = 280;
-
-  // ---------- CRUD de serviços (US17/ST17.1) ----------
-  fastify.post('/api/servicos', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const { tenantId } = request.user;
-    const { nome, duracao_minutos: duracaoMinutos, preco, descricao, profissional_preferencial_id: profissionalPreferencialId } = request.body || {};
-
-    if (!nome || !nome.trim()) {
-      return reply.code(400).send({ error: 'Campo "nome" é obrigatório' });
-    }
-    if (!Number.isFinite(duracaoMinutos) || duracaoMinutos <= 0) {
-      return reply.code(400).send({ error: 'Campo "duracao_minutos" deve ser um número maior que zero' });
-    }
-    if (preco !== undefined && preco !== null && (!Number.isFinite(preco) || preco < 0)) {
-      return reply.code(400).send({ error: 'Campo "preco" deve ser um número maior ou igual a zero' });
-    }
-    if (descricao && descricao.length > DESCRICAO_SERVICO_MAX) {
-      return reply.code(400).send({ error: `Campo "descricao" deve ter no máximo ${DESCRICAO_SERVICO_MAX} caracteres` });
-    }
-
-    const { rows } = await pool.query(
-      `INSERT INTO servicos (tenant_id, nome, duracao_minutos, preco, descricao, profissional_preferencial_id)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, nome, duracao_minutos, preco, descricao, ativo, profissional_preferencial_id`,
-      [tenantId, nome.trim(), duracaoMinutos, preco ?? null, descricao ? descricao.trim() : null, profissionalPreferencialId || null]
-    );
-
-    // Tenant com um único profissional (fora do plano Custom) não tem como
-    // vincular manualmente pela tela Profissionais (menu oculto) — sem isso o
-    // serviço recém-criado ficaria inagendável pelo bot/IA.
-    const profissionalPadrao = await garantirProfissionalPadrao(tenantId);
-    if (profissionalPadrao.unico) {
-      await pool.query(
-        'INSERT INTO profissionais_servicos (profissional_id, servico_id) VALUES ($1, $2)',
-        [profissionalPadrao.id, rows[0].id]
-      );
-    }
-
-    reply.code(201);
-    return rows[0];
-  });
-
-  fastify.patch('/api/servicos/:id', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const { tenantId } = request.user;
-    const { id } = request.params;
-    const { nome, duracao_minutos: duracaoMinutos, preco, descricao, ativo, profissional_preferencial_id: profissionalPreferencialId } = request.body || {};
-
-    if (nome !== undefined && !nome.trim()) {
-      return reply.code(400).send({ error: 'Campo "nome" não pode ficar vazio' });
-    }
-    if (duracaoMinutos !== undefined && (!Number.isFinite(duracaoMinutos) || duracaoMinutos <= 0)) {
-      return reply.code(400).send({ error: 'Campo "duracao_minutos" deve ser um número maior que zero' });
-    }
-    if (preco !== undefined && preco !== null && (!Number.isFinite(preco) || preco < 0)) {
-      return reply.code(400).send({ error: 'Campo "preco" deve ser um número maior ou igual a zero' });
-    }
-    if (descricao && descricao.length > DESCRICAO_SERVICO_MAX) {
-      return reply.code(400).send({ error: `Campo "descricao" deve ter no máximo ${DESCRICAO_SERVICO_MAX} caracteres` });
-    }
-
-    const { rows } = await pool.query(
-      `UPDATE servicos SET
-         nome = COALESCE($3, nome),
-         duracao_minutos = COALESCE($4, duracao_minutos),
-         preco = CASE WHEN $5 THEN $6 ELSE preco END,
-         descricao = CASE WHEN $7 THEN $8 ELSE descricao END,
-         ativo = COALESCE($9, ativo),
-         profissional_preferencial_id = CASE WHEN $10 THEN $11 ELSE profissional_preferencial_id END
-       WHERE id = $1 AND tenant_id = $2 AND excluido_em IS NULL
-       RETURNING id, nome, duracao_minutos, preco, descricao, ativo, profissional_preferencial_id`,
-      [
-        id, tenantId, nome ? nome.trim() : null, duracaoMinutos ?? null, preco !== undefined, preco ?? null,
-        descricao !== undefined, descricao ? descricao.trim() : null,
-        ativo ?? null, profissionalPreferencialId !== undefined, profissionalPreferencialId || null,
-      ]
-    );
-    if (!rows[0]) {
-      return reply.code(404).send({ error: 'Serviço não encontrado' });
-    }
-    return rows[0];
-  });
-
-  // CA da exclusão (redesenho do menu Serviços): soft delete, não mais um
-  // DELETE de verdade — servico_id tem ON DELETE CASCADE em agendamentos, e
-  // um hard delete apagaria o histórico de agendamentos antigos que usam
-  // esse serviço. "Excluir" só marca excluido_em (some da listagem e de
-  // novos agendamentos); os agendamentos já feitos continuam intactos.
-  fastify.delete('/api/servicos/:id', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const { tenantId } = request.user;
-    const { id } = request.params;
-
-    const { rowCount } = await pool.query(
-      'UPDATE servicos SET excluido_em = now() WHERE id = $1 AND tenant_id = $2 AND excluido_em IS NULL',
-      [id, tenantId]
-    );
-    if (!rowCount) {
-      return reply.code(404).send({ error: 'Serviço não encontrado' });
-    }
-    return { ok: true };
-  });
+  // CRUD de Serviços (US17/ST17.1) — extraído pra routes/servicos.js (fase 2
+  // da modularização): GET/POST/PATCH/DELETE /api/servicos[/:id].
+  registerServicosRoutes(fastify, pool);
 
   // Listagem de clientes (menu Clientes): nome, telefone, último atendimento
   // (serviço + data) e o total geral de resultados (pra montar a paginação
@@ -2419,121 +2285,10 @@ async function start() {
     return { cliente: rows[0] };
   });
 
-  // Lista de profissionais do tenant, usada para popular o dropdown do
-  // formulário de novo agendamento (ST09.2 / US09). Inclui os ids dos
-  // serviços que cada um atende, usado na tela de gestão (US17/ST17.4).
-  fastify.get('/api/profissionais', { preHandler: [fastify.authenticate] }, async (request) => {
-    const { tenantId } = request.user;
-    await garantirProfissionalPadrao(tenantId);
-    const { rows } = await pool.query(
-      `SELECT p.id, p.nome,
-              COALESCE(array_agg(ps.servico_id) FILTER (WHERE ps.servico_id IS NOT NULL), '{}') AS servicos
-       FROM profissionais p
-       LEFT JOIN profissionais_servicos ps ON ps.profissional_id = p.id
-       WHERE p.tenant_id = $1
-       GROUP BY p.id, p.nome
-       ORDER BY p.nome`,
-      [tenantId]
-    );
-    return { profissionais: rows };
-  });
-
-  // ---------- CRUD de profissionais (US17/ST17.2) ----------
-  async function definirServicosDoProfissional(client, tenantId, profissionalId, servicoIds) {
-    if (!Array.isArray(servicoIds)) return;
-    // Só vincula serviços que realmente pertencem a este tenant — evita que
-    // um id de outro tenant seja injetado no vínculo.
-    await client.query('DELETE FROM profissionais_servicos WHERE profissional_id = $1', [profissionalId]);
-    if (servicoIds.length === 0) return;
-    await client.query(
-      `INSERT INTO profissionais_servicos (profissional_id, servico_id)
-       SELECT $1, s.id FROM servicos s WHERE s.tenant_id = $2 AND s.id = ANY($3::uuid[])`,
-      [profissionalId, tenantId, servicoIds]
-    );
-  }
-
-  fastify.post('/api/profissionais', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const { tenantId } = request.user;
-    const { nome, servicos } = request.body || {};
-
-    if (!nome || !nome.trim()) {
-      return reply.code(400).send({ error: 'Campo "nome" é obrigatório' });
-    }
-
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      const { rows } = await client.query(
-        'INSERT INTO profissionais (tenant_id, nome) VALUES ($1, $2) RETURNING id, nome',
-        [tenantId, nome.trim()]
-      );
-      await definirServicosDoProfissional(client, tenantId, rows[0].id, servicos);
-      await client.query('COMMIT');
-      reply.code(201);
-      return { ...rows[0], servicos: servicos || [] };
-    } catch (erro) {
-      await client.query('ROLLBACK');
-      throw erro;
-    } finally {
-      client.release();
-    }
-  });
-
-  fastify.patch('/api/profissionais/:id', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const { tenantId } = request.user;
-    const { id } = request.params;
-    const { nome, servicos } = request.body || {};
-
-    if (nome !== undefined && !nome.trim()) {
-      return reply.code(400).send({ error: 'Campo "nome" não pode ficar vazio' });
-    }
-
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      const { rows } = await client.query(
-        `UPDATE profissionais SET nome = COALESCE($3, nome)
-         WHERE id = $1 AND tenant_id = $2
-         RETURNING id, nome`,
-        [id, tenantId, nome ? nome.trim() : null]
-      );
-      if (!rows[0]) {
-        await client.query('ROLLBACK');
-        return reply.code(404).send({ error: 'Profissional não encontrado' });
-      }
-      await definirServicosDoProfissional(client, tenantId, id, servicos);
-      await client.query('COMMIT');
-      return { ...rows[0], servicos: servicos !== undefined ? servicos : undefined };
-    } catch (erro) {
-      await client.query('ROLLBACK');
-      throw erro;
-    } finally {
-      client.release();
-    }
-  });
-
-  fastify.delete('/api/profissionais/:id', { preHandler: [fastify.authenticate] }, async (request, reply) => {
-    const { tenantId } = request.user;
-    const { id } = request.params;
-
-    // ST17.5 — mesma proteção do DELETE de serviço.
-    const { rows: futuros } = await pool.query(
-      `SELECT COUNT(*)::int AS total FROM agendamentos
-       WHERE tenant_id = $1 AND profissional_id = $2 AND status = 'confirmado' AND data_hora > now()`,
-      [tenantId, id]
-    );
-    if (futuros[0].total > 0) {
-      return reply.code(409).send({
-        error: `Não é possível excluir: há ${futuros[0].total} agendamento(s) futuro(s) com este profissional.`,
-      });
-    }
-
-    const { rowCount } = await pool.query('DELETE FROM profissionais WHERE id = $1 AND tenant_id = $2', [id, tenantId]);
-    if (!rowCount) {
-      return reply.code(404).send({ error: 'Profissional não encontrado' });
-    }
-    return { ok: true };
-  });
+  // CRUD de Profissionais (US17/ST17.2, incluindo GET pro dropdown do
+  // formulário de agendamento) — extraído pra routes/profissionais.js (fase
+  // 2 da modularização): GET/POST/PATCH/DELETE /api/profissionais[/:id].
+  registerProfissionaisRoutes(fastify, pool);
 
   // Bloqueios manuais de agenda (US61) + Feriados nacionais (Configurações >
   // Bloqueio de agenda) — extraídos pra routes/bloqueios.js (fase 1 da
