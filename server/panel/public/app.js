@@ -5266,11 +5266,13 @@ async function abrirModalConversa(clienteId) {
   if (chatConversa) chatConversa.scrollTop = chatConversa.scrollHeight;
 
   // Abre a janela de atendimento ao vivo (atendimento.html, nova aba —
-  // continua com o resto do painel disponível na aba original) e já marca a
-  // conversa como assumida, pra IA parar de responder automaticamente
-  // (ver processarMensagemIA em lib/ia-engine.js).
-  document.getElementById('btn-assumir-atendimento').addEventListener('click', async () => {
-    await api(`/api/whatsapp/conversas/${clienteId}/assumir`, { method: 'POST' });
+  // continua com o resto do painel disponível na aba original). window.open
+  // vai primeiro e síncrono, sem nenhum await antes — um `await` antes dele
+  // quebra o "gesto do usuário" que o navegador exige pra não bloquear o
+  // popup silenciosamente (Chrome não lança erro, só bloqueia sem avisar).
+  // Não precisa chamar /assumir aqui: atendimento.html já faz isso sozinha
+  // ao carregar (idempotente).
+  document.getElementById('btn-assumir-atendimento').addEventListener('click', () => {
     window.open(`/atendimento.html?clienteId=${clienteId}`, '_blank', 'width=440,height=680');
     fecharModal();
   });
