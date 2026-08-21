@@ -107,7 +107,7 @@ function registerWhatsappConfigRoutes(fastify, pool) {
     const { clienteId } = request.params;
 
     const { rows: clienteRows } = await pool.query(
-      'SELECT nome, telefone FROM clientes WHERE id = $1 AND tenant_id = $2',
+      'SELECT nome, telefone, status_conversa FROM clientes WHERE id = $1 AND tenant_id = $2',
       [clienteId, tenantId]
     );
     const cliente = clienteRows[0];
@@ -134,7 +134,89 @@ function registerWhatsappConfigRoutes(fastify, pool) {
       }
     });
 
-    return { cliente: { nome: cliente.nome, telefone: cliente.telefone }, mensagens };
+    return {
+      cliente: { nome: cliente.nome, telefone: cliente.telefone, status_conversa: cliente.status_conversa },
+      mensagens,
+    };
+  });
+
+  // Atendimento humano ao vivo — "Assumir atendimento" (janela de chat em
+  // atendimento.html). Qualquer membro da equipe pode assumir, não só admin
+  // (mesmo critério de GET /api/whatsapp/conversas). Marca status_conversa
+  // pra suspender a resposta automática da IA (ver processarMensagemIA em
+  // lib/ia-engine.js) sem mexer em mais nada.
+  fastify.post('/api/whatsapp/conversas/:clienteId/assumir', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const { tenantId } = request.user;
+    const { clienteId } = request.params;
+    const { rowCount } = await pool.query(
+      "UPDATE clientes SET status_conversa = 'aguardando_humano' WHERE id = $1 AND tenant_id = $2",
+      [clienteId, tenantId]
+    );
+    if (!rowCount) return reply.code(404).send({ error: 'Cliente não encontrado' });
+    return { ok: true, status_conversa: 'aguardando_humano' };
+  });
+
+  // "Devolver pra IA" e "Concluir atendimento" caem aqui — mesmo efeito no
+  // banco (status_conversa volta a 'ativo', a IA responde de novo), só muda
+  // a intenção de quem clicou; não há um terceiro status pra distinguir
+  // "concluído" de "devolvido", de propósito (decisão explícita — evita
+  // migração/estado extra pra uma distinção que não muda nenhum
+  // comportamento do sistema).
+  fastify.post('/api/whatsapp/conversas/:clienteId/liberar', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const { tenantId } = request.user;
+    const { clienteId } = request.params;
+    const { rowCount } = await pool.query(
+      "UPDATE clientes SET status_conversa = 'ativo' WHERE id = $1 AND tenant_id = $2",
+      [clienteId, tenantId]
+    );
+    if (!rowCount) return reply.code(404).send({ error: 'Cliente não encontrado' });
+    return { ok: true, status_conversa: 'ativo' };
+  });
+
+  // Mensagem manual do atendente durante atendimento humano (janela de
+  // atendimento ao vivo, atendimento.html) — envia de verdade pelo WhatsApp
+  // do salão (mesmo enviarTexto usado pela IA) e grava em conversas_ia com
+  // role='assistant' (mesma role da IA — do ponto de vista do histórico
+  // enviado pra Claude, é o mesmo "turno" de resposta; o texto puro em vez
+  // do JSON {intent,...} cai no catch/fallback do parse acima, que já exibe
+  // como texto normal quando o JSON.parse falha).
+  fastify.post('/api/whatsapp/conversas/:clienteId/mensagem', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const { tenantId } = request.user;
+    const { clienteId } = request.params;
+    const { texto } = request.body || {};
+    if (!texto || !texto.trim()) {
+      return reply.code(400).send({ error: 'Mensagem vazia' });
+    }
+
+    const { rows: clienteRows } = await pool.query(
+      'SELECT nome, telefone FROM clientes WHERE id = $1 AND tenant_id = $2',
+      [clienteId, tenantId]
+    );
+    const cliente = clienteRows[0];
+    if (!cliente) return reply.code(404).send({ error: 'Cliente não encontrado' });
+
+    const { rows: tenantRows } = await pool.query('SELECT meta_phone_number_id FROM tenants WHERE id = $1', [tenantId]);
+    const phoneNumberId = tenantRows[0] && tenantRows[0].meta_phone_number_id;
+    if (!phoneNumberId) {
+      return reply.code(409).send({ error: 'WhatsApp não conectado.' });
+    }
+
+    try {
+      await metaWhatsappService.enviarTexto(phoneNumberId, cliente.telefone, texto.trim());
+    } catch (erro) {
+      return reply.code(502).send({ error: `Falha ao enviar pelo WhatsApp: ${erro.message}` });
+    }
+
+    await pool.query(
+      `INSERT INTO conversas_ia (tenant_id, cliente_id, role, conteudo) VALUES ($1, $2, 'assistant', $3)`,
+      [tenantId, clienteId, texto.trim()]
+    );
+    // Defensivo — mensagem manual só faz sentido em atendimento humano;
+    // garante o estado certo mesmo se a janela for aberta sem passar pelo
+    // /assumir antes (ex.: aba antiga reaberta).
+    await pool.query("UPDATE clientes SET status_conversa = 'aguardando_humano' WHERE id = $1", [clienteId]);
+
+    return { ok: true };
   });
 
   // CA (US39.1) — pedido de "Novo número": passos 2/3 da jornada (coleta de

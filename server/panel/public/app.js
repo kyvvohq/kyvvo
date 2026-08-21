@@ -5247,14 +5247,33 @@ async function abrirModalConversa(clienteId) {
       `).join('')
     : '<div class="vazio">Nenhuma mensagem registrada.</div>';
 
+  // "Continuar" em vez de "Assumir" quando já está em atendimento humano
+  // (ex.: outro membro da equipe assumiu antes) — o clique tem o mesmo
+  // efeito nos dois casos, só muda o rótulo.
+  const jaAssumida = dados.cliente.status_conversa === 'aguardando_humano';
+
   abrirModal(
-    `<h3>${escapeHtml(dados.cliente.nome || 'Conversa')}</h3><p class="modal-subtitulo">${escapeHtml(formatarTelefoneWhatsapp(dados.cliente.telefone || ''))}</p>`,
+    `<h3>${escapeHtml(dados.cliente.nome || 'Conversa')}</h3>
+     <p class="modal-subtitulo">${escapeHtml(formatarTelefoneWhatsapp(dados.cliente.telefone || ''))}</p>
+     <div class="modal-acoes">
+       <button type="button" class="btn-secundario" id="btn-assumir-atendimento">${jaAssumida ? 'Continuar atendimento' : 'Assumir atendimento'}</button>
+     </div>`,
     `<div class="chat-conversa">${mensagensHtml}</div>`
   );
   // Abre já rolado pra mensagem mais recente (mantém a ordem cronológica das
   // bolhas, igual WhatsApp de verdade — só evita ter que rolar manualmente).
   const chatConversa = document.querySelector('.chat-conversa');
   if (chatConversa) chatConversa.scrollTop = chatConversa.scrollHeight;
+
+  // Abre a janela de atendimento ao vivo (atendimento.html, nova aba —
+  // continua com o resto do painel disponível na aba original) e já marca a
+  // conversa como assumida, pra IA parar de responder automaticamente
+  // (ver processarMensagemIA em lib/ia-engine.js).
+  document.getElementById('btn-assumir-atendimento').addEventListener('click', async () => {
+    await api(`/api/whatsapp/conversas/${clienteId}/assumir`, { method: 'POST' });
+    window.open(`/atendimento.html?clienteId=${clienteId}`, '_blank', 'width=440,height=680');
+    fecharModal();
+  });
 }
 
 // Formata timestamp completo (data + hora) em pt-BR curto, ex.: "03/08/2026

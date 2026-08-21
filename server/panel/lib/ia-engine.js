@@ -406,9 +406,6 @@ async function processarMensagemIA({ tenant, telefone, mensagem, pushName, envia
     await pool.query('UPDATE clientes SET excluido_em = NULL WHERE id = $1', [cliente.id]);
   }
 
-  // US68/CA06 — não processa via IA enquanto aguarda retomada humana.
-  if (cliente.status_conversa === 'aguardando_humano') return;
-
   // Calculado ANTES de salvar a mensagem atual — senão a mensagem atual
   // viraria "a última", e o intervalo seria sempre zero.
   const { rows: ultimaMensagemRows } = await pool.query(
@@ -420,7 +417,16 @@ async function processarMensagemIA({ tenant, telefone, mensagem, pushName, envia
     : Infinity;
   const primeiraMensagem = gapDesdeUltimaMensagemMs > IA_GAP_NOVA_CONVERSA_MS;
 
+  // Sempre salva a mensagem do cliente, mesmo durante atendimento humano —
+  // o atendente precisa ver na janela de atendimento ao vivo
+  // (atendimento.html) o que o cliente escreveu; só a resposta automática da
+  // IA que fica suspensa enquanto aguardando_humano, não o registro em si
+  // (antes desse ajuste, o `return` abaixo saía cedo demais e a mensagem
+  // nunca chegava a ser gravada).
   await salvarMensagemIA(tenant.id, cliente.id, 'user', mensagem);
+
+  // US68/CA06 — não processa via IA enquanto aguarda retomada humana.
+  if (cliente.status_conversa === 'aguardando_humano') return;
 
   const historico = await buscarHistoricoIA(tenant.id, cliente.id);
   const system = await montarContextoIA(tenant, cliente, primeiraMensagem);

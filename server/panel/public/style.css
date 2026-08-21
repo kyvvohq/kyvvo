@@ -2208,6 +2208,77 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   text-align: right;
 }
 
+/* Tela de atendimento humano ao vivo (atendimento.html, aberta em nova aba
+   ao clicar "Assumir atendimento") — layout de página inteira (não modal),
+   cabeçalho + mensagens roláveis + campo de digitação sempre visíveis sem
+   rolar a página toda. Reaproveita .chat-bolha* acima pras bolhas. */
+.atendimento-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.atendimento-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid #2a2f52;
+  flex-shrink: 0;
+}
+
+.atendimento-header-nome { font-weight: 600; font-size: 16px; }
+.atendimento-header-telefone { color: #a1a5c4; font-size: 13px; margin-top: 2px; }
+
+.atendimento-header-acoes { display: flex; gap: 8px; flex-shrink: 0; }
+
+/* Sobrescreve width:100%/margin-top:24px do reset global de button — mesmo
+   ajuste já feito em .cobranca-banner-fechar, senão os botões viram largura
+   total e empurram o layout do cabeçalho. */
+.atendimento-header-acoes button {
+  width: auto;
+  margin: 0;
+  padding: 8px 14px;
+  font-size: 13px;
+}
+
+.atendimento-mensagens {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px;
+}
+
+.atendimento-form {
+  display: flex;
+  gap: 10px;
+  padding: 16px 20px;
+  border-top: 1px solid #2a2f52;
+  flex-shrink: 0;
+}
+
+.atendimento-form input {
+  flex: 1;
+}
+
+.atendimento-form button {
+  width: auto;
+  margin: 0;
+  padding: 12px 20px;
+  flex-shrink: 0;
+}
+
+.atendimento-encerrado {
+  text-align: center;
+  color: #a1a5c4;
+  font-size: 13px;
+  padding: 12px;
+  border-top: 1px solid #2a2f52;
+}
+
 .modal-erro {
   color: #ff6b6b;
   font-size: 13px;
