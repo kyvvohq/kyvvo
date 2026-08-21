@@ -4454,6 +4454,21 @@ function formatarTelefoneMascara(valor) {
   return `(${ddd}) ${resto.slice(0, 5)}-${resto.slice(5)}`;
 }
 
+// Máscara pra números que já vêm com DDI (todo telefone de origem WhatsApp —
+// status da conexão, tabela de conversas, popup de conversa — diferente de
+// formatarTelefoneMascara acima, que é só o número nacional dos campos de
+// cadastro/perfil). Bandeira + DDI na frente, DDD entre parênteses.
+function formatarTelefoneWhatsapp(valor) {
+  const digitos = (valor || '').replace(/\D/g, '');
+  if (digitos.length !== 12 && digitos.length !== 13) return formatarTelefoneMascara(digitos);
+  const ddi = digitos.slice(0, 2);
+  const ddd = digitos.slice(2, 4);
+  const numero = digitos.slice(4);
+  const numeroFormatado = `${numero.slice(0, -4)}-${numero.slice(-4)}`;
+  const bandeira = ddi === '55' ? '🇧🇷 ' : '';
+  return `${bandeira}+${ddi} (${ddd}) ${numeroFormatado}`;
+}
+
 function formatarCepMascara(valor) {
   const digitos = (valor || '').replace(/\D/g, '').slice(0, 8);
   return digitos.length > 5 ? `${digitos.slice(0, 5)}-${digitos.slice(5)}` : digitos;
@@ -5142,7 +5157,7 @@ async function renderWhatsapp() {
   let statusDotClasse;
   if (status.conectado) {
     statusDotClasse = 'status-dot-verde';
-    statusTexto = `WhatsApp conectado — ${status.numeroExibido || 'número não informado'}${[status.nomeVerificado, status.qualidade ? `Qualidade: ${status.qualidade}` : null].filter(Boolean).length ? ` · ${[status.nomeVerificado, status.qualidade ? `Qualidade: ${status.qualidade}` : null].filter(Boolean).join(' · ')}` : ''}`;
+    statusTexto = `WhatsApp conectado — ${status.numeroExibido ? formatarTelefoneWhatsapp(status.numeroExibido) : 'número não informado'}${[status.nomeVerificado, status.qualidade ? `Qualidade: ${status.qualidade}` : null].filter(Boolean).length ? ` · ${[status.nomeVerificado, status.qualidade ? `Qualidade: ${status.qualidade}` : null].filter(Boolean).join(' · ')}` : ''}`;
   } else if (status.erro) {
     statusDotClasse = 'status-dot-amarelo';
     statusTexto = `Erro de conexão — ${status.erro}`;
@@ -5185,9 +5200,9 @@ async function renderWhatsapp() {
         <tbody>
           ${conversas.conversas.length
             ? conversas.conversas.map((c) => `
-              <tr data-cliente-id="${c.cliente_id}">
+              <tr data-conversa-cliente="${c.cliente_id}">
                 <td>${escapeHtml(c.cliente_nome || '—')}</td>
-                <td>${escapeHtml(formatarTelefoneMascara(c.telefone || ''))}</td>
+                <td>${escapeHtml(formatarTelefoneWhatsapp(c.telefone || ''))}</td>
                 <td><span class="badge ${CONVERSA_STATUS_BADGE[c.status_conversa] || 'badge-status-inativo'}">${CONVERSA_STATUS_LABEL[c.status_conversa] || c.status_conversa}</span></td>
                 <td>${c.status_conversa === 'ativo' ? '🤖 Kyvvo' : escapeHtml(conversas.tenant_nome || 'Salão')}</td>
               </tr>
@@ -5204,9 +5219,14 @@ async function renderWhatsapp() {
     if (btnPedirNumeroNovo) btnPedirNumeroNovo.addEventListener('click', abrirModalPedirNumeroNovo);
   }
 
-  // Popup com o histórico completo ao clicar numa conversa.
-  document.querySelectorAll('#conteudo tr[data-cliente-id]').forEach((tr) => {
-    tr.addEventListener('click', () => abrirModalConversa(tr.dataset.clienteId));
+  // Popup com o histórico completo ao clicar numa conversa. Atributo
+  // "data-conversa-cliente" (não "data-cliente-id") de propósito — esse
+  // último já é usado por um listener delegado global em #conteudo (linha
+  // ~1479) que abre o modal de perfil do cliente; reaproveitar o mesmo nome
+  // fazia os dois listeners disparar no mesmo clique e o modal de perfil
+  // fechava/substituía este logo em seguida.
+  document.querySelectorAll('#conteudo tr[data-conversa-cliente]').forEach((tr) => {
+    tr.addEventListener('click', () => abrirModalConversa(tr.dataset.conversaCliente));
   });
 }
 
@@ -5228,7 +5248,7 @@ async function abrirModalConversa(clienteId) {
     : '<div class="vazio">Nenhuma mensagem registrada.</div>';
 
   abrirModal(
-    `<h3>${escapeHtml(dados.cliente.nome || 'Conversa')}</h3><p class="modal-subtitulo">${escapeHtml(formatarTelefoneMascara(dados.cliente.telefone || ''))}</p>`,
+    `<h3>${escapeHtml(dados.cliente.nome || 'Conversa')}</h3><p class="modal-subtitulo">${escapeHtml(formatarTelefoneWhatsapp(dados.cliente.telefone || ''))}</p>`,
     `<div class="chat-conversa">${mensagensHtml}</div>`
   );
   // Abre já rolado pra mensagem mais recente (mantém a ordem cronológica das
