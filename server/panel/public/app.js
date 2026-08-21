@@ -583,14 +583,14 @@ tabs.forEach((tab) => {
 });
 
 async function api(path, options = {}) {
-  const res = await fetch(path, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-      ...(options.headers || {}),
-    },
-  });
+  // Content-Type: application/json só entra quando existe body de verdade —
+  // Fastify rejeita (400 FST_ERR_CTP_EMPTY_JSON_BODY) um POST sem corpo que
+  // declara esse content-type, mesmo sem nenhum dado pra mandar (achado
+  // testando /assumir e /liberar, que são POST só pelo efeito colateral,
+  // sem payload — o mesmo bug já existia em /api/onboarding/dispensar).
+  const headers = { Authorization: `Bearer ${token}`, ...(options.headers || {}) };
+  if (options.body !== undefined) headers['Content-Type'] = 'application/json';
+  const res = await fetch(path, { ...options, headers });
   if (res.status === 401) {
     localStorage.removeItem('kyvvo_token');
     window.location.href = '/login';

@@ -45,14 +45,12 @@
   }
 
   async function api(path, options = {}) {
-    const res = await fetch(path, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-        ...(options.headers || {}),
-      },
-    });
+    // Content-Type só entra com body de verdade — Fastify rejeita (400
+    // FST_ERR_CTP_EMPTY_JSON_BODY) POST sem corpo que declara json (caso de
+    // /assumir e /liberar aqui, POST só pelo efeito colateral).
+    const headers = { Authorization: `Bearer ${token}`, ...(options.headers || {}) };
+    if (options.body !== undefined) headers['Content-Type'] = 'application/json';
+    const res = await fetch(path, { ...options, headers });
     if (res.status === 401) {
       localStorage.removeItem('kyvvo_token');
       window.location.href = '/login';
