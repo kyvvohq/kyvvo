@@ -1,6 +1,7 @@
 // CRUD de Profissionais (US17/ST17.2) — extraído de index.js (fase 2 da
 // modularização).
 const { garantirProfissionalPadrao } = require('../lib/profissionais');
+const planos = require('../lib/planos');
 
 async function definirServicosDoProfissional(client, tenantId, profissionalId, servicoIds) {
   if (!Array.isArray(servicoIds)) return;
@@ -41,6 +42,32 @@ function registerProfissionaisRoutes(fastify, pool) {
 
     if (!nome || !nome.trim()) {
       return reply.code(400).send({ error: 'Campo "nome" é obrigatório' });
+    }
+
+    // Trava de limite do plano — conta quantos profissionais o tenant já tem
+    // contra plano_limites.profissionais do plano efetivo (mesmo critério de
+    // "plano efetivo" já usado em POST /api/pagamentos/cadastrar: sem plano
+    // escolhido ainda, o valor de referência é o plano padrão). `valor` nulo
+    // (ou sem linha em plano_limites pro plano) significa ilimitado.
+    const { rows: tenantRows } = await pool.query('SELECT plano FROM tenants WHERE id = $1', [tenantId]);
+    const planoEfetivo = tenantRows[0] && tenantRows[0].plano && tenantRows[0].plano !== 'trial'
+      ? tenantRows[0].plano
+      : planos.PLANO_PADRAO_CHAVE;
+    const { rows: limiteRows } = await pool.query(
+      `SELECT valor FROM plano_limites WHERE plano_chave = $1 AND chave = 'profissionais'`,
+      [planoEfetivo]
+    );
+    const limite = limiteRows[0] ? limiteRows[0].valor : null;
+    if (limite != null) {
+      const { rows: contagemRows } = await pool.query(
+        'SELECT COUNT(*)::int AS total FROM profissionais WHERE tenant_id = $1',
+        [tenantId]
+      );
+      if (contagemRows[0].total >= limite) {
+        return reply.code(409).send({
+          error: `Seu plano permite até ${limite} ${limite === 1 ? 'profissional' : 'profissionais'}. Fale com o suporte para aumentar o limite.`,
+        });
+      }
     }
 
     const client = await pool.connect();

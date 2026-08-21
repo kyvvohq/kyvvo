@@ -224,19 +224,20 @@ async function start() {
     'GET /api/tenant/status',
   ]);
 
-  // US52/CA03 — acessíveis mesmo com trial vencido e sem assinatura ativa:
-  // só o necessário pra regularizar a conta (sair, ver o próprio status/
-  // perfil básico, consultar e cadastrar meio de pagamento, e o endpoint de
-  // analytics que a própria tela de bloqueio usa). Todo o resto (agenda,
-  // clientes, serviços, configuração...) fica bloqueado até reativar.
+  // US52/CA03 — acesso limitado: com trial vencido/inadimplente/suspenso/
+  // cancelado, GET nunca é bloqueado (o tenant continua vendo os dados reais
+  // normalmente, só não consegue criar/editar/excluir nada) — só as rotas de
+  // ESCRITA abaixo continuam liberadas: sair da conta, o endpoint de
+  // analytics, e tudo relacionado a Plano e cobrança (cadastrar meio de
+  // pagamento, trocar de plano, cancelar assinatura). Qualquer outra escrita
+  // (agenda, clientes, serviços, configuração...) fica bloqueada até
+  // regularizar.
   const ROTAS_LIVRES_SEM_ASSINATURA = new Set([
     'POST /api/auth/logout',
-    'GET /api/tenant/status',
-    'GET /api/perfil',
-    'GET /api/pagamentos',
-    'GET /api/pagamentos/status',
-    'POST /api/pagamentos/cadastrar',
     'POST /api/eventos',
+    'POST /api/pagamentos/cadastrar',
+    'PATCH /api/pagamentos/plano',
+    'DELETE /api/pagamentos/assinatura',
   ]);
 
   fastify.decorate('authenticate', async (request, reply) => {
@@ -290,14 +291,18 @@ async function start() {
       status_alterado_em: usuario.status_alterado_em,
       acesso_ate: usuario.acesso_ate,
     });
-    if (bloqueioMotivo && !ROTAS_LIVRES_SEM_ASSINATURA.has(rotaAtual)) {
+    if (bloqueioMotivo) {
       if (bloqueioMotivo === 'trial_expirado') {
         await registrarEventoTrialExpiradoUmaVez(request.user.tenantId);
       }
-      return reply.code(403).send({
-        error: BLOQUEIO_MENSAGENS[bloqueioMotivo],
-        bloqueio: bloqueioMotivo,
-      });
+      // Acesso limitado (não binário): GET sempre passa (dados reais,
+      // sem esconder nada); só escrita fora do whitelist acima é bloqueada.
+      if (request.method !== 'GET' && !ROTAS_LIVRES_SEM_ASSINATURA.has(rotaAtual)) {
+        return reply.code(403).send({
+          error: BLOQUEIO_MENSAGENS[bloqueioMotivo],
+          bloqueio: bloqueioMotivo,
+        });
+      }
     }
   });
 

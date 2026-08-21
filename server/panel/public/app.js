@@ -41,15 +41,21 @@ async function verificarStatusConta() {
     return;
   }
 
-  // US52/CA03 + bloqueio por inadimplência/suspensão/cancelamento vencido —
-  // o backend já bloqueia essas rotas com 403 (fastify.authenticate,
-  // calcularBloqueioAssinatura), mas o redirect aqui evita que o painel
-  // tente renderizar e tropece nesses 403 antes de mandar o cliente pra tela
-  // de regularização.
-  if (status.bloqueio_motivo) {
-    window.location.href = '/bloqueio';
-    return;
-  }
+  // US52/CA03 — acesso limitado (não mais tela cheia de bloqueio): o tenant
+  // continua vendo o painel normalmente (o backend só bloqueia ESCRITA fora
+  // de Plano e cobrança, GET nunca é bloqueado, ver fastify.authenticate/
+  // calcularBloqueioAssinatura). Aqui só liga o aviso fixo abaixo do
+  // cabeçalho — renderBannerCobranca cuida de mostrar/reforçar.
+  window.__bloqueioMotivo = status.bloqueio_motivo || null;
+  renderBannerCobranca(status.bloqueio_motivo);
+  // Desabilita visualmente os botões "+ Novo X" de cada página (Agenda,
+  // Serviços, Profissionais, Clientes, Bloqueios, Financeiro, Equipe — todos
+  // compartilham a classe .btn-novo-agendamento) via CSS, exceto o próprio
+  // CTA da tela de Plano e cobrança (#btn-cadastrar-pagamento, ver
+  // style.css). Classe no <body> (nunca substituído pelo SPA, ao contrário
+  // de #conteudo) pra continuar valendo em qualquer página pra onde o
+  // usuário navegar depois, sem precisar re-aplicar a cada renderX().
+  document.body.classList.toggle('conta-bloqueada', !!status.bloqueio_motivo);
 
   // CA08 — toast verde ao voltar da validação do token.
   if (new URLSearchParams(location.search).get('verificado') === '1') {
@@ -71,9 +77,13 @@ async function verificarStatusConta() {
     mostrarModalOnboarding(status);
   }
 
-  // CA09 — banner de trial com contador de dias restantes.
+  // CA09 — banner de trial com contador de dias restantes. Não mostra
+  // junto com o aviso de conta bloqueada (trial_expirado é um dos motivos
+  // de bloqueio) — o #cobranca-banner já cobre essa mensagem, com CTA mais
+  // claro; mostrar os dois juntos ("Trial ativo — 0 dias restantes" +
+  // "seu trial acabou") seria redundante e confuso.
   const banner = document.getElementById('trial-banner');
-  if (banner && status.status === 'trial' && status.dias_restantes != null) {
+  if (banner && !status.bloqueio_motivo && status.status === 'trial' && status.dias_restantes != null) {
     const dias = status.dias_restantes;
     const texto = dias === 1 ? '1 dia restante' : `${dias} dias restantes`;
     banner.textContent = `🎉 Trial ativo — ${texto}. Escolha seu plano antes que expire.`;
@@ -107,6 +117,68 @@ async function verificarStatusConta() {
     el.hidden = el.hidden || status.plano !== 'custom';
   });
 }
+
+// Aviso fixo de conta bloqueada (acesso limitado — trial vencido/
+// inadimplente/suspenso/cancelado): substitui a antiga tela cheia de
+// bloqueio. Cópia curta por motivo, mesmo texto-base de BLOQUEIO_MENSAGENS
+// (server/panel/lib/trial-conta.js) — duplicado aqui de propósito, mesmo
+// padrão já usado em bloqueio.html (BLOQUEIO_COPY), pra não precisar de mais
+// uma chamada de API só pra montar o texto do aviso.
+const COBRANCA_BANNER_MENSAGENS = {
+  trial_expirado: 'Seu período de teste terminou.',
+  inadimplente: 'Não conseguimos confirmar seu pagamento.',
+  suspenso: 'Sua assinatura foi suspensa por falha no pagamento.',
+  cancelado: 'Sua assinatura foi encerrada.',
+};
+
+// "Até o próximo login" (não localStorage permanente, que é o que
+// kyvvo_avisos_dispensados/renderAvisos usa pros avisos do US59) — guarda o
+// TOKEN atual como "dispensado"; como um novo login sempre gera um token
+// novo, a comparação abaixo falha sozinha na próxima sessão, sem precisar
+// tocar em login.html/cadastro.html/equipe-convite.html pra limpar nada.
+function avisoCobrancaDispensadoNestaSessao() {
+  try {
+    return sessionStorage.getItem('kyvvo_aviso_cobranca_token') === token;
+  } catch (e) {
+    return false;
+  }
+}
+function dispensarAvisoCobranca() {
+  try {
+    sessionStorage.setItem('kyvvo_aviso_cobranca_token', token);
+  } catch (e) {
+    // Sem sessionStorage (modo privado restritivo, etc.) — só esconde por
+    // esta renderização, sem persistir; reaparece no próximo reload, o que é
+    // aceitável (mesmo espírito de fail-open já usado no resto do arquivo).
+  }
+  const banner = document.getElementById('cobranca-banner');
+  if (banner) banner.hidden = true;
+}
+
+// `forcar` ignora o dispensado da sessão — usado quando o `api()` abaixo
+// detecta um 403 de bloqueio (o usuário tentou editar algo, o aviso precisa
+// voltar mesmo que ele já tivesse fechado antes nesta mesma sessão).
+function renderBannerCobranca(motivo, forcar = false) {
+  const banner = document.getElementById('cobranca-banner');
+  const texto = document.getElementById('cobranca-banner-texto');
+  if (!banner || !texto) return;
+  if (!motivo || (!forcar && avisoCobrancaDispensadoNestaSessao())) {
+    banner.hidden = true;
+    return;
+  }
+  const mensagem = COBRANCA_BANNER_MENSAGENS[motivo] || 'Sua assinatura precisa de atenção.';
+  texto.textContent = `${mensagem} Toque aqui para regularizar em Plano e cobrança.`;
+  banner.hidden = false;
+}
+
+document.getElementById('cobranca-banner').addEventListener('click', (e) => {
+  if (e.target.closest('#cobranca-banner-fechar')) {
+    e.stopPropagation();
+    dispensarAvisoCobranca();
+    return;
+  }
+  selecionarMenu('pagamentos');
+});
 
 // Mensagem + rótulo/destino do botão de ação de cada tipo de aviso. `critico:
 // true` = sem botão de dispensar, some só quando a pendência é resolvida
@@ -524,7 +596,16 @@ async function api(path, options = {}) {
     window.location.href = '/login';
     return null;
   }
-  return res.json();
+  const dados = await res.json();
+  // Acesso limitado (US52) — qualquer escrita bloqueada por conta vencida/
+  // inadimplente/suspensa/cancelada cai aqui, em qualquer página do app
+  // (único ponto de passagem de toda chamada de API) — reforça o aviso
+  // mesmo que o usuário já tivesse dispensado nesta sessão, já que ele
+  // acabou de tentar editar algo de verdade.
+  if (res.status === 403 && dados && dados.bloqueio) {
+    renderBannerCobranca(dados.bloqueio, true);
+  }
+  return dados;
 }
 
 // BUG HISTÓRICO (achado testando o "+" da grade de horários em produção):
@@ -5054,13 +5135,20 @@ async function renderWhatsapp() {
   // Redesenho: as 3 linhas de antes (label/número/detalhe) viram uma linha
   // única de texto — pedido explícito do Bruno pra reduzir a altura do
   // card, já que a WhatsApp é a primeira coisa da tela.
+  // Bolinha de status (.status-dot, ver style.css) no lugar do emoji
+  // 🟢/🟡/⚪ solto no texto — mesma paleta de cor já usada pelos badges de
+  // status do resto do app (verde/amarelo/cinza).
   let statusTexto;
+  let statusDotClasse;
   if (status.conectado) {
-    statusTexto = `🟢 WhatsApp conectado — ${status.numeroExibido || 'número não informado'}${[status.nomeVerificado, status.qualidade ? `Qualidade: ${status.qualidade}` : null].filter(Boolean).length ? ` · ${[status.nomeVerificado, status.qualidade ? `Qualidade: ${status.qualidade}` : null].filter(Boolean).join(' · ')}` : ''}`;
+    statusDotClasse = 'status-dot-verde';
+    statusTexto = `WhatsApp conectado — ${status.numeroExibido || 'número não informado'}${[status.nomeVerificado, status.qualidade ? `Qualidade: ${status.qualidade}` : null].filter(Boolean).length ? ` · ${[status.nomeVerificado, status.qualidade ? `Qualidade: ${status.qualidade}` : null].filter(Boolean).join(' · ')}` : ''}`;
   } else if (status.erro) {
-    statusTexto = `🟡 Erro de conexão — ${status.erro}`;
+    statusDotClasse = 'status-dot-amarelo';
+    statusTexto = `Erro de conexão — ${status.erro}`;
   } else {
-    statusTexto = '⚪ WhatsApp não conectado — conecte pra ativar o agendamento automático pelo bot.';
+    statusDotClasse = 'status-dot-cinza';
+    statusTexto = 'WhatsApp não conectado — conecte pra ativar o agendamento automático pelo bot.';
   }
 
   // US46.1 — antes de mostrar o botão de self-service, explica que ele é uma
@@ -5084,7 +5172,7 @@ async function renderWhatsapp() {
     <h2 class="titulo-detalhe">WhatsApp</h2>
     <div class="pagamento-plano-card">
       <div class="pagamento-plano-linha">
-        <span>${escapeHtml(statusTexto)}</span>
+        <span><span class="status-dot ${statusDotClasse}"></span>${escapeHtml(statusTexto)}</span>
       </div>
     </div>
     ${planosInfo}
@@ -5097,7 +5185,7 @@ async function renderWhatsapp() {
         <tbody>
           ${conversas.conversas.length
             ? conversas.conversas.map((c) => `
-              <tr>
+              <tr data-cliente-id="${c.cliente_id}">
                 <td>${escapeHtml(c.cliente_nome || '—')}</td>
                 <td>${escapeHtml(formatarTelefoneMascara(c.telefone || ''))}</td>
                 <td><span class="badge ${CONVERSA_STATUS_BADGE[c.status_conversa] || 'badge-status-inativo'}">${CONVERSA_STATUS_LABEL[c.status_conversa] || c.status_conversa}</span></td>
@@ -5115,6 +5203,34 @@ async function renderWhatsapp() {
     const btnPedirNumeroNovo = document.getElementById('btn-pedir-numero-novo');
     if (btnPedirNumeroNovo) btnPedirNumeroNovo.addEventListener('click', abrirModalPedirNumeroNovo);
   }
+
+  // Popup com o histórico completo ao clicar numa conversa.
+  document.querySelectorAll('#conteudo tr[data-cliente-id]').forEach((tr) => {
+    tr.addEventListener('click', () => abrirModalConversa(tr.dataset.clienteId));
+  });
+}
+
+// Popup com o histórico completo de uma conversa (US "clicar numa conversa
+// abre a conversa realizada no atendimento"). Mensagens do cliente e da
+// IA/atendente como bolhas de chat, mais recente embaixo.
+async function abrirModalConversa(clienteId) {
+  abrirModal('<h3>Conversa</h3>', '<div class="vazio">Carregando...</div>');
+  const dados = await api(`/api/whatsapp/conversas/${clienteId}`);
+  if (!dados) return;
+
+  const mensagensHtml = dados.mensagens.length
+    ? dados.mensagens.map((m) => `
+        <div class="chat-bolha ${m.role === 'user' ? 'chat-bolha-cliente' : 'chat-bolha-atendente'}">
+          <div class="chat-bolha-texto">${escapeHtml(m.texto || '')}</div>
+          <div class="chat-bolha-hora">${formatarDataHoraCurta(m.criado_em)}</div>
+        </div>
+      `).join('')
+    : '<div class="vazio">Nenhuma mensagem registrada.</div>';
+
+  abrirModal(
+    `<h3>${escapeHtml(dados.cliente.nome || 'Conversa')}</h3><p class="modal-subtitulo">${escapeHtml(formatarTelefoneMascara(dados.cliente.telefone || ''))}</p>`,
+    `<div class="chat-conversa">${mensagensHtml}</div>`
+  );
 }
 
 // Formata timestamp completo (data + hora) em pt-BR curto, ex.: "03/08/2026

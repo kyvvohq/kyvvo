@@ -75,7 +75,7 @@ function registerWhatsappConfigRoutes(fastify, pool) {
     const tenantNome = tenantRows[0] ? tenantRows[0].nome : null;
 
     const { rows } = await pool.query(
-      `SELECT c.nome, c.telefone, c.status_conversa, MAX(ci.criado_em) AS ultima_mensagem_em
+      `SELECT c.id AS cliente_id, c.nome, c.telefone, c.status_conversa, MAX(ci.criado_em) AS ultima_mensagem_em
        FROM clientes c
        JOIN conversas_ia ci ON ci.cliente_id = c.id
        WHERE c.tenant_id = $1
@@ -88,11 +88,53 @@ function registerWhatsappConfigRoutes(fastify, pool) {
     return {
       tenant_nome: tenantNome,
       conversas: rows.map((r) => ({
+        cliente_id: r.cliente_id,
         cliente_nome: r.nome,
         telefone: r.telefone,
         status_conversa: r.status_conversa,
       })),
     };
+  });
+
+  // Histórico completo de uma conversa (popup ao clicar numa linha da
+  // listagem acima). Mensagens role='user' já são texto puro; role='assistant'
+  // são gravadas como JSON ({intent, params, resposta}, ver
+  // salvarMensagemIA/processarMensagemIA em lib/ia-engine.js — de propósito,
+  // pra não vazar o histórico de resposta em linguagem natural de volta pro
+  // prompt da IA) — aqui extrai só `resposta` pra exibir como texto normal.
+  fastify.get('/api/whatsapp/conversas/:clienteId', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const { tenantId } = request.user;
+    const { clienteId } = request.params;
+
+    const { rows: clienteRows } = await pool.query(
+      'SELECT nome, telefone FROM clientes WHERE id = $1 AND tenant_id = $2',
+      [clienteId, tenantId]
+    );
+    const cliente = clienteRows[0];
+    if (!cliente) {
+      return reply.code(404).send({ error: 'Cliente não encontrado' });
+    }
+
+    const { rows } = await pool.query(
+      `SELECT role, conteudo, criado_em FROM conversas_ia
+       WHERE tenant_id = $1 AND cliente_id = $2
+       ORDER BY criado_em ASC`,
+      [tenantId, clienteId]
+    );
+
+    const mensagens = rows.map((r) => {
+      if (r.role !== 'assistant') {
+        return { role: r.role, texto: r.conteudo, criado_em: r.criado_em };
+      }
+      try {
+        const parsed = JSON.parse(r.conteudo);
+        return { role: r.role, texto: parsed.resposta ?? r.conteudo, criado_em: r.criado_em };
+      } catch {
+        return { role: r.role, texto: r.conteudo, criado_em: r.criado_em };
+      }
+    });
+
+    return { cliente: { nome: cliente.nome, telefone: cliente.telefone }, mensagens };
   });
 
   // CA (US39.1) — pedido de "Novo número": passos 2/3 da jornada (coleta de

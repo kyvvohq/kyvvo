@@ -1710,6 +1710,22 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   margin-left: 8px;
 }
 
+/* Bolinha de status (ex.: conexão do WhatsApp, Configurações > WhatsApp) —
+   mesma paleta verde/amarelo/cinza dos badges acima, no lugar de emoji solto
+   no texto. */
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 8px;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+.status-dot-verde { background: #4ade80; }
+.status-dot-amarelo { background: #facc15; }
+.status-dot-cinza { background: #a1a5c4; }
+
 .badge-encaixe { background: rgba(0, 212, 255, 0.15); color: var(--cyan); }
 .badge-cancelado { background: rgba(255, 107, 107, 0.15); color: #ff6b6b; }
 /* US64 — status do agendamento (Concluído) e do lançamento financeiro de
@@ -2142,6 +2158,54 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   font-size: 14px;
   line-height: 1.6;
   margin-top: 16px;
+}
+
+.modal-subtitulo {
+  color: #a1a5c4;
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+/* Popup de histórico de conversa (Configurações > WhatsApp). */
+.chat-conversa {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.chat-bolha {
+  max-width: 78%;
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.chat-bolha-cliente {
+  align-self: flex-start;
+  background: #191f3d;
+  border-bottom-left-radius: 2px;
+}
+
+.chat-bolha-atendente {
+  align-self: flex-end;
+  background: rgba(124, 92, 252, 0.25);
+  border-bottom-right-radius: 2px;
+}
+
+.chat-bolha-texto {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.chat-bolha-hora {
+  color: #a1a5c4;
+  font-size: 11px;
+  margin-top: 4px;
+  text-align: right;
 }
 
 .modal-erro {
@@ -2715,6 +2779,52 @@ input.invalid, select.invalid {
   font-weight: 500;
   text-align: center;
   padding: 12px 24px;
+}
+
+/* Aviso de acesso limitado (US52) — conta com trial vencido/inadimplente/
+   suspensa/cancelada. Abaixo do cabeçalho (topbar), não acima como o
+   trial-banner: o pedido foi especificamente "logo abaixo do cabeçalho".
+   Clicável (leva pra Plano e cobrança); dispensável só até o próximo login. */
+.cobranca-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: rgba(255, 107, 107, 0.14);
+  border-bottom: 1px solid #2a2f52;
+  color: #ffb4b4;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: center;
+  padding: 12px 24px;
+  cursor: pointer;
+}
+
+.cobranca-banner-fechar {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+  opacity: 0.75;
+}
+
+.cobranca-banner-fechar:hover {
+  opacity: 1;
+}
+
+/* Modo acesso limitado (US52) — desabilita visualmente os botões "+ Novo X"
+   de toda página (todos usam .btn-novo-agendamento, ver painel.html/app.js),
+   exceto o CTA da própria tela de Plano e cobrança, que precisa continuar
+   funcionando pra regularizar a conta. A trava de verdade é no backend
+   (403); isto é só o sinal visual. */
+body.conta-bloqueada .btn-novo-agendamento:not(#btn-cadastrar-pagamento) {
+  opacity: 0.45;
+  pointer-events: none;
+  cursor: not-allowed;
 }
 
 /* Avisos contextuais (US59): cobrança pendente (crítico) e configuração
