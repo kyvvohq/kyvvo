@@ -2810,6 +2810,8 @@ input.invalid, select.invalid {
 
 .cobranca-banner-fechar {
   flex-shrink: 0;
+  width: auto;
+  margin: 0;
   background: none;
   border: none;
   color: inherit;
