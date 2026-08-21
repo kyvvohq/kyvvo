@@ -2800,6 +2800,14 @@ input.invalid, select.invalid {
   cursor: pointer;
 }
 
+/* `display: flex` acima é uma regra de autor e por isso sempre vence a regra
+   padrão do navegador `[hidden] { display: none }` (autor > user-agent no
+   cascade, independente de especificidade) — sem isto, setar o atributo
+   `hidden` via JS não escondia o banner de verdade. */
+.cobranca-banner[hidden] {
+  display: none;
+}
+
 .cobranca-banner-fechar {
   flex-shrink: 0;
   background: none;
