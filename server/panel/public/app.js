@@ -5231,6 +5231,10 @@ async function abrirModalConversa(clienteId) {
     `<h3>${escapeHtml(dados.cliente.nome || 'Conversa')}</h3><p class="modal-subtitulo">${escapeHtml(formatarTelefoneMascara(dados.cliente.telefone || ''))}</p>`,
     `<div class="chat-conversa">${mensagensHtml}</div>`
   );
+  // Abre já rolado pra mensagem mais recente (mantém a ordem cronológica das
+  // bolhas, igual WhatsApp de verdade — só evita ter que rolar manualmente).
+  const chatConversa = document.querySelector('.chat-conversa');
+  if (chatConversa) chatConversa.scrollTop = chatConversa.scrollHeight;
 }
 
 // Formata timestamp completo (data + hora) em pt-BR curto, ex.: "03/08/2026
