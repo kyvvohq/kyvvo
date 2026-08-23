@@ -64,6 +64,18 @@ function registerAuthRoutes(fastify, pool) {
     return { token, nome: usuario.nome, email: usuario.email, email_verified: usuario.email_verified, role: usuario.role };
   });
 
+  // Checagem de acesso ao módulo "people" (Kyvvo People, produto separado —
+  // ver server/panel/index.js#requireModulo) usada pelo backend do Kyvvo
+  // People logo após o login acima: reaproveita authenticate+requireModulo
+  // sem expor usuarios/tenants a esse outro serviço — só confirma se o
+  // tenant do token pode entrar, nada além de tenantId (nome/email o
+  // People já tem da resposta do /login).
+  fastify.get(
+    '/api/auth/people/acesso',
+    { preHandler: [fastify.authenticate, fastify.requireModulo('people')] },
+    async (request) => ({ tenantId: request.user.tenantId })
+  );
+
   // Invalida o token atual (e qualquer outro emitido antes dele) incrementando
   // token_version: como o JWT é stateless, é essa comparação em `authenticate`
   // que faz o logout ter efeito imediato no servidor, e não só no cliente.
