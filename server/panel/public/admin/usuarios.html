@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<script>
+  if (!localStorage.getItem('kyvvo_admin_token')) {
+    window.location.href = '/login.html';
+  }
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Usuários — Admin Kyvvo</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%237c5cfc'/%3E%3Ctext x='16' y='22' font-family='Arial,sans-serif' font-size='15' font-weight='800' fill='white' text-anchor='middle'%3Evv%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Syne:wght@400;600;700;800&display=swap">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="painel-shell">
+  <aside class="painel-sidebar">
+    <div class="logo">ky<span class="logo-vv">vv</span>o</div>
+    <nav class="menu">
+      <div class="menu-secao-titulo">Visão geral</div>
+      <a class="menu-item" href="/dashboard.html">Dashboard</a>
+      <div class="menu-secao-titulo">Clientes</div>
+      <a class="menu-item" href="/painel.html">Tenants</a>
+      <a class="menu-item active" href="/usuarios.html">Usuários</a>
+      <a class="menu-item" href="/assinaturas.html">Assinaturas</a>
+      <div class="menu-secao-titulo">Operação</div>
+      <a class="menu-item" href="/whatsapp.html">WhatsApp</a>
+      <a class="menu-item" href="/ia-uso.html">IA e consumo</a>
+      <div class="menu-secao-titulo">Sistema</div>
+      <a class="menu-item" href="/configuracoes.html">Configurações</a>
+      <a class="menu-item" href="/versao.html">Versões / Changelog</a>
+      <a class="menu-item" href="/docs" target="_blank" rel="noopener">Swagger</a>
+    </nav>
+  </aside>
+  <div class="painel-main">
+    <div class="topbar">
+      <div class="topbar-textos">
+        <div class="admin-badge">🛠 Área administrativa</div>
+      </div>
+      <div class="user-menu" id="user-menu">
+        <button class="user-menu-toggle" id="user-menu-toggle">
+          <div class="user-menu-avatar" id="user-menu-avatar"></div>
+          <div class="user-menu-textos">
+            <div class="user-menu-nome" id="admin-nome"></div>
+          </div>
+          <span class="user-menu-chevron">▾</span>
+        </button>
+        <div class="user-menu-dropdown" id="user-menu-dropdown" hidden>
+          <button class="user-menu-sair" id="btn-sair"><span aria-hidden="true">⎋</span> Sair</button>
+        </div>
+      </div>
+    </div>
+    <div class="conteudo" id="conteudo" style="max-width: 1300px;"></div>
+    <footer class="rodape-app">
+      <div class="logo">ky<span class="logo-vv">vv</span>o</div>
+      <p class="rodape-app-copy">© 2026 Kyvvo. Todos os direitos reservados.</p>
+    </footer>
+  </div>
+</div>
+<script src="/shell.js"></script>
+<script src="/usuarios.js"></script>
+</body>
+</html>

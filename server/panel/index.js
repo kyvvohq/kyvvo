@@ -87,6 +87,7 @@ const { registerAdminTenantsRoutes } = require('./routes/admin-tenants');
 const { registerAdminConfiguracoesRoutes } = require('./routes/admin-configuracoes');
 const { registerAdminMonitoramentoRoutes } = require('./routes/admin-monitoramento');
 const { registerAdminNumerosProntosRoutes } = require('./routes/admin-numeros-prontos');
+const { registerAdminUsuariosRoutes } = require('./routes/admin-usuarios');
 // Fase 10 da modularização
 const { registerAuthRoutes } = require('./routes/auth');
 const { registerPublicoRoutes } = require('./routes/publico');
@@ -594,6 +595,7 @@ async function start() {
   registerAdminConfiguracoesRoutes(fastify, pool);
   registerAdminMonitoramentoRoutes(fastify, pool);
   registerAdminNumerosProntosRoutes(fastify, pool);
+  registerAdminUsuariosRoutes(fastify, pool);
 
 
   // CA09 — carrega os valores configuráveis do banco antes de aceitar
