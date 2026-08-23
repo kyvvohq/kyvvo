@@ -44,6 +44,8 @@ if (process.env.SENTRY_DSN) Sentry.setupFastifyErrorHandler(fastify);
 const jwt = require('@fastify/jwt');
 const cors = require('@fastify/cors');
 const staticPlugin = require('@fastify/static');
+const swagger = require('@fastify/swagger');
+const swaggerUi = require('@fastify/swagger-ui');
 const path = require('path');
 const fsPromises = require('fs/promises');
 const crypto = require('crypto');
@@ -98,6 +100,7 @@ const { registerContaRoutes } = require('./routes/conta');
 const disponibilidadeLib = require('./lib/disponibilidade');
 const iaEngineLib = require('./lib/ia-engine');
 const { registerWebhookWhatsappRoutes } = require('./routes/webhook-whatsapp');
+const { openapiConfig, transform: swaggerTransform } = require('./lib/swagger-config');
 const { contarHorariosLivresNoDia } = disponibilidadeLib;
 const { dataAtualBrasilia } = datetime;
 const { calcularBloqueioAssinatura, BLOQUEIO_MENSAGENS } = trialConta;
@@ -181,6 +184,15 @@ async function start() {
     // antigos com `.html`: continuam resolvendo normalmente também.
     extensions: ['html'],
   });
+
+  // Documentação interativa da API (Swagger/OpenAPI) — precisa registrar
+  // ANTES de qualquer rota (inclusive as dos routes/*.js exigidos abaixo),
+  // já que @fastify/swagger captura cada rota no momento em que ela é
+  // registrada no Fastify. Ver lib/swagger-config.js pra como a tag de cada
+  // rota é derivada automaticamente do próprio path (sem schema manual por
+  // rota) e como só rotas /api, /admin/api e /webhook* entram no doc.
+  await fastify.register(swagger, { openapi: openapiConfig, transform: swaggerTransform });
+  await fastify.register(swaggerUi, { routePrefix: '/admin/docs' });
 
   // Página de detalhe do tenant (US28/CA01) — rota dinâmica que o
   // @fastify/static não resolve sozinho, já que não existe um arquivo físico
