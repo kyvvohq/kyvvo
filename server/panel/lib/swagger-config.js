@@ -11,7 +11,7 @@
 // /admin/tenants/:id etc.) não começam com /api, /admin/api ou /webhook* —
 // ficam de fora do doc (hide: true) por não serem endpoints de dados.
 //
-// "Try it out" sempre mira app.kyvvo.com.br (host direto, sem reescrita de
+// "Try it out" sempre mira studio.kyvvo.com.br (host direto, sem reescrita de
 // path) independente de onde a página de docs foi carregada — acessar via
 // admin.kyvvo.com.br e chamar uma rota /admin/api/... duplicaria o prefixo
 // (o nginx de lá já prepende /admin/ sozinho).
@@ -40,7 +40,7 @@ const openapiConfig = {
     version: '1.0.0',
   },
   servers: [
-    { url: 'https://app.kyvvo.com.br', description: 'Produção (host direto — use este pro "Try it out")' },
+    { url: 'https://studio.kyvvo.com.br', description: 'Produção (host direto — use este pro "Try it out")' },
   ],
   components: {
     securitySchemes: {

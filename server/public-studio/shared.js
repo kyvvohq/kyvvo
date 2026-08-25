@@ -4,7 +4,7 @@
 // Também concentra a lógica do modal de login, usada pelo botão "Entrar"
 // injetado no header.
 
-const PANEL_ORIGIN = 'https://app.kyvvo.com.br';
+const PANEL_ORIGIN = 'https://studio.kyvvo.com.br';
 
 async function injectPartial(url, targetId) {
   const target = document.getElementById(targetId);

@@ -3,7 +3,7 @@
 Referente à US48 (fortalecer SEO e identidade de marca, reduzir confusão com
 marcas parecidas como "kyvoo"/"Kyvo").
 
-## O que já está implementado (landing, `server/public/`)
+## O que já está implementado (landing do Studio, `server/public-studio/` — movida de `server/public/` quando kyvvo.com.br virou a landing da plataforma)
 
 - Metadados: `<title>`, meta description, `robots`, canonical, Open Graph e
   Twitter Card em todas as páginas públicas (`index.html`, `diagnostico.html`,

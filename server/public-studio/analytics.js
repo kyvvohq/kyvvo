@@ -5,14 +5,15 @@
 // padrão já usado no WhatsApp self-service pra integrações pendentes de
 // config em produção).
 //
-// cross_subdomain_cookie mantém o mesmo distinct_id entre a landing
-// (kyvvo.com.br) e o painel (app.kyvvo.com.br) — mesmo domínio raiz — pra o
-// funil continuar de visita até ativação sem virar duas pessoas diferentes
+// cross_subdomain_cookie mantém o mesmo distinct_id entre a landing e o
+// painel do Studio (ambos em studio.kyvvo.com.br) — mesmo domínio raiz — pra
+// o funil continuar de visita até ativação sem virar duas pessoas diferentes
 // no PostHog.
 (function () {
-  // URL absoluta pra API da landing (server/index.js), que continua na EC2
-  // depois que server/public/** passou a ser servido pelo Amplify Hosting
-  // (domínio diferente) — mesmo padrão do PANEL_ORIGIN em shared.js.
+  // URL absoluta pra API da landing (server/index.js), que roda separada na
+  // EC2 (server/public-studio/** é servido por esse mesmo processo, mas via
+  // nginx em studio.kyvvo.com.br, não em api.kyvvo.com.br) — mesmo padrão do
+  // PANEL_ORIGIN em shared.js.
   window.KYVVO_API_ORIGIN = 'https://api.kyvvo.com.br';
 
   window.kyvvoCapture = function (evento, props) {

@@ -3,9 +3,11 @@ const fs = require('fs');
 const path = require('path');
 
 // Mesma ideia do static-server do painel (server/panel/tests/), mas
-// servindo server/public — a landing não tinha nenhum harness de teste até
-// aqui (US67).
-const PUBLIC_DIR = path.join(__dirname, '..', 'public');
+// servindo server/public-studio (landing do Studio, movida de server/public
+// quando kyvvo.com.br virou a landing da plataforma e o conteúdo de vendas
+// existente passou a viver em studio.kyvvo.com.br) — a landing não tinha
+// nenhum harness de teste até aqui (US67).
+const PUBLIC_DIR = path.join(__dirname, '..', 'public-studio');
 const PORT = process.env.PORT || 4174;
 
 const MIME = {

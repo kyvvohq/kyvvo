@@ -44,7 +44,7 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public-studio')));
 
 // Conexão com PostgreSQL
 const pool = new Pool({
@@ -86,7 +86,7 @@ async function initDB() {
 
 // Rota principal — serve a landing page
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  res.sendFile(path.join(__dirname, 'public-studio', 'index.html'));
 });
 
 // GET /config-publica — expõe só a chave pública do PostHog pro front (US47),

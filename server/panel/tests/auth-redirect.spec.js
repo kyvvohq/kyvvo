@@ -48,7 +48,7 @@ test.describe('Redirecionamento raiz (/)', () => {
 });
 
 test.describe('Logout (/painel.html) — ST07.5', () => {
-  test('clicar em Sair chama /api/auth/logout, limpa a sessão local e redireciona para kyvvo.com.br', async ({ page }) => {
+  test('clicar em Sair chama /api/auth/logout, limpa a sessão local e redireciona para studio.kyvvo.com.br', async ({ page }) => {
     await mockDashboardApis(page);
     let logoutChamado = false;
     await page.route('**/api/auth/logout', (route) => {
@@ -61,7 +61,7 @@ test.describe('Logout (/painel.html) — ST07.5', () => {
     // precisar de um contexto JS vivo numa página) em vez de page.evaluate()
     // — evaluate trava em deadlock se chamado de dentro do handler da rota
     // que a própria navegação em andamento está esperando resolver.
-    await page.route('https://kyvvo.com.br/**', (route) =>
+    await page.route('https://studio.kyvvo.com.br/**', (route) =>
       route.fulfill({ body: '<html></html>', contentType: 'text/html' })
     );
     await page.addInitScript(() => {
@@ -74,7 +74,7 @@ test.describe('Logout (/painel.html) — ST07.5', () => {
     await page.goto('/painel.html');
     await page.click('#user-menu-toggle');
     await page.click('#btn-sair');
-    await page.waitForURL('https://kyvvo.com.br/');
+    await page.waitForURL('https://studio.kyvvo.com.br/');
 
     expect(logoutChamado).toBe(true);
     const estado = await page.context().storageState();
@@ -85,7 +85,7 @@ test.describe('Logout (/painel.html) — ST07.5', () => {
   test('logout limpa a sessão e redireciona mesmo se a chamada ao servidor falhar', async ({ page }) => {
     await mockDashboardApis(page);
     await page.route('**/api/auth/logout', (route) => route.abort());
-    await page.route('https://kyvvo.com.br/**', (route) =>
+    await page.route('https://studio.kyvvo.com.br/**', (route) =>
       route.fulfill({ body: '<html></html>', contentType: 'text/html' })
     );
     await page.addInitScript(() => {
@@ -97,7 +97,7 @@ test.describe('Logout (/painel.html) — ST07.5', () => {
     await page.goto('/painel.html');
     await page.click('#user-menu-toggle');
     await page.click('#btn-sair');
-    await page.waitForURL('https://kyvvo.com.br/');
+    await page.waitForURL('https://studio.kyvvo.com.br/');
 
     const estado = await page.context().storageState();
     const origemPainel = estado.origins.find((o) => o.origin === 'http://127.0.0.1:4173');

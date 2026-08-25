@@ -1,0 +1,1240 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kyvvo — CRM inteligente para pequenos negócios</title>
+<meta name="description" content="Kyvvo é o CRM com agenda via WhatsApp para salões de beleza, petshops, clínicas e outros pequenos negócios de serviço. Organize agenda, clientes e financeiro em um só lugar. Teste grátis por 14 dias.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://kyvvo.com.br/">
+<!-- Open Graph / redes sociais (US48/CA — metadados de compartilhamento) -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Kyvvo">
+<meta property="og:locale" content="pt_BR">
+<meta property="og:url" content="https://kyvvo.com.br/">
+<meta property="og:title" content="Kyvvo — CRM inteligente para pequenos negócios">
+<meta property="og:description" content="O CRM com agenda via WhatsApp para salões, petshops, clínicas e outros pequenos negócios de serviço. Teste grátis por 14 dias.">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Kyvvo — CRM inteligente para pequenos negócios">
+<meta name="twitter:description" content="O CRM com agenda via WhatsApp para salões, petshops, clínicas e outros pequenos negócios de serviço. Teste grátis por 14 dias.">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%237c5cfc'/%3E%3Ctext x='16' y='22' font-family='Arial,sans-serif' font-size='15' font-weight='800' fill='white' text-anchor='middle'%3Evv%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/shared.css">
+<!-- schema.org Organization (US48/CA — reduz ambiguidade com marcas parecidas
+     tipo "kyvoo"/"Kyvo" nos resultados de busca e no Knowledge Panel). -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": "Kyvvo",
+  "alternateName": "Kyvvo CRM",
+  "url": "https://kyvvo.com.br/",
+  "description": "Kyvvo é o CRM com agenda via WhatsApp para pequenos negócios de serviço — salões de beleza, petshops, clínicas e academias.",
+  "foundingDate": "2026",
+  "foundingLocation": {
+    "@type": "Place",
+    "name": "Uberlândia, MG, Brasil"
+  },
+  "contactPoint": {
+    "@type": "ContactPoint",
+    "telephone": "+55-34-8428-5182",
+    "contactType": "customer service",
+    "areaServed": "BR",
+    "availableLanguage": ["Portuguese"]
+  }
+}
+</script>
+<style>
+.hero-v2{padding:140px 6% 0;position:relative;overflow:hidden}
+.glow-1{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(124,92,252,.15) 0%,transparent 65%);top:-200px;left:50%;transform:translateX(-50%);pointer-events:none}
+.glow-2{position:absolute;width:400px;height:400px;border-radius:50%;background:radial-gradient(circle,rgba(0,212,255,.08) 0%,transparent 65%);bottom:0;right:10%;pointer-events:none}
+
+.hero-eyebrow{display:inline-flex;align-items:center;gap:8px;background:rgba(124,92,252,.12);border:1px solid rgba(124,92,252,.28);border-radius:100px;padding:6px 16px;font-size:.75rem;font-weight:600;color:var(--accent-light);letter-spacing:.06em;text-transform:uppercase;margin-bottom:28px;animation:fadeUp .8s ease both}
+.hero-eyebrow-star{font-size:.8rem;line-height:1}
+.hl-vv{background:linear-gradient(120deg,var(--accent-light),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+
+.hero-v2-inner{position:relative;display:grid;grid-template-columns:minmax(320px,620px) 1fr;gap:40px;align-items:center;max-width:1360px;margin:0 auto;padding-bottom:70px}
+.hero-v2-text,.hero-v2-visual{min-width:0}
+.hero-v2-title{font-family:var(--font-d);font-weight:800;font-size:clamp(1.9rem,3.4vw,2.5rem);line-height:1.2;letter-spacing:-.02em;margin-bottom:22px;animation:fadeUp .9s .1s ease both}
+.hero-v2-highlight{background:linear-gradient(120deg,var(--accent-light),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero-v2-sub{font-size:1.02rem;color:var(--muted);max-width:480px;margin-bottom:32px;line-height:1.7;font-weight:300;animation:fadeUp .9s .2s ease both}
+
+.hero-v2-cta-row{display:flex;flex-wrap:wrap;gap:16px;margin-bottom:14px;animation:fadeUp .9s .3s ease both}
+.btn-whatsapp{display:inline-flex;align-items:center;gap:10px;padding:16px 32px;background:linear-gradient(135deg,var(--accent),#5b3fd4);color:#fff;border:none;border-radius:100px;font-family:var(--font-b);font-size:1rem;font-weight:600;cursor:pointer;transition:all .2s;box-shadow:0 4px 20px rgba(124,92,252,.35);text-decoration:none}
+.btn-whatsapp:hover{transform:translateY(-2px);box-shadow:0 10px 32px rgba(124,92,252,.45)}
+.btn-secundario{background:transparent;color:var(--text);border:1px solid var(--border);box-shadow:none}
+.btn-secundario:hover{border-color:rgba(124,92,252,.5);box-shadow:none}
+.hero-cta-sub{font-size:.8rem;color:var(--muted)}
+.diagnostico-cta{font-size:.8rem;color:var(--muted);margin-top:4px}
+.diagnostico-cta a{color:var(--accent-light);font-weight:600;text-decoration:none}
+.diagnostico-cta a:hover{text-decoration:underline}
+
+.hero-v2-features{display:flex;flex-wrap:wrap;gap:26px;margin:32px 0 24px}
+.hero-v2-feature{display:flex;align-items:center;gap:10px}
+.hero-v2-feature-icon{width:34px;height:34px;border-radius:10px;background:rgba(124,92,252,.14);display:flex;align-items:center;justify-content:center;color:var(--accent-light);flex-shrink:0}
+.hero-v2-feature-icon svg{width:16px;height:16px}
+.hero-v2-feature-text{font-size:.76rem;color:var(--muted);line-height:1.35}
+.hero-v2-security{display:flex;align-items:center;gap:10px;font-size:.8rem;color:var(--muted);max-width:440px}
+.hero-v2-security svg{width:17px;height:17px;color:var(--accent-light);flex-shrink:0}
+
+.hero-v2-visual{position:relative;min-height:520px}
+
+.hero-v2-dashboard{position:absolute;right:0;top:74px;width:400px;max-width:60vw;background:var(--bg2);border:1px solid var(--border);border-radius:14px;box-shadow:0 30px 60px -20px rgba(0,0,0,.6);overflow:hidden;z-index:1}
+.hero-v2-dash-topbar{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border)}
+.hero-v2-dash-logo{font-family:var(--font-d);font-weight:800;font-size:.85rem}
+.hero-v2-dash-title{font-size:.72rem;color:var(--muted);font-weight:600}
+.hero-v2-dash-body{display:flex}
+.hero-v2-dash-sidebar{width:34px;padding:14px 0;display:flex;flex-direction:column;align-items:center;gap:14px;border-right:1px solid var(--border)}
+.hero-v2-dash-sidebar span{width:14px;height:14px;border-radius:4px;background:rgba(124,92,252,.18)}
+.hero-v2-dash-sidebar span.active{background:var(--accent)}
+.hero-v2-dash-cal{flex:1;padding:14px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;min-height:220px}
+.hero-v2-dash-col{display:flex;flex-direction:column;gap:8px}
+.hero-v2-dash-block{border-radius:6px;padding:6px 7px;font-size:.6rem;color:#fff;font-weight:600;line-height:1.3}
+
+.hero-v2-phone{position:relative;z-index:2;width:250px;max-width:66vw;background:#0b0e1a;border:6px solid #1c2338;border-radius:34px;box-shadow:0 30px 70px -10px rgba(0,0,0,.65);overflow:hidden;margin:220px 0 0 0}
+.hero-v2-phone::before{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:86px;height:18px;background:#1c2338;border-radius:0 0 12px 12px;z-index:2}
+.hero-v2-phone-header{background:linear-gradient(135deg,#1f2c34,#128c7e);display:flex;align-items:center;gap:10px;padding:18px 14px 10px}
+.hero-v2-phone-avatar{width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,.25);display:flex;align-items:center;justify-content:center;font-size:.68rem;font-weight:700;color:#fff;flex-shrink:0}
+.hero-v2-phone-header>span:last-child{display:flex;flex-direction:column}
+.hero-v2-phone-title{color:#fff;font-size:.76rem;font-weight:600}
+.hero-v2-phone-status{color:rgba(255,255,255,.7);font-size:.6rem}
+.hero-v2-phone-body{background:#e9e2da;padding:14px 12px;display:flex;flex-direction:column;gap:8px;min-height:260px}
+.hero-v2-bubble{max-width:82%;padding:8px 11px;border-radius:12px;font-size:.66rem;line-height:1.4;color:#161616}
+.hero-v2-bubble.in{background:#fff;align-self:flex-start;border-bottom-left-radius:2px}
+.hero-v2-bubble.out{background:#d9fdd3;align-self:flex-end;border-bottom-right-radius:2px}
+.hero-v2-phone-options{display:flex;flex-direction:column;gap:6px;align-self:flex-end;max-width:82%}
+.hero-v2-phone-option{background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:8px;padding:7px 10px;font-size:.66rem;color:#0a7cff;text-align:center;font-weight:600}
+.hero-v2-phone-input{background:#f0f0f0;display:flex;align-items:center;gap:8px;padding:9px 12px;border-top:1px solid rgba(0,0,0,.06)}
+.hero-v2-phone-input>span:first-child{flex:1;color:#999;font-size:.66rem}
+.hero-v2-phone-mic{width:24px;height:24px;border-radius:50%;background:#25d366;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.hero-v2-phone-mic svg{width:12px;height:12px;color:#fff}
+
+.hero-v2-trustbar{max-width:1200px;margin:0 auto;border-top:1px solid var(--border);padding:32px 0;display:grid;grid-template-columns:repeat(4,1fr);gap:24px}
+.trust-item{display:flex;align-items:center;gap:12px;min-width:0}
+.trust-icon{width:36px;height:36px;border-radius:10px;background:rgba(124,92,252,.12);display:flex;align-items:center;justify-content:center;color:var(--accent-light);flex-shrink:0}
+.trust-icon svg{width:17px;height:17px}
+.trust-icon.whatsapp{background:rgba(37,211,102,.14);color:#25d366}
+.trust-icon.lock{background:rgba(0,212,255,.14);color:var(--cyan)}
+.trust-text{min-width:0}
+.trust-label{display:block;font-size:.72rem;color:var(--muted)}
+.trust-text strong{display:block;font-size:.84rem;font-weight:700;margin-top:2px}
+.trust-platform-icons{display:flex;gap:8px;margin-top:4px}
+.trust-platform-icons svg{width:16px;height:16px;color:var(--muted)}
+
+@media(max-width:1050px){
+  .hero-v2-inner{grid-template-columns:1fr;padding-bottom:40px}
+  .hero-v2-visual{min-height:0;display:flex;flex-direction:column;align-items:center;gap:24px;padding-top:20px}
+  .hero-v2-dashboard,.hero-v2-phone{position:static;max-width:100%}
+  .hero-v2-dashboard{width:100%;max-width:420px}
+  .hero-v2-phone{margin:0}
+  .hero-v2-text{text-align:center}
+  .hero-v2-sub{margin-left:auto;margin-right:auto}
+  .hero-v2-cta-row,.hero-v2-features{justify-content:center}
+  .hero-v2-security{margin-left:auto;margin-right:auto}
+  .hero-v2-trustbar{grid-template-columns:repeat(2,1fr)}
+}
+@media(max-width:520px){
+  .hero-v2-trustbar{grid-template-columns:1fr}
+}
+
+.beneficios-section{padding:100px 6%;border-top:1px solid var(--border)}
+.beneficios-header{max-width:680px;margin:0 auto 56px;text-align:center}
+.beneficios-header .section-eyebrow{justify-content:center}
+.beneficios-header .section-title{white-space:normal;margin-bottom:16px}
+.beneficios-header .section-title em{font-style:normal;background:linear-gradient(120deg,var(--accent-light),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.beneficios-header .section-sub{white-space:normal;margin-bottom:0;margin-left:auto;margin-right:auto}
+.beneficios-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;max-width:1160px;margin:0 auto}
+.beneficio-card{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:36px 30px;transition:transform .2s,border-color .2s;min-width:0}
+.beneficio-card:hover{transform:translateY(-4px);border-color:rgba(124,92,252,.4)}
+.beneficio-card.featured{border-color:rgba(124,92,252,.5);box-shadow:0 20px 40px -20px rgba(124,92,252,.35)}
+.beneficio-icon-badge{width:56px;height:56px;border-radius:50%;background:radial-gradient(circle at 32% 30%,rgba(124,92,252,.55),rgba(124,92,252,.12));border:1px solid rgba(124,92,252,.35);display:flex;align-items:center;justify-content:center;margin-bottom:24px}
+.beneficio-icon-badge svg{width:23px;height:23px;color:#e4dbff}
+.beneficio-title{font-family:var(--font-d);font-size:1.05rem;font-weight:700;margin-bottom:10px}
+.beneficio-desc{font-size:.88rem;color:var(--muted);line-height:1.65;margin-bottom:22px}
+.beneficio-underline{width:26px;height:2px;background:var(--accent-light);border-radius:2px}
+@media(max-width:900px){.beneficios-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:600px){.beneficios-grid{grid-template-columns:1fr}}
+
+.how-section{padding:80px 6%;background:var(--bg2);border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.section-eyebrow{font-size:.75rem;text-transform:uppercase;letter-spacing:.1em;color:var(--accent-light);font-weight:600;margin-bottom:14px}
+.section-title{font-family:var(--font-d);font-size:clamp(1.6rem,3vw,2.4rem);font-weight:700;letter-spacing:-.025em;margin-bottom:16px;max-width:100%;white-space:nowrap}
+.section-sub{color:var(--muted);font-size:.95rem;max-width:100%;line-height:1.75;margin-bottom:52px;font-weight:300;white-space:nowrap}
+@media(max-width:900px){.section-title,.section-sub{white-space:normal}}
+.step-title{font-family:var(--font-d);font-size:1rem;font-weight:600;margin-bottom:8px}
+.step-desc{font-size:.84rem;color:var(--muted);line-height:1.65}
+
+.how-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:32px;margin-top:8px}
+.how-step{min-width:0}
+.how-step-foto{position:relative;width:100%;aspect-ratio:4/3;border-radius:16px;overflow:hidden;background:var(--surface);border:1px solid var(--border)}
+.how-step-foto img{display:block;width:100%;height:100%;object-fit:cover}
+.how-step-badge{position:absolute;right:14px;bottom:14px;width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;border:3px solid var(--bg2);color:#fff}
+.how-step-badge svg{width:19px;height:19px}
+.badge-whatsapp{background:#25d366}
+.badge-bot{background:var(--accent)}
+.badge-painel{background:var(--accent)}
+.how-step-info{padding-top:20px}
+.how-step-num{font-family:var(--font-d);font-size:.75rem;font-weight:700;color:var(--accent-light);letter-spacing:.05em;display:block;margin-bottom:6px}
+@media(max-width:900px){.how-steps{grid-template-columns:1fr;gap:36px}}
+/* CA04 (US22) — CTA logo abaixo da demonstração dos 3 passos, mesmo padrão
+   visual do CTA do hero (.btn-whatsapp/.hero-cta-sub), só centralizado. */
+.how-cta{text-align:center;margin-top:48px}
+.how-cta .hero-cta-sub{margin-top:12px}
+
+.niches-section{padding:80px 6%}
+.niches-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:16px;margin-top:40px}
+.niche-card{position:relative;border-radius:16px;overflow:hidden;background:var(--surface);border:1px solid var(--border);min-width:0;transition:transform .2s,border-color .2s}
+.niche-card:hover{transform:translateY(-3px);border-color:rgba(124,92,252,.4)}
+.niche-card img{display:block;width:100%;aspect-ratio:1/1;object-fit:cover}
+.niche-icon{position:absolute;left:12px;top:12px;width:34px;height:34px;border-radius:10px;background:rgba(8,11,20,.65);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;color:var(--accent-light)}
+.niche-icon svg{width:16px;height:16px}
+.niche-info{padding:16px 16px 18px}
+.niche-title{font-family:var(--font-d);font-weight:700;font-size:.9rem;margin-bottom:6px}
+.niche-desc{font-size:.78rem;color:var(--muted);line-height:1.55}
+@media(max-width:1100px){.niches-grid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:640px){.niches-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:420px){.niches-grid{grid-template-columns:1fr}}
+
+.roadmap-section{padding:80px 6%;background:var(--bg2);border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.roadmap-row{display:flex;gap:12px;flex-wrap:wrap;margin-top:40px}
+.roadmap-pill{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px dashed var(--border);border-radius:100px;padding:10px 18px;font-size:.85rem;color:var(--muted)}
+.roadmap-grid{display:grid;grid-template-columns:minmax(280px,460px) 1fr;gap:48px;align-items:center}
+.roadmap-intro,.roadmap-foto{min-width:0}
+.roadmap-intro .section-title,.roadmap-intro .section-sub{white-space:normal}
+.roadmap-foto{position:relative;border-radius:20px;overflow:hidden;background:linear-gradient(160deg,rgba(124,92,252,.35),rgba(0,212,255,.08))}
+.roadmap-foto img{display:block;width:100%;height:420px;object-fit:cover}
+@media(max-width:900px){.roadmap-grid{grid-template-columns:1fr}}
+@media(max-width:600px){.roadmap-foto img{height:280px}}
+
+.diagnostico-cta{font-size:.8rem;color:var(--muted);margin-top:4px}
+.diagnostico-cta a{color:var(--accent-light);font-weight:600;text-decoration:none}
+.diagnostico-cta a:hover{text-decoration:underline}
+
+.quem-somos-section{padding:80px 6%;border-top:1px solid var(--border);background:var(--bg2)}
+
+/* Três colunas: intro+pills / foto do fundador / lista de pilares */
+.quem-somos-grid{display:grid;grid-template-columns:minmax(260px,340px) minmax(260px,360px) 1fr;gap:40px;align-items:start}
+.quem-somos-intro,.fundador-foto-card,.pilares-lista{min-width:0}
+.quem-somos-intro .section-title{white-space:normal;margin-bottom:18px}
+.quem-somos-intro .section-title em{font-style:normal;background:linear-gradient(120deg,var(--accent-light),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.quem-somos-intro .section-sub{white-space:normal;margin-bottom:24px}
+.quem-somos-pills{display:flex;flex-wrap:wrap;gap:10px 18px}
+.quem-somos-pill{display:flex;align-items:center;gap:7px;font-size:.8rem;color:var(--muted)}
+.quem-somos-pill svg{width:15px;height:15px;color:var(--accent-light);flex-shrink:0}
+
+.fundador-foto-card{position:relative;border-radius:20px;overflow:hidden;background:linear-gradient(160deg,rgba(124,92,252,.35),rgba(0,212,255,.08))}
+.fundador-foto-card img{display:block;width:100%;height:420px;object-fit:cover;object-position:top center}
+.fundador-foto-legenda{position:absolute;left:14px;right:14px;bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:12px;background:rgba(8,11,20,.6);backdrop-filter:blur(10px);border-radius:12px;padding:10px 14px}
+.fundador-foto-nome{font-family:var(--font-d);font-weight:700;font-size:.95rem;color:#fff}
+.fundador-foto-cargo{font-size:.76rem;color:rgba(255,255,255,.72)}
+.fundador-linkedin-btn{width:30px;height:30px;border-radius:8px;background:#0a66c2;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#fff}
+.fundador-linkedin-btn svg{width:16px;height:16px}
+
+.pilares-lista{display:flex;flex-direction:column}
+.pilar-item{display:flex;gap:16px;padding:20px 0;border-bottom:1px solid var(--border)}
+.pilar-item:first-child{padding-top:0}
+.pilar-item:last-child{border-bottom:none;padding-bottom:0}
+.pilar-icone{width:44px;height:44px;border-radius:50%;background:rgba(124,92,252,.14);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.pilar-icone svg{width:19px;height:19px;color:var(--accent-light)}
+.pilar-title{font-family:var(--font-d);font-weight:700;font-size:.95rem;margin-bottom:6px}
+.pilar-desc{font-size:.84rem;color:var(--muted);line-height:1.6}
+
+@media(max-width:1050px){
+  .quem-somos-grid{grid-template-columns:1fr 1fr}
+  .pilares-lista{grid-column:1/-1;margin-top:8px}
+}
+@media(max-width:700px){
+  .quem-somos-grid{grid-template-columns:1fr}
+  .fundador-foto-card img{height:320px}
+}
+
+/* Depoimentos (US25) — CA01/CA07 */
+.depoimentos-section{padding:100px 6%;border-top:1px solid var(--border)}
+.depoimentos-header{max-width:680px;margin:0 auto 56px;text-align:center}
+.depoimentos-header .section-eyebrow{justify-content:center}
+.depoimentos-header .section-title{white-space:normal;margin-bottom:0}
+
+/* CA02 — estado vazio, antes dos primeiros depoimentos reais: precisa
+   parecer proposital (identidade visual da seção), não um erro/ausência de
+   conteúdo. */
+.depoimentos-vazio{max-width:480px;margin:0 auto;text-align:center;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:40px 32px}
+.depoimentos-vazio-icone{font-size:2rem;display:block;margin-bottom:16px}
+.depoimentos-vazio p{color:var(--muted);font-size:.9rem;line-height:1.7;margin:0}
+
+/* CA04/CA07 — até 3 por linha no desktop; no mobile vira carrossel por
+   scroll/swipe (scroll-snap, sem JS/lib nenhuma) em vez de empilhar, porque
+   o texto do depoimento some se cortar direto pra 1 coluna estreita. */
+.depoimentos-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;max-width:1080px;margin:0 auto}
+.depoimento-card{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 24px;min-width:0;display:flex;flex-direction:column;gap:14px}
+.depoimento-cabecalho{display:flex;align-items:center;gap:12px}
+.depoimento-avatar,.depoimento-avatar-iniciais{width:48px;height:48px;border-radius:50%;flex-shrink:0}
+.depoimento-avatar{object-fit:cover}
+.depoimento-avatar-iniciais{background:rgba(124,92,252,.16);color:var(--accent-light);display:flex;align-items:center;justify-content:center;font-weight:700;font-family:var(--font-d);font-size:.85rem}
+.depoimento-nome{font-family:var(--font-d);font-weight:700;font-size:.9rem}
+.depoimento-salao{font-size:.78rem;color:var(--muted)}
+.depoimento-estrelas{color:#facc15;font-size:.8rem;letter-spacing:2px}
+.depoimento-texto{font-size:.86rem;color:var(--muted);line-height:1.6;margin:0;cursor:pointer;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden}
+.depoimento-texto.expandido{-webkit-line-clamp:unset;overflow:visible}
+.depoimentos-logos{margin-top:56px;text-align:center}
+.depoimentos-logos-titulo{font-size:.8rem;color:var(--muted);margin-bottom:20px}
+.depoimentos-logos-grid{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:32px}
+.depoimentos-logos-grid img{height:32px;width:auto;opacity:.7;filter:grayscale(1)}
+@media(max-width:900px){
+  .depoimentos-grid{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:16px;max-width:100%;padding-bottom:8px;-webkit-overflow-scrolling:touch}
+  .depoimento-card{scroll-snap-align:center;flex:0 0 85%}
+}
+
+.nav-link{
+  font-family:var(--font-b);font-size:.85rem;font-weight:500;
+  color:var(--muted);text-decoration:none;transition:color .2s;
+}
+.nav-link:hover{color:var(--text)}
+/* Menu âncora só aparece no desktop — no mobile o header já tem Entrar +
+   Começar grátis, links de seção a mais só poluiriam (US51.10). */
+@media(max-width:900px){.nav-link{display:none}}
+
+.precos-section{padding:100px 6%;border-top:1px solid var(--border)}
+.precos-header{max-width:680px;margin:0 auto 56px;text-align:center}
+.precos-header .section-eyebrow{justify-content:center}
+.precos-header .section-title{white-space:normal;margin-bottom:16px}
+.precos-header .section-sub{white-space:normal;margin-bottom:0;margin-left:auto;margin-right:auto}
+.precos-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;max-width:1080px;margin:0 auto}
+.precos-grid-matriz{grid-template-columns:repeat(2,1fr);max-width:760px}
+.plano-card{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:32px 28px;transition:transform .2s,border-color .2s;min-width:0;display:flex;flex-direction:column}
+.plano-card:hover{transform:translateY(-4px);border-color:rgba(124,92,252,.4)}
+.plano-card.destaque{border-color:rgba(124,92,252,.55);box-shadow:0 20px 40px -20px rgba(124,92,252,.35)}
+.plano-selo{align-self:flex-start;background:rgba(124,92,252,.16);color:var(--accent-light);font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;border-radius:100px;padding:5px 14px;margin-bottom:16px}
+.plano-nome{font-family:var(--font-d);font-size:1.1rem;font-weight:700;margin-bottom:8px}
+/* US73 — headline_diferencial: o benefício em poucas palavras, em destaque
+   acima do preço (nunca o meio técnico que o produz). */
+.plano-headline{font-size:.95rem;font-weight:600;color:var(--accent-light);margin-bottom:10px}
+.plano-preco{font-family:var(--font-d);font-size:2rem;font-weight:800;letter-spacing:-.02em;margin-bottom:4px}
+.plano-preco span{font-family:var(--font-b);font-size:.85rem;font-weight:400;color:var(--muted)}
+.plano-desc{font-size:.86rem;color:var(--muted);line-height:1.6;margin-bottom:24px}
+/* US74 — bloco "Tudo do X, mais:" com os diferenciais exclusivos, e a linha
+   de limites de uso (conversas/profissionais/unidades), entre a descrição
+   e o CTA. */
+.plano-features{border-top:1px solid var(--border);padding-top:16px;margin-bottom:16px}
+.plano-features-titulo{font-size:.8rem;font-weight:700;color:var(--text);margin-bottom:8px}
+.plano-features ul{list-style:none;display:flex;flex-direction:column;gap:6px}
+.plano-features li{font-size:.85rem;color:var(--muted);line-height:1.4}
+.plano-limites{font-size:.78rem;color:var(--muted);margin-bottom:20px}
+.plano-cta{margin-top:auto;display:block;text-align:center;padding:12px 20px;border-radius:100px;font-size:.85rem;font-weight:600;font-family:var(--font-b);text-decoration:none;transition:all .2s}
+.plano-card.destaque .plano-cta{color:#fff;background:linear-gradient(135deg,var(--accent),#5b3fd4);box-shadow:0 4px 14px rgba(124,92,252,.3)}
+.plano-card.destaque .plano-cta:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(124,92,252,.4)}
+.plano-card:not(.destaque) .plano-cta{color:var(--text);background:transparent;border:1px solid var(--border)}
+.plano-card:not(.destaque) .plano-cta:hover{border-color:rgba(124,92,252,.5)}
+.precos-carregando{grid-column:1/-1;text-align:center;color:var(--muted);padding:24px 0}
+.precos-nota{text-align:center;color:var(--muted);font-size:.85rem;margin-top:32px}
+.precos-nota + .precos-nota{margin-top:8px}
+/* CA05/US67 — abaixo de 768px a grade 2x2 colapsa numa lista única, na ordem
+   Essencial → Smart → Essencial Plus → Smart Plus (não é a ordem natural do
+   array, que vem por preço ASC — por isso a reordenação explícita aqui).
+   Slugs atualizados pela US72 (eram starter/professional/business/
+   enterprise). */
+@media(max-width:768px){
+  .precos-grid-matriz{grid-template-columns:1fr;max-width:420px}
+  .plano-card[data-slug="essencial"]{order:1}
+  .plano-card[data-slug="smart"]{order:2}
+  .plano-card[data-slug="essencial-plus"]{order:3}
+  .plano-card[data-slug="smart-plus"]{order:4}
+}
+
+/* FAQ */
+.faq-section{
+  padding:80px 6%;background:var(--bg);
+  border-top:1px solid var(--border);
+}
+.faq-grid{display:grid;grid-template-columns:minmax(260px,340px) 1fr;gap:48px;align-items:start}
+.faq-intro,.faq-lista-wrap{min-width:0}
+.faq-intro .section-title{white-space:normal;margin-bottom:14px}
+.faq-intro .section-sub{white-space:normal;margin-bottom:32px}
+
+.faq-beneficios{display:flex;flex-direction:column;gap:18px;margin-bottom:28px}
+.faq-beneficio{display:flex;align-items:center;gap:14px}
+.faq-beneficio-icone{width:40px;height:40px;border-radius:50%;background:rgba(124,92,252,.14);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.faq-beneficio-icone svg{width:18px;height:18px;color:var(--accent-light)}
+.faq-beneficio-title{font-family:var(--font-d);font-weight:700;font-size:.9rem;margin-bottom:2px}
+.faq-beneficio-desc{font-size:.8rem;color:var(--muted)}
+
+.faq-whatsapp-box{display:flex;align-items:center;gap:14px;border:1px solid rgba(37,211,102,.35);background:rgba(37,211,102,.06);border-radius:14px;padding:18px}
+.faq-whatsapp-icone{width:38px;height:38px;border-radius:50%;background:rgba(37,211,102,.16);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#25d366}
+.faq-whatsapp-icone svg{width:19px;height:19px}
+.faq-whatsapp-texto{flex:1}
+.faq-whatsapp-titulo{font-weight:700;font-size:.86rem;margin-bottom:2px}
+.faq-whatsapp-desc{font-size:.78rem;color:var(--muted);margin-bottom:12px}
+.faq-whatsapp-btn{display:inline-flex;padding:9px 18px;font-size:.8rem;font-weight:600;font-family:var(--font-b);background:linear-gradient(135deg,var(--accent),#5b3fd4);color:#fff;border:none;border-radius:100px;text-decoration:none;cursor:pointer}
+
+.faq-tabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:24px}
+.faq-tab{padding:9px 18px;border-radius:100px;font-size:.82rem;font-weight:600;font-family:var(--font-b);color:var(--muted);background:var(--surface);border:1px solid var(--border);cursor:pointer;transition:all .2s;white-space:nowrap}
+.faq-tab:hover{border-color:rgba(124,92,252,.4);color:var(--text)}
+.faq-tab.active{background:linear-gradient(135deg,var(--accent),#5b3fd4);color:#fff;border-color:transparent}
+
+.faq-wrap{margin:0}
+.faq-item{
+  border:1px solid var(--border);border-radius:12px;
+  background:var(--surface);margin-bottom:12px;overflow:hidden;
+  transition:border-color .2s;
+}
+.faq-item.open{border-color:rgba(124,92,252,.5)}
+.faq-question{
+  width:100%;display:flex;align-items:center;justify-content:space-between;gap:16px;
+  padding:20px 22px;background:none;border:none;cursor:pointer;
+  font-family:var(--font-d);font-size:1rem;font-weight:600;
+  color:var(--text);text-align:left;line-height:1.4;
+}
+.faq-icon{
+  flex-shrink:0;width:22px;height:22px;position:relative;
+  color:var(--accent-light);
+}
+.faq-icon::before,.faq-icon::after{
+  content:'';position:absolute;top:50%;left:50%;
+  background:currentColor;border-radius:2px;
+  transform:translate(-50%,-50%);
+}
+.faq-icon::before{width:12px;height:2px}
+.faq-icon::after{width:2px;height:12px;transition:transform .25s ease}
+.faq-item.open .faq-icon::after{transform:translate(-50%,-50%) scaleY(0)}
+.faq-answer{
+  max-height:0;overflow:hidden;
+  transition:max-height .35s ease;
+}
+.faq-answer-inner{
+  padding:0 22px 20px;color:var(--muted);
+  font-size:.92rem;line-height:1.7;font-weight:300;
+}
+.faq-answer-inner strong{color:var(--text);font-weight:500}
+.faq-contact{
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  text-align:center;margin-top:28px;
+  font-size:.88rem;color:var(--muted);
+}
+.faq-contact svg{width:16px;height:16px;color:var(--accent-light);flex-shrink:0}
+.faq-contact a{
+  color:var(--accent-light);font-weight:600;text-decoration:none;
+  transition:color .2s;
+}
+.faq-contact a:hover{color:var(--cyan)}
+
+@media(max-width:950px){
+  .faq-grid{grid-template-columns:1fr}
+}
+@media(max-width:600px){.faq-tabs{overflow-x:auto;flex-wrap:nowrap;padding-bottom:2px}}
+
+@keyframes fadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
+@media(max-width:480px){
+  .nav-link{font-size:.78rem}
+  .faq-wrap{margin-top:32px}
+  .faq-question{font-size:.94rem;padding:16px 18px}
+  .faq-answer-inner{padding:0 18px 18px;font-size:.9rem}
+}
+</style>
+</head>
+<body>
+
+<div id="site-header"></div>
+
+<section class="hero-v2" id="inicio">
+  <div class="glow-1"></div>
+  <div class="glow-2"></div>
+
+  <div class="hero-v2-inner">
+    <div class="hero-v2-text">
+      <div class="hero-eyebrow">
+        <span class="hero-eyebrow-star" aria-hidden="true">★</span>
+        <span data-pt="Acesso antecipado" data-en="Early access">Acesso antecipado</span>
+      </div>
+
+      <h1 class="hero-v2-title" data-pt="O CRM que salões de beleza usam pra atender pelo <span class=&quot;hero-v2-highlight&quot;>WhatsApp</span> e organizar tudo em um só lugar." data-en="The CRM beauty salons use to book via <span class=&quot;hero-v2-highlight&quot;>WhatsApp</span> and organize everything in one place.">O CRM que salões de beleza usam pra atender pelo <span class="hero-v2-highlight">WhatsApp</span> e organizar tudo em um só lugar.</h1>
+
+      <p class="hero-v2-sub" data-pt="Agenda, clientes, serviços e equipe — feito pra salões de beleza (e outros pequenos negócios de atendimento por horário) que atendem pelo WhatsApp." data-en="Schedule, clients, services and team — built for beauty salons (and other appointment-based small businesses) that book via WhatsApp.">Agenda, clientes, serviços e equipe — feito pra salões de beleza (e outros pequenos negócios de atendimento por horário) que atendem pelo WhatsApp.</p>
+
+      <div class="hero-v2-cta-row">
+        <a class="btn-whatsapp" id="ctaComecar" data-panel-path="/cadastro" href="#">
+          <span>🚀</span>
+          <span data-pt="Começar grátis" data-en="Start free">Começar grátis</span>
+        </a>
+        <a class="btn-whatsapp btn-secundario" id="ctaWhatsapp" href="https://wa.me/553484285182?text=Ol%C3%A1!%20Quero%20saber%20mais%20sobre%20a%20Kyvvo." target="_blank" rel="noopener">
+          <span>💬</span>
+          <span data-pt="Falar no WhatsApp" data-en="Chat on WhatsApp">Falar no WhatsApp</span>
+        </a>
+      </div>
+      <p class="hero-cta-sub" data-pt="Teste por 14 dias. Sem cartão de crédito." data-en="14-day trial. No credit card.">Teste por 14 dias. Sem cartão de crédito.</p>
+      <p class="diagnostico-cta">
+        <span data-pt="Não sabe por onde começar?" data-en="Not sure where to start?">Não sabe por onde começar?</span>
+        <a href="/diagnostico.html" data-pt="Faça o diagnóstico gratuito →" data-en="Take the free diagnosis →">Faça o diagnóstico gratuito →</a>
+      </p>
+
+      <div class="hero-v2-features">
+        <div class="hero-v2-feature">
+          <span class="hero-v2-feature-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C11 3 12 8 12 8"/><path d="M16.5 8a2.5 2.5 0 0 0 0-5C13 3 12 8 12 8"/></svg></span>
+          <span class="hero-v2-feature-text" data-pt="14 dias<br>grátis" data-en="14 days<br>free">14 dias<br>grátis</span>
+        </div>
+        <div class="hero-v2-feature">
+          <span class="hero-v2-feature-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg></span>
+          <span class="hero-v2-feature-text" data-pt="Sem cartão<br>de crédito" data-en="No credit<br>card">Sem cartão<br>de crédito</span>
+        </div>
+        <div class="hero-v2-feature">
+          <span class="hero-v2-feature-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
+          <span class="hero-v2-feature-text" data-pt="Configuração<br>em minutos" data-en="Set up in<br>minutes">Configuração<br>em minutos</span>
+        </div>
+        <div class="hero-v2-feature">
+          <span class="hero-v2-feature-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13v-1a8 8 0 0 1 16 0v1"/><rect x="2.5" y="13" width="4" height="6" rx="1.5"/><rect x="17.5" y="13" width="4" height="6" rx="1.5"/><path d="M20 19v1a3 3 0 0 1-3 3h-3"/></svg></span>
+          <span class="hero-v2-feature-text" data-pt="Suporte<br>humano" data-en="Human<br>support">Suporte<br>humano</span>
+        </div>
+      </div>
+
+      <div class="hero-v2-security">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.5 8.5 8 11 4.5-2.5 8-6 8-11V5l-8-3z"/><path d="M9 12l2 2 4-4"/></svg>
+        <span data-pt="Seus dados protegidos com segurança de ponta a ponta. Conexão segura e criptografada." data-en="Your data is protected end-to-end. Secure, encrypted connection.">Seus dados protegidos com segurança de ponta a ponta. Conexão segura e criptografada.</span>
+      </div>
+    </div>
+
+    <div class="hero-v2-visual">
+      <div class="hero-v2-dashboard" aria-hidden="true">
+        <div class="hero-v2-dash-topbar"><span class="hero-v2-dash-logo">ky<span class="hl-vv">vv</span>o</span><span class="hero-v2-dash-title" data-pt="Agenda" data-en="Schedule">Agenda</span></div>
+        <div class="hero-v2-dash-body">
+          <div class="hero-v2-dash-sidebar">
+            <span></span><span class="active"></span><span></span><span></span><span></span><span></span>
+          </div>
+          <div class="hero-v2-dash-cal">
+            <div class="hero-v2-dash-col">
+              <span class="hero-v2-dash-block" style="background:#3b6ef0;margin-top:6px">08:00 Julia S.</span>
+              <span class="hero-v2-dash-block" style="background:#3b6ef0;margin-top:34px">10:00 Ana Paula</span>
+            </div>
+            <div class="hero-v2-dash-col">
+              <span class="hero-v2-dash-block" style="background:#7c5cfc;margin-top:22px">09:00 Mariana C.</span>
+              <span class="hero-v2-dash-block" style="background:#e05fa8;margin-top:44px">14:00 Fernanda S.</span>
+            </div>
+            <div class="hero-v2-dash-col">
+              <span class="hero-v2-dash-block" style="background:#e05fa8;margin-top:12px">10:00 Ana Paula</span>
+              <span class="hero-v2-dash-block" style="background:#7c5cfc;margin-top:40px">15:00 Carlos M.</span>
+            </div>
+            <div class="hero-v2-dash-col">
+              <span class="hero-v2-dash-block" style="background:#e0a13b;margin-top:30px">11:00 Beatriz L.</span>
+              <span class="hero-v2-dash-block" style="background:#e0a13b;margin-top:20px">16:00 Juliana S.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="hero-v2-phone" aria-hidden="true">
+        <div class="hero-v2-phone-header">
+          <span class="hero-v2-phone-avatar">S</span>
+          <span>
+            <span class="hero-v2-phone-title">Salão Beleza</span>
+            <span class="hero-v2-phone-status" data-pt="online" data-en="online">online</span>
+          </span>
+        </div>
+        <div class="hero-v2-phone-body">
+          <span class="hero-v2-bubble in" data-pt="Oi! Gostaria de agendar um horário" data-en="Hi! I'd like to book a time">Oi! Gostaria de agendar um horário</span>
+          <span class="hero-v2-bubble out" data-pt="Claro! Qual serviço você deseja agendar?" data-en="Sure! Which service would you like?">Claro! Qual serviço você deseja agendar?</span>
+          <span class="hero-v2-bubble in" data-pt="Corte de cabelo feminino" data-en="Women's haircut">Corte de cabelo feminino</span>
+          <span class="hero-v2-bubble out" data-pt="Perfeito! Tenho essas opções disponíveis:" data-en="Perfect! I have these times available:">Perfeito! Tenho essas opções disponíveis:</span>
+          <div class="hero-v2-phone-options">
+            <span class="hero-v2-phone-option" data-pt="Hoje - 14:00" data-en="Today - 2:00 PM">Hoje - 14:00</span>
+            <span class="hero-v2-phone-option" data-pt="Hoje - 16:00" data-en="Today - 4:00 PM">Hoje - 16:00</span>
+            <span class="hero-v2-phone-option" data-pt="Amanhã - 09:00" data-en="Tomorrow - 9:00 AM">Amanhã - 09:00</span>
+          </div>
+        </div>
+        <div class="hero-v2-phone-input">
+          <span data-pt="Mensagem" data-en="Message">Mensagem</span>
+          <span class="hero-v2-phone-mic"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z"/><path d="M19 11a7 7 0 0 1-14 0H3a9 9 0 0 0 8 8.94V22h2v-2.06A9 9 0 0 0 21 11h-2z"/></svg></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="hero-v2-trustbar">
+    <div class="trust-item">
+      <span class="trust-icon whatsapp" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2a10 10 0 0 0-8.6 15L2 22l5.2-1.4A10 10 0 1 0 12 2zm5.8 14.2c-.25.7-1.4 1.3-2 1.4-.5.1-1.1.1-1.8-.1-.4-.1-1-.3-1.7-.6-3-1.3-5-4.3-5.1-4.5-.1-.2-1.2-1.6-1.2-3 0-1.4.7-2.1 1-2.4.3-.3.6-.4.8-.4h.6c.2 0 .4 0 .6.5.2.5.7 1.8.8 1.9.1.2.1.3 0 .5-.1.2-.1.3-.3.5l-.4.5c-.1.2-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1.1 2.1 1.4 2.4 1.6.3.2.5.1.7-.1l.6-.7c.2-.3.4-.2.7-.1l1.7.8c.2.1.4.2.4.4.1.2.1.9-.1 1.5z"/></svg></span>
+      <div class="trust-text">
+        <span class="trust-label" data-pt="Integração oficial" data-en="Official integration">Integração oficial</span>
+        <strong>WhatsApp API Oficial</strong>
+      </div>
+    </div>
+    <div class="trust-item">
+      <span class="trust-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V9l9-6 9 6v12"/><path d="M9 21v-6h6v6"/></svg></span>
+      <div class="trust-text">
+        <span class="trust-label" data-pt="Feito para" data-en="Built for">Feito para</span>
+        <strong data-pt="Pequenos negócios de serviço" data-en="Small service businesses">Pequenos negócios de serviço</strong>
+      </div>
+    </div>
+    <div class="trust-item">
+      <div class="trust-text">
+        <span class="trust-label" data-pt="Disponível em" data-en="Available on">Disponível em</span>
+        <div class="trust-platform-icons">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-label="Web"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-label="Computador"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-label="Celular"><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/></svg>
+        </div>
+      </div>
+    </div>
+    <div class="trust-item">
+      <span class="trust-icon lock" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span>
+      <div class="trust-text">
+        <span class="trust-label" data-pt="Segurança" data-en="Security">Segurança</span>
+        <strong data-pt="Dados protegidos com criptografia" data-en="Data protected with encryption">Dados protegidos com criptografia</strong>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="beneficios-section" id="recursos">
+  <div class="beneficios-header">
+    <div class="section-eyebrow" data-pt="Por que escolher a Kyvvo?" data-en="Why choose Kyvvo?">Por que escolher a Kyvvo?</div>
+    <h2 class="section-title" data-pt="Tudo o que você precisa para organizar <em>seu negócio</em>" data-en="Everything you need to organize <em>your business</em>">Tudo o que você precisa para organizar <em>seu negócio</em></h2>
+    <p class="section-sub" data-pt="Recursos completos, fáceis de usar e feitos para quem quer mais tempo para o que realmente importa." data-en="Full-featured, easy to use, and built for people who want more time for what really matters.">Recursos completos, fáceis de usar e feitos para quem quer mais tempo para o que realmente importa.</p>
+  </div>
+  <div class="beneficios-grid">
+    <div class="beneficio-card featured">
+      <span class="beneficio-icon-badge" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 8V4"/><circle cx="12" cy="3" r="1.2" fill="currentColor" stroke="none"/><circle cx="9" cy="14" r="1.3" fill="currentColor" stroke="none"/><circle cx="15" cy="14" r="1.3" fill="currentColor" stroke="none"/><path d="M9 18h6"/></svg></span>
+      <h3 class="beneficio-title" data-pt="Automação no WhatsApp" data-en="WhatsApp automation">Automação no WhatsApp</h3>
+      <p class="beneficio-desc" data-pt="O cliente agenda pelo WhatsApp e a Kyvvo organiza tudo automaticamente." data-en="The client books via WhatsApp and Kyvvo organizes everything automatically.">O cliente agenda pelo WhatsApp e a Kyvvo organiza tudo automaticamente.</p>
+      <span class="beneficio-underline"></span>
+    </div>
+    <div class="beneficio-card">
+      <span class="beneficio-icon-badge" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18"/><path d="M8 3v4M16 3v4"/></svg></span>
+      <h3 class="beneficio-title" data-pt="Agenda inteligente" data-en="Smart schedule">Agenda inteligente</h3>
+      <p class="beneficio-desc" data-pt="Visualize o dia, a semana e o mês em um painel simples e rápido." data-en="View the day, week and month in a simple, fast dashboard.">Visualize o dia, a semana e o mês em um painel simples e rápido.</p>
+      <span class="beneficio-underline"></span>
+    </div>
+    <div class="beneficio-card">
+      <span class="beneficio-icon-badge" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg></span>
+      <h3 class="beneficio-title" data-pt="Implantação em minutos" data-en="Live in minutes">Implantação em minutos</h3>
+      <p class="beneficio-desc" data-pt="Crie sua conta, configure seus serviços e dê os primeiros passos com a Kyvvo." data-en="Create your account, set up your services and take your first steps with Kyvvo.">Crie sua conta, configure seus serviços e dê os primeiros passos com a Kyvvo.</p>
+      <span class="beneficio-underline"></span>
+    </div>
+    <div class="beneficio-card">
+      <span class="beneficio-icon-badge" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="3" y="13" width="4" height="8" rx="1"/><rect x="10" y="8" width="4" height="13" rx="1"/><rect x="17" y="3" width="4" height="18" rx="1"/></svg></span>
+      <h3 class="beneficio-title" data-pt="Pronto para crescer" data-en="Ready to grow">Pronto para crescer</h3>
+      <p class="beneficio-desc" data-pt="Cadastre novos profissionais, serviços e unidades conforme seu negócio evolui." data-en="Add new staff, services and locations as your business grows.">Cadastre novos profissionais, serviços e unidades conforme seu negócio evolui.</p>
+      <span class="beneficio-underline"></span>
+    </div>
+    <div class="beneficio-card">
+      <span class="beneficio-icon-badge" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 5v6c0 5 3.5 8.5 8 11 4.5-2.5 8-6 8-11V5l-8-3z"/><path d="M9 12l2 2 4-4"/></svg></span>
+      <h3 class="beneficio-title" data-pt="Seguro e confiável" data-en="Secure and reliable">Seguro e confiável</h3>
+      <p class="beneficio-desc" data-pt="Dados protegidos, conexão criptografada e infraestrutura em nuvem de alto nível." data-en="Protected data, encrypted connection and top-tier cloud infrastructure.">Dados protegidos, conexão criptografada e infraestrutura em nuvem de alto nível.</p>
+      <span class="beneficio-underline"></span>
+    </div>
+    <div class="beneficio-card">
+      <span class="beneficio-icon-badge" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+      <h3 class="beneficio-title" data-pt="Feito para negócios de serviço" data-en="Built for service businesses">Feito para negócios de serviço</h3>
+      <p class="beneficio-desc" data-pt="Salões, clínicas, psicólogos, fisioterapeutas, pet shops, pilates e muito mais." data-en="Salons, clinics, psychologists, physical therapists, pet shops, pilates studios and more.">Salões, clínicas, psicólogos, fisioterapeutas, pet shops, pilates e muito mais.</p>
+      <span class="beneficio-underline"></span>
+    </div>
+  </div>
+</section>
+
+<section class="how-section" id="como-funciona">
+  <div class="section-eyebrow" data-pt="Como funciona" data-en="How it works">Como funciona</div>
+  <h2 class="section-title" data-pt="Do WhatsApp ao painel em 3&nbsp;passos" data-en="From WhatsApp to dashboard in 3&nbsp;steps">Do WhatsApp ao painel em 3&nbsp;passos</h2>
+  <p class="section-sub" data-pt="Sua cliente agenda pelo WhatsApp que já usa. Você visualiza tudo no painel, sem planilha, sem caderno." data-en="Your client books via WhatsApp they already use. You see everything in the dashboard — no spreadsheet, no notebook.">
+    Sua cliente agenda pelo WhatsApp que já usa. Você visualiza tudo no painel, sem planilha, sem caderno.
+  </p>
+  <div class="how-steps">
+    <div class="how-step">
+      <div class="how-step-foto">
+        <img src="/images/passo1-whatsapp.png" alt="Cliente conversando com o bot da Kyvvo no WhatsApp" loading="lazy">
+        <span class="how-step-badge badge-whatsapp" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2a10 10 0 0 0-8.6 15L2 22l5.2-1.4A10 10 0 1 0 12 2zm5.8 14.2c-.25.7-1.4 1.3-2 1.4-.5.1-1.1.1-1.8-.1-.4-.1-1-.3-1.7-.6-3-1.3-5-4.3-5.1-4.5-.1-.2-1.2-1.6-1.2-3 0-1.4.7-2.1 1-2.4.3-.3.6-.4.8-.4h.6c.2 0 .4 0 .6.5.2.5.7 1.8.8 1.9.1.2.1.3 0 .5-.1.2-.1.3-.3.5l-.4.5c-.1.2-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1.1 2.1 1.4 2.4 1.6.3.2.5.1.7-.1l.6-.7c.2-.3.4-.2.7-.1l1.7.8c.2.1.4.2.4.4.1.2.1.9-.1 1.5z"/></svg></span>
+      </div>
+      <div class="how-step-info">
+        <span class="how-step-num">01</span>
+        <h3 class="step-title" data-pt="Cliente manda mensagem" data-en="Client sends a message">Cliente manda mensagem</h3>
+        <p class="step-desc" data-pt="Ela escreve no WhatsApp do salão. O bot da Kyvvo responde automaticamente, pergunta o serviço e o horário." data-en="They write to your WhatsApp. Kyvvo's bot replies automatically, asking for service and time slot.">Ela escreve no WhatsApp do salão. O bot da Kyvvo responde automaticamente, pergunta o serviço e o horário.</p>
+      </div>
+    </div>
+    <div class="how-step">
+      <div class="how-step-foto">
+        <img src="/images/passo2-cliente.png" alt="Cliente sorrindo ao receber a confirmação do agendamento" loading="lazy">
+        <span class="how-step-badge badge-bot" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 8V4"/><circle cx="12" cy="3" r="1.2" fill="currentColor" stroke="none"/><circle cx="9" cy="14" r="1.3" fill="currentColor" stroke="none"/><circle cx="15" cy="14" r="1.3" fill="currentColor" stroke="none"/><path d="M9 18h6"/></svg></span>
+      </div>
+      <div class="how-step-info">
+        <span class="how-step-num">02</span>
+        <h3 class="step-title" data-pt="Bot confirma e registra" data-en="Bot confirms and registers">Bot confirma e registra</h3>
+        <p class="step-desc" data-pt="O agendamento é confirmado na conversa e salvo automaticamente no sistema. Sem intervenção manual." data-en="The booking is confirmed in the conversation and saved automatically. No manual input required.">O agendamento é confirmado na conversa e salvo automaticamente no sistema. Sem intervenção manual.</p>
+      </div>
+    </div>
+    <div class="how-step">
+      <div class="how-step-foto">
+        <img src="/images/passo3-painel.png" alt="Painel da Kyvvo mostrando a agenda no laptop" loading="lazy">
+        <span class="how-step-badge badge-painel" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18"/><path d="M8 3v4M16 3v4"/></svg></span>
+      </div>
+      <div class="how-step-info">
+        <span class="how-step-num">03</span>
+        <h3 class="step-title" data-pt="Você vê no painel" data-en="You see it on the dashboard">Você vê no painel</h3>
+        <p class="step-desc" data-pt="Abra o painel e veja a agenda do dia, da semana e do mês. Tudo organizado, do jeito que você precisa." data-en="Open the dashboard and see today's, this week's, and this month's schedule. Organized just the way you need.">Abra o painel e veja a agenda do dia, da semana e do mês. Tudo organizado, do jeito que você precisa.</p>
+      </div>
+    </div>
+  </div>
+  <div class="how-cta">
+    <a class="btn-whatsapp" data-panel-path="/cadastro" href="#" data-pt="Quero experimentar grátis →" data-en="I want to try it free →">Quero experimentar grátis →</a>
+    <p class="hero-cta-sub" data-pt="14 dias grátis. Sem cartão de crédito." data-en="14 days free. No credit card.">14 dias grátis. Sem cartão de crédito.</p>
+  </div>
+</section>
+
+<section class="niches-section" id="segmentos">
+  <div class="section-eyebrow" data-pt="Segmentos" data-en="Segments">Segmentos</div>
+  <h2 class="section-title" data-pt="Para pequenos negócios de serviço" data-en="For small service businesses">Para pequenos negócios de serviço</h2>
+  <div class="niches-grid">
+    <div class="niche-card">
+      <img src="/images/segmento-salao.png" alt="Cabeleireira atendendo uma cliente no salão" loading="lazy">
+      <span class="niche-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg></span>
+      <div class="niche-info">
+        <h3 class="niche-title" data-pt="Salão de beleza" data-en="Beauty salon">Salão de beleza</h3>
+        <p class="niche-desc" data-pt="Cortes, coloração e horários cheios, tudo organizado num só lugar." data-en="Cuts, coloring and a full schedule, all organized in one place.">Cortes, coloração e horários cheios, tudo organizado num só lugar.</p>
+      </div>
+    </div>
+    <div class="niche-card">
+      <img src="/images/segmento-petshop.png" alt="Cachorro golden retriever sendo tosado" loading="lazy">
+      <span class="niche-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="7" cy="9" r="2"/><circle cx="12" cy="6.5" r="2.1"/><circle cx="17" cy="9" r="2"/><path d="M12 12c-3 0-6 2.3-6 5.2 0 1.5 1.2 2.3 2.6 2 1-.2 2.1-.7 3.4-.7s2.4.5 3.4.7c1.4.3 2.6-.5 2.6-2 0-2.9-3-5.2-6-5.2z"/></svg></span>
+      <div class="niche-info">
+        <h3 class="niche-title" data-pt="Pet Shop" data-en="Pet Shop">Pet Shop</h3>
+        <p class="niche-desc" data-pt="Banho, tosa e consultas agendados sem confusão." data-en="Baths, grooming and appointments booked without the mix-ups.">Banho, tosa e consultas agendados sem confusão.</p>
+      </div>
+    </div>
+    <div class="niche-card">
+      <img src="/images/segmento-psicologa.png" alt="Psicóloga anotando em um caderno na mesa" loading="lazy">
+      <span class="niche-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4a3 3 0 0 0-3 3 3 3 0 0 0-1.5 5.6A3 3 0 0 0 7 17a3 3 0 0 0 5 2.2A3 3 0 0 0 17 17a3 3 0 0 0 2.5-4.4A3 3 0 0 0 18 7a3 3 0 0 0-3-3 3 3 0 0 0-3 1.5A3 3 0 0 0 9 4z"/><path d="M12 4v15.5"/></svg></span>
+      <div class="niche-info">
+        <h3 class="niche-title" data-pt="Psicólogo(a)" data-en="Psychologist">Psicólogo(a)</h3>
+        <p class="niche-desc" data-pt="Sessões marcadas com privacidade e sem retrabalho." data-en="Sessions booked with privacy and no extra hassle.">Sessões marcadas com privacidade e sem retrabalho.</p>
+      </div>
+    </div>
+    <div class="niche-card">
+      <img src="/images/segmento-fisioterapia.png" alt="Fisioterapeuta atendendo o joelho de um paciente" loading="lazy">
+      <span class="niche-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span>
+      <div class="niche-info">
+        <h3 class="niche-title" data-pt="Fisioterapia" data-en="Physical therapy">Fisioterapia</h3>
+        <p class="niche-desc" data-pt="Acompanhe pacientes e sessões sem depender de papel." data-en="Track patients and sessions without relying on paper.">Acompanhe pacientes e sessões sem depender de papel.</p>
+      </div>
+    </div>
+    <div class="niche-card">
+      <img src="/images/segmento-pilates.png" alt="Mulher se exercitando em um reformer de pilates" loading="lazy">
+      <span class="niche-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2"/><path d="M12 7v6M12 13l-5 6M12 13l5 6M7 10l5 2 5-2"/></svg></span>
+      <div class="niche-info">
+        <h3 class="niche-title" data-pt="Pilates" data-en="Pilates">Pilates</h3>
+        <p class="niche-desc" data-pt="Turmas e horários organizados pro seu studio rodar redondo." data-en="Classes and schedules organized to keep your studio running smoothly.">Turmas e horários organizados pro seu studio rodar redondo.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="roadmap-section">
+  <div class="roadmap-grid">
+    <div class="roadmap-intro">
+      <div class="section-eyebrow" data-pt="Em breve" data-en="Coming soon">Em breve</div>
+      <h2 class="section-title" data-pt="Pra onde a Kyvvo está indo" data-en="Where Kyvvo is headed">Pra onde a Kyvvo está indo</h2>
+      <p class="section-sub" data-pt="Estamos construindo mais módulos pra você ativar conforme o seu negócio precisar." data-en="We're building more modules for you to activate as your business needs them.">
+        Estamos construindo mais módulos pra você ativar conforme o seu negócio precisar.
+      </p>
+      <div class="roadmap-row">
+        <div class="roadmap-pill">💰 <span data-pt="Financeiro" data-en="Finance">Financeiro</span></div>
+        <div class="roadmap-pill">📊 <span data-pt="Dashboards" data-en="Dashboards">Dashboards</span></div>
+        <div class="roadmap-pill">📦 <span data-pt="Estoque" data-en="Inventory">Estoque</span></div>
+        <div class="roadmap-pill">💸 <span data-pt="Comissão" data-en="Commission">Comissão</span></div>
+        <div class="roadmap-pill">📣 <span data-pt="Campanhas proativas" data-en="Proactive campaigns">Campanhas proativas</span></div>
+      </div>
+    </div>
+    <div class="roadmap-foto">
+      <img src="/images/roadmap-fundador.png" alt="Fundador da Kyvvo trabalhando no painel com o logo Kyvvo em destaque" loading="lazy">
+    </div>
+  </div>
+</section>
+
+<section class="precos-section" id="precos">
+  <div class="precos-header">
+    <div class="section-eyebrow" data-pt="Preços" data-en="Pricing">Preços</div>
+    <h2 class="section-title" data-pt="Um plano pro seu jeito de atender no WhatsApp" data-en="A plan for how you serve on WhatsApp">Um plano pro seu jeito de atender no WhatsApp</h2>
+    <p class="section-sub" data-pt="Bot de agendamento, agenda, financeiro, serviços e profissionais já vêm em todos os planos. 14 dias grátis pra testar. Cancele quando quiser." data-en="Booking bot, schedule, finances, services and staff come in every plan. 14 days free to try. Cancel anytime.">Bot de agendamento, agenda, financeiro, serviços e profissionais já vêm em todos os planos. 14 dias grátis pra testar. Cancele quando quiser.</p>
+  </div>
+  <div class="precos-grid precos-grid-matriz" id="planos-grid" data-testid="planos-grid">
+    <p class="precos-carregando" data-pt="Carregando planos..." data-en="Loading plans...">Carregando planos...</p>
+  </div>
+  <p class="precos-nota" data-pt="Preços sujeitos a alteração. Assinaturas em andamento não são afetadas por mudanças de preço." data-en="Prices subject to change. Existing subscriptions aren't affected by price changes.">Preços sujeitos a alteração. Assinaturas em andamento não são afetadas por mudanças de preço.</p>
+</section>
+
+<!-- FAQ -->
+<section class="faq-section" id="faq">
+  <div class="faq-grid">
+    <div class="faq-intro">
+      <div class="section-eyebrow" data-pt="FAQ" data-en="FAQ">FAQ</div>
+      <h2 class="section-title" data-pt="Perguntas frequentes" data-en="Frequently asked questions">Perguntas frequentes</h2>
+      <p class="section-sub" data-pt="Selecionamos as dúvidas mais comuns para te ajudar antes de começar." data-en="We've gathered the most common questions to help you get started.">Selecionamos as dúvidas mais comuns para te ajudar antes de começar.</p>
+
+      <div class="faq-beneficios">
+        <div class="faq-beneficio">
+          <div class="faq-beneficio-icone" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18"/><path d="M8 3v4M16 3v4"/></svg></div>
+          <div>
+            <div class="faq-beneficio-title" data-pt="Trial gratuito de 14 dias" data-en="14-day free trial">Trial gratuito de 14 dias</div>
+            <div class="faq-beneficio-desc" data-pt="Teste todas as funcionalidades." data-en="Try every feature.">Teste todas as funcionalidades.</div>
+          </div>
+        </div>
+        <div class="faq-beneficio">
+          <div class="faq-beneficio-icone" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16.5v2.3a2 2 0 0 1-2.2 2 18 18 0 0 1-7.8-2.8 17.6 17.6 0 0 1-5.4-5.4A18 18 0 0 1 3 4.7 2 2 0 0 1 5 2.5h2.3a2 2 0 0 1 2 1.7c.1.9.4 1.9.7 2.7a2 2 0 0 1-.5 2.1L8.3 10.3a14.4 14.4 0 0 0 5.4 5.4l1.3-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2.1z"/></svg></div>
+          <div>
+            <div class="faq-beneficio-title" data-pt="API Oficial da Meta" data-en="Official Meta API">API Oficial da Meta</div>
+            <div class="faq-beneficio-desc" data-pt="Segurança e conformidade garantidas." data-en="Security and compliance guaranteed.">Segurança e conformidade garantidas.</div>
+          </div>
+        </div>
+        <div class="faq-beneficio">
+          <div class="faq-beneficio-icone" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13v-1a8 8 0 0 1 16 0v1"/><rect x="2.5" y="13" width="4" height="6" rx="1.5"/><rect x="17.5" y="13" width="4" height="6" rx="1.5"/><path d="M20 19v1a3 3 0 0 1-3 3h-3"/></svg></div>
+          <div>
+            <div class="faq-beneficio-title" data-pt="Suporte humano" data-en="Human support">Suporte humano</div>
+            <div class="faq-beneficio-desc" data-pt="Atendimento rápido e próximo." data-en="Fast, hands-on service.">Atendimento rápido e próximo.</div>
+          </div>
+        </div>
+        <div class="faq-beneficio">
+          <div class="faq-beneficio-icone" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 5v6c0 5 3.5 8.5 8 11 4.5-2.5 8-6 8-11V5l-8-3z"/><path d="M9 12l2 2 4-4"/></svg></div>
+          <div>
+            <div class="faq-beneficio-title" data-pt="Seus dados protegidos" data-en="Your data protected">Seus dados protegidos</div>
+            <div class="faq-beneficio-desc" data-pt="LGPD, backups e infraestrutura AWS." data-en="LGPD, backups and AWS infrastructure.">LGPD, backups e infraestrutura AWS.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="faq-whatsapp-box">
+        <div class="faq-whatsapp-icone" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2a10 10 0 0 0-8.6 15L2 22l5.2-1.4A10 10 0 1 0 12 2zm5.8 14.2c-.25.7-1.4 1.3-2 1.4-.5.1-1.1.1-1.8-.1-.4-.1-1-.3-1.7-.6-3-1.3-5-4.3-5.1-4.5-.1-.2-1.2-1.6-1.2-3 0-1.4.7-2.1 1-2.4.3-.3.6-.4.8-.4h.6c.2 0 .4 0 .6.5.2.5.7 1.8.8 1.9.1.2.1.3 0 .5-.1.2-.1.3-.3.5l-.4.5c-.1.2-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1.1 2.1 1.4 2.4 1.6.3.2.5.1.7-.1l.6-.7c.2-.3.4-.2.7-.1l1.7.8c.2.1.4.2.4.4.1.2.1.9-.1 1.5z"/></svg></div>
+        <div class="faq-whatsapp-texto">
+          <div class="faq-whatsapp-titulo" data-pt="Ainda ficou alguma dúvida?" data-en="Still have a question?">Ainda ficou alguma dúvida?</div>
+          <div class="faq-whatsapp-desc" data-pt="Fale com nosso time pelo WhatsApp." data-en="Talk to our team on WhatsApp.">Fale com nosso time pelo WhatsApp.</div>
+          <a class="faq-whatsapp-btn" href="https://wa.me/553484285182?text=Ol%C3%A1!%20Quero%20saber%20mais%20sobre%20a%20Kyvvo." target="_blank" rel="noopener" data-pt="Conversar agora" data-en="Chat now">Conversar agora</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="faq-lista-wrap">
+      <div class="faq-tabs">
+        <button class="faq-tab active" data-categoria="todas" onclick="filtrarFaq(this)" data-pt="Todas" data-en="All">Todas</button>
+        <button class="faq-tab" data-categoria="comecando" onclick="filtrarFaq(this)" data-pt="Começando" data-en="Getting started">Começando</button>
+        <button class="faq-tab" data-categoria="whatsapp" onclick="filtrarFaq(this)" data-pt="WhatsApp" data-en="WhatsApp">WhatsApp</button>
+        <button class="faq-tab" data-categoria="pagamento" onclick="filtrarFaq(this)" data-pt="Pagamento" data-en="Billing">Pagamento</button>
+        <button class="faq-tab" data-categoria="seguranca" onclick="filtrarFaq(this)" data-pt="Segurança" data-en="Security">Segurança</button>
+        <button class="faq-tab" data-categoria="conta" onclick="filtrarFaq(this)" data-pt="Conta" data-en="Account">Conta</button>
+      </div>
+
+      <div class="faq-wrap">
+        <div class="faq-item" data-categoria="comecando">
+          <button class="faq-question" onclick="toggleFaq(this)" aria-expanded="false" aria-controls="faq-answer-1">
+            <span data-pt="O que é a Kyvvo?" data-en="What is Kyvvo?">O que é a Kyvvo?</span>
+            <span class="faq-icon" aria-hidden="true"></span>
+          </button>
+          <div class="faq-answer" id="faq-answer-1">
+            <div class="faq-answer-inner" data-pt="A Kyvvo (com dois &quot;v&quot;) é a <strong>plataforma</strong> que simplifica a gestão de pequenos negócios de serviços — salões de beleza, petshops, clínicas e academias. Você organiza sua agenda, clientes, financeiro e WhatsApp em um só lugar. Não temos relação com outras marcas de nome parecido." data-en="Kyvvo (with two &quot;v&quot;s) is the <strong>platform</strong> that simplifies management for small service businesses — salons, pet shops, clinics and gyms. You organize your schedule, clients, finances and WhatsApp in one place. We're not related to other similarly-named brands.">A Kyvvo (com dois "v") é a <strong>plataforma</strong> que simplifica a gestão de pequenos negócios de serviços — salões de beleza, petshops, clínicas e academias. Você organiza sua agenda, clientes, financeiro e WhatsApp em um só lugar. Não temos relação com outras marcas de nome parecido.</div>
+          </div>
+        </div>
+
+        <div class="faq-item" data-categoria="comecando">
+          <button class="faq-question" onclick="toggleFaq(this)" aria-expanded="false" aria-controls="faq-answer-2">
+            <span data-pt="Preciso instalar alguma coisa?" data-en="Do I need to install anything?">Preciso instalar alguma coisa?</span>
+            <span class="faq-icon" aria-hidden="true"></span>
+          </button>
+          <div class="faq-answer" id="faq-answer-2">
+            <div class="faq-answer-inner" data-pt="Não. A Kyvvo funciona direto pelo navegador do celular ou computador. O app mobile estará disponível em breve." data-en="No. Kyvvo runs straight from your phone or computer browser. The mobile app will be available soon.">Não. A Kyvvo funciona direto pelo navegador do celular ou computador. O app mobile estará disponível em breve.</div>
+          </div>
+        </div>
+
+        <div class="faq-item" data-categoria="comecando">
+          <button class="faq-question" onclick="toggleFaq(this)" aria-expanded="false" aria-controls="faq-answer-3">
+            <span data-pt="Funciona no celular?" data-en="Does it work on mobile?">Funciona no celular?</span>
+            <span class="faq-icon" aria-hidden="true"></span>
+          </button>
+          <div class="faq-answer" id="faq-answer-3">
+            <div class="faq-answer-inner" data-pt="Sim, a Kyvvo funciona direto pelo navegador do seu celular, sem precisar instalar nada. Você gerencia sua agenda e seus clientes de qualquer lugar." data-en="Yes, Kyvvo runs straight from your phone's browser, no install needed. You can manage your schedule and clients from anywhere.">Sim, a Kyvvo funciona direto pelo navegador do seu celular, sem precisar instalar nada. Você gerencia sua agenda e seus clientes de qualquer lugar.</div>
+          </div>
+        </div>
+
+        <div class="faq-item" data-categoria="whatsapp">
+          <button class="faq-question" onclick="toggleFaq(this)" aria-expanded="false" aria-controls="faq-answer-4">
+            <span data-pt="Como funciona a integração com o WhatsApp?" data-en="How does the WhatsApp integration work?">Como funciona a integração com o WhatsApp?</span>
+            <span class="faq-icon" aria-hidden="true"></span>
+          </button>
+          <div class="faq-answer" id="faq-answer-4">
+            <div class="faq-answer-inner" data-pt="Seu cliente manda uma mensagem para o número do seu negócio. O bot da Kyvvo responde automaticamente, pergunta o serviço e o horário, e confirma o agendamento — tudo sem você precisar responder." data-en="Your client sends a message to your business's number. Kyvvo's bot replies automatically, asks for the service and time, and confirms the booking — all without you lifting a finger.">Seu cliente manda uma mensagem para o número do seu negócio. O bot da Kyvvo responde automaticamente, pergunta o serviço e o horário, e confirma o agendamento — tudo sem você precisar responder.</div>
+          </div>
+        </div>
+
+        <div class="faq-item" data-categoria="whatsapp">
+          <button class="faq-question" onclick="toggleFaq(this)" aria-expanded="false" aria-controls="faq-answer-5">
+            <span data-pt="Meu número de WhatsApp está seguro?" data-en="Is my WhatsApp number safe?">Meu número de WhatsApp está seguro?</span>
+            <span class="faq-icon" aria-hidden="true"></span>
+          </button>
+          <div class="faq-answer" id="faq-answer-5">
+            <div class="faq-answer-inner" data-pt="Sim. Usamos a API oficial do WhatsApp (Meta), que garante segurança e conformidade. Números conectados via API oficial não são bloqueados." data-en="Yes. We use the official WhatsApp API (Meta), which ensures security and compliance. Numbers connected through the official API are not blocked.">Sim. Usamos a API oficial do WhatsApp (Meta), que garante segurança e conformidade. Números conectados via API oficial não são bloqueados.</div>
+          </div>
+        </div>
+
+        <div class="faq-item" data-categoria="whatsapp">
+          <button class="faq-question" onclick="toggleFaq(this)" aria-expanded="false" aria-controls="faq-answer-10">
+            <span data-pt="Preciso ter um número de WhatsApp Business pronto?" data-en="Do I need to already have a WhatsApp Business number?">Preciso ter um número de WhatsApp Business pronto?</span>
+            <span class="faq-icon" aria-hidden="true"></span>
+          </button>
+          <div class="faq-answer" id="faq-answer-10">
+            <div class="faq-answer-inner" data-pt="Não necessariamente. Você pode conectar o número que seu negócio já usa direto pelo painel, em poucos cliques, via Embedded Signup oficial da Meta. Se preferir que a Kyvvo configure um número novo pra você, fale com o nosso suporte para confirmar disponibilidade — hoje esse caminho ainda é combinado diretamente com o nosso time, fora do fluxo automático." data-en="Not necessarily. You can connect the number your business already uses straight from the dashboard, in a few clicks, via Meta's official Embedded Signup. If you'd rather have Kyvvo set up a new number for you, contact our support to check availability — today that path is still arranged directly with our team, outside the automated flow.">Não necessariamente. Você pode conectar o número que seu negócio já usa direto pelo painel, em poucos cliques, via Embedded Signup oficial da Meta. Se preferir que a Kyvvo configure um número novo pra você, fale com o nosso suporte para confirmar disponibilidade — hoje esse caminho ainda é combinado diretamente com o nosso time, fora do fluxo automático.</div>
+          </div>
+        </div>
+
+        <div class="faq-item" data-categoria="pagamento">
+          <button class="faq-question" onclick="toggleFaq(this)" aria-expanded="false" aria-controls="faq-answer-6">
+            <span data-pt="Quanto custa após o trial?" data-en="How much does it cost after the trial?">Quanto custa após o trial?</span>
+            <span class="faq-icon" aria-hidden="true"></span>
+          </button>
+          <div class="faq-answer" id="faq-answer-6">
+            <div class="faq-answer-inner" data-pt="A partir de R$ 247/mês, variando conforme o modelo de número de WhatsApp e o nível de inteligência do bot escolhidos. Veja todos os planos na seção de preços." data-en="From R$ 247/month, depending on the WhatsApp number model and bot intelligence level you choose. See all plans in the pricing section.">A partir de R$ 247/mês, variando conforme o modelo de número de WhatsApp e o nível de inteligência do bot escolhidos. Veja todos os planos na seção de preços.</div>
+          </div>
+        </div>
+
+        <div class="faq-item" data-categoria="seguranca">
+          <button class="faq-question" onclick="toggleFaq(this)" aria-expanded="false" aria-controls="faq-answer-7">
+            <span data-pt="Meus dados estão protegidos?" data-en="Is my data protected?">Meus dados estão protegidos?</span>
+            <span class="faq-icon" aria-hidden="true"></span>
+          </button>
+          <div class="faq-answer" id="faq-answer-7">
+            <div class="faq-answer-inner" data-pt="Sim. Seguimos a LGPD, fazemos backups regulares e usamos infraestrutura AWS para manter seus dados e os do seu negócio protegidos." data-en="Yes. We follow LGPD (Brazil's data protection law), run regular backups and use AWS infrastructure to keep your data and your business's data safe.">Sim. Seguimos a LGPD, fazemos backups regulares e usamos infraestrutura AWS para manter seus dados e os do seu negócio protegidos.</div>
+          </div>
+        </div>
+
+        <div class="faq-item" data-categoria="conta">
+          <button class="faq-question" onclick="toggleFaq(this)" aria-expanded="false" aria-controls="faq-answer-8">
+            <span data-pt="Como funciona o trial gratuito?" data-en="How does the free trial work?">Como funciona o trial gratuito?</span>
+            <span class="faq-icon" aria-hidden="true"></span>
+          </button>
+          <div class="faq-answer" id="faq-answer-8">
+            <div class="faq-answer-inner" data-pt="Você tem 14 dias grátis para testar todas as funcionalidades, sem precisar cadastrar cartão de crédito. Depois, escolhe um dos nossos planos para continuar." data-en="You get 14 days free to try every feature, no credit card required. After that, you pick one of our plans to keep going.">Você tem 14 dias grátis para testar todas as funcionalidades, sem precisar cadastrar cartão de crédito. Depois, escolhe um dos nossos planos para continuar.</div>
+          </div>
+        </div>
+
+        <div class="faq-item" data-categoria="conta">
+          <button class="faq-question" onclick="toggleFaq(this)" aria-expanded="false" aria-controls="faq-answer-9">
+            <span data-pt="Posso cancelar quando quiser?" data-en="Can I cancel anytime?">Posso cancelar quando quiser?</span>
+            <span class="faq-icon" aria-hidden="true"></span>
+          </button>
+          <div class="faq-answer" id="faq-answer-9">
+            <div class="faq-answer-inner" data-pt="Sim. Sem fidelidade, sem multa. Cancele quando quiser direto pelo portal." data-en="Yes. No lock-in, no penalty. Cancel whenever you want, straight from the portal.">Sim. Sem fidelidade, sem multa. Cancele quando quiser direto pelo portal.</div>
+          </div>
+        </div>
+      </div>
+
+      <p class="faq-contact">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 4.6 1.4c0 1.6-2.1 1.8-2.1 3.3"/><circle cx="12" cy="17" r=".6" fill="currentColor" stroke="none"/></svg>
+        <span data-pt="Não encontrou sua resposta? " data-en="Didn't find your answer? ">Não encontrou sua resposta? </span>
+        <a href="https://wa.me/553484285182?text=Ol%C3%A1!%20Quero%20saber%20mais%20sobre%20a%20Kyvvo." target="_blank" rel="noopener"
+           data-pt="Fale com a gente pelo WhatsApp" data-en="Talk to us on WhatsApp">Fale com a gente pelo WhatsApp</a>
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- Quem somos -->
+<section class="quem-somos-section" id="quem-somos">
+  <div class="quem-somos-grid">
+    <div class="quem-somos-intro">
+      <div class="section-eyebrow" data-pt="Quem somos?" data-en="About us?">Quem somos?</div>
+      <h2 class="section-title" data-pt="Criamos a Kyvvo para <em>devolver tempo</em> para quem vive atendendo pessoas todos os dias." data-en="We created Kyvvo to <em>give back time</em> to those who spend every day serving people.">Criamos a Kyvvo para <em>devolver tempo</em> para quem vive atendendo pessoas todos os dias.</h2>
+      <p class="section-sub" data-pt="Acreditamos que pequenos negócios merecem tecnologia do mesmo nível das grandes empresas. Por isso, construímos uma plataforma simples, completa e feita para o dia a dia real de quem empreende." data-en="We believe small businesses deserve technology on par with big companies. That's why we built a simple, complete platform made for the real day-to-day of entrepreneurs.">Acreditamos que pequenos negócios merecem tecnologia do mesmo nível das grandes empresas. Por isso, construímos uma plataforma simples, completa e feita para o dia a dia real de quem empreende.</p>
+
+      <div class="quem-somos-pills">
+        <div class="quem-somos-pill">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s7-6.5 7-12a7 7 0 0 0-14 0c0 5.5 7 12 7 12z"/><circle cx="12" cy="9" r="2.3"/></svg>
+          <span data-pt="Uberlândia, MG" data-en="Uberlândia, Brazil">Uberlândia, MG</span>
+        </div>
+        <div class="quem-somos-pill">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18"/><path d="M8 3v4M16 3v4"/></svg>
+          <span data-pt="Fundada em 2026" data-en="Founded in 2026">Fundada em 2026</span>
+        </div>
+        <div class="quem-somos-pill">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20s-7-4.4-9.5-9A5.5 5.5 0 0 1 12 5.5 5.5 5.5 0 0 1 21.5 11c-2.5 4.6-9.5 9-9.5 9z"/></svg>
+          <span data-pt="Feita com propósito" data-en="Made with purpose">Feita com propósito</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="fundador-foto-card">
+      <img src="/images/bruno-alves-fundador.png" alt="Bruno Alves, fundador da Kyvvo" loading="lazy">
+      <div class="fundador-foto-legenda">
+        <div>
+          <div class="fundador-foto-nome">Bruno Alves</div>
+          <div class="fundador-foto-cargo" data-pt="Fundador da Kyvvo" data-en="Founder of Kyvvo">Fundador da Kyvvo</div>
+        </div>
+        <a class="fundador-linkedin-btn" href="https://www.linkedin.com/in/brunoalvesbr/" target="_blank" rel="noopener" aria-label="LinkedIn">
+          <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M4.98 3.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5zM3 9h4v12H3zM9 9h3.8v1.7h.05c.53-1 1.83-2 3.77-2 4.03 0 4.78 2.65 4.78 6.1V21h-4v-5.4c0-1.3-.02-2.96-1.8-2.96-1.8 0-2.08 1.4-2.08 2.86V21H9z"/></svg>
+        </a>
+      </div>
+    </div>
+
+    <div class="pilares-lista">
+      <div class="pilar-item">
+        <div class="pilar-icone" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/></svg></div>
+        <div>
+          <h3 class="pilar-title" data-pt="Nosso propósito" data-en="Our purpose">Nosso propósito</h3>
+          <p class="pilar-desc" data-pt="Simplificar a gestão de negócios de serviços para que você possa focar no que importa." data-en="Simplify management for service businesses so you can focus on what matters.">Simplificar a gestão de negócios de serviços para que você possa focar no que importa.</p>
+        </div>
+      </div>
+      <div class="pilar-item">
+        <div class="pilar-icone" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c0-3.3 2.9-6 6.5-6s6.5 2.7 6.5 6"/><path d="M16.5 4.6a3.2 3.2 0 0 1 0 6.3"/><path d="M18.8 14.3c2.3.6 3.7 2.7 3.7 5.7"/></svg></div>
+        <div>
+          <h3 class="pilar-title" data-pt="Nosso compromisso" data-en="Our commitment">Nosso compromisso</h3>
+          <p class="pilar-desc" data-pt="Estar ao lado do cliente com suporte humano, transparência e evolução constante." data-en="Standing by our clients with human support, transparency and constant evolution.">Estar ao lado do cliente com suporte humano, transparência e evolução constante.</p>
+        </div>
+      </div>
+      <div class="pilar-item">
+        <div class="pilar-icone" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2c3 2 5 6 5 10 0 2-.5 4-1.5 5.5L12 21l-3.5-3.5C7.5 16 7 14 7 12c0-4 2-8 5-10z"/><path d="M9 15l-3 1 1-3"/><path d="M15 15l3 1-1-3"/><circle cx="12" cy="10" r="1.6"/></svg></div>
+        <div>
+          <h3 class="pilar-title" data-pt="Nossa visão" data-en="Our vision">Nossa visão</h3>
+          <p class="pilar-desc" data-pt="Ser a plataforma número 1 para pequenos negócios de serviços na América Latina." data-en="To be the #1 platform for small service businesses in Latin America.">Ser a plataforma número 1 para pequenos negócios de serviços na América Latina.</p>
+        </div>
+      </div>
+      <div class="pilar-item">
+        <div class="pilar-icone" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2.5l2.9 6 6.6.6-5 4.4 1.5 6.5L12 16.8 6 20l1.5-6.5-5-4.4 6.6-.6z"/></svg></div>
+        <div>
+          <h3 class="pilar-title" data-pt="Nossos valores" data-en="Our values">Nossos valores</h3>
+          <p class="pilar-desc" data-pt="Simplicidade, inovação, respeito e foco no sucesso do cliente." data-en="Simplicity, innovation, respect and a focus on our clients' success.">Simplicidade, inovação, respeito e foco no sucesso do cliente.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Depoimentos (US25) -->
+<section class="depoimentos-section" id="depoimentos">
+  <div class="depoimentos-header">
+    <div class="section-eyebrow" data-pt="Depoimentos" data-en="Testimonials">Depoimentos</div>
+    <h2 class="section-title" data-pt="O que nossos clientes dizem" data-en="What our clients say">O que nossos clientes dizem</h2>
+  </div>
+  <div id="depoimentos-conteudo"></div>
+</section>
+
+<div id="site-footer"></div>
+
+<script src="/analytics.js"></script>
+<script src="/shared.js"></script>
+<script>
+let currentLang = 'pt';
+
+function setLang(lang) {
+  currentLang = lang;
+  document.documentElement.lang = lang === 'pt' ? 'pt-BR' : 'en';
+  document.querySelectorAll('.lang-btn').forEach(b => {
+    const ativo = b.textContent.toLowerCase() === lang;
+    b.classList.toggle('active', ativo);
+    b.setAttribute('aria-pressed', String(ativo));
+  });
+  document.querySelectorAll('[data-pt]').forEach(el => {
+    const val = el.getAttribute('data-' + lang);
+    if (val) el.innerHTML = val;
+  });
+
+  // recalcula altura de itens do FAQ abertos, pois o texto pode mudar de tamanho
+  document.querySelectorAll('.faq-item.open .faq-answer').forEach(a => {
+    a.style.maxHeight = a.scrollHeight + 'px';
+  });
+}
+
+// FAQ ACCORDION
+function toggleFaq(btn) {
+  const item = btn.closest('.faq-item');
+  const answer = item.querySelector('.faq-answer');
+  const isOpen = item.classList.contains('open');
+
+  // fecha todos (apenas um item aberto por vez)
+  document.querySelectorAll('.faq-item.open').forEach(openItem => {
+    openItem.classList.remove('open');
+    openItem.querySelector('.faq-answer').style.maxHeight = null;
+    openItem.querySelector('.faq-question').setAttribute('aria-expanded', 'false');
+  });
+
+  if (!isOpen) {
+    item.classList.add('open');
+    answer.style.maxHeight = answer.scrollHeight + 'px';
+    btn.setAttribute('aria-expanded', 'true');
+  }
+}
+
+// Chamado pelo shared.js depois que o header (com o botão Entrar) foi
+// injetado — o toggle de idioma e o link do FAQ são específicos da landing
+// (a página de diagnóstico não tem conteúdo em inglês nem seção de FAQ),
+// por isso não fazem parte do header compartilhado.
+function onSharedReady() {
+  const navRight = document.getElementById('navRight');
+  if (navRight) {
+    navRight.insertAdjacentHTML('afterbegin', `
+      <a class="nav-link" href="#recursos" data-pt="Recursos" data-en="Features">Recursos</a>
+      <a class="nav-link" href="#como-funciona" data-pt="Como funciona" data-en="How it works">Como funciona</a>
+      <a class="nav-link" href="#segmentos" data-pt="Segmentos" data-en="Segments">Segmentos</a>
+      <a class="nav-link" href="#precos" data-pt="Preços" data-en="Pricing">Preços</a>
+      <a class="nav-link" href="#faq" data-pt="Perguntas frequentes" data-en="FAQ">Perguntas frequentes</a>
+      <a class="nav-link" href="#quem-somos" data-pt="Quem somos" data-en="About us">Quem somos</a>
+      <a class="nav-link" href="#depoimentos" data-pt="Depoimentos" data-en="Testimonials">Depoimentos</a>
+      <div class="lang-toggle">
+        <button class="lang-btn active" onclick="setLang('pt')" aria-pressed="true">PT</button>
+        <button class="lang-btn" onclick="setLang('en')" aria-pressed="false">EN</button>
+      </div>
+    `);
+  }
+
+  // Primeiro item do FAQ (US: nova versão do FAQ) já abre expandido —
+  // igual toggleFaq() faria, mas disparado no load em vez de num clique.
+  const primeiroFaq = document.querySelector('.faq-item');
+  if (primeiroFaq) {
+    const answer = primeiroFaq.querySelector('.faq-answer');
+    primeiroFaq.classList.add('open');
+    answer.style.maxHeight = answer.scrollHeight + 'px';
+    primeiroFaq.querySelector('.faq-question').setAttribute('aria-expanded', 'true');
+  }
+}
+
+// Filtro de categoria do FAQ (Todas/Começando/WhatsApp/Pagamento/Segurança/
+// Conta) — cada .faq-item tem um data-categoria; "todas" mostra tudo.
+function filtrarFaq(btn) {
+  document.querySelectorAll('.faq-tab').forEach((t) => t.classList.remove('active'));
+  btn.classList.add('active');
+  const categoria = btn.dataset.categoria;
+  document.querySelectorAll('.faq-item').forEach((item) => {
+    const mostrar = categoria === 'todas' || item.dataset.categoria === categoria;
+    item.style.display = mostrar ? '' : 'none';
+  });
+}
+
+// CA05 (US25) — depoimentos configuráveis aqui, sem CMS: adicionar um novo
+// depoimento é só incluir um objeto neste array e fazer deploy. Vazio até os
+// primeiros clientes piloto autorizarem o uso do relato (CA02 cobre o
+// estado vazio enquanto isso). Formato: { nome, salao, cidade, foto
+// (opcional — sem ela usa iniciais), texto, estrelas (opcional, 1-5) }.
+const DEPOIMENTOS = [];
+
+// CA06 (opcional) — logos de clientes piloto que autorizaram exibição.
+// Formato: { nome, logo }.
+const DEPOIMENTOS_LOGOS = [];
+
+function iniciaisDoNome(nome) {
+  return nome.split(' ').filter(Boolean).slice(0, 2).map((p) => p[0].toUpperCase()).join('');
+}
+
+function renderDepoimentos() {
+  const conteudo = document.getElementById('depoimentos-conteudo');
+  if (!conteudo) return;
+
+  if (!DEPOIMENTOS.length) {
+    conteudo.innerHTML = `
+      <div class="depoimentos-vazio">
+        <span class="depoimentos-vazio-icone" aria-hidden="true">💬</span>
+        <p data-pt="Estamos nos preparando para lançar. Em breve você verá aqui os resultados dos nossos primeiros clientes." data-en="We're getting ready to launch. Soon you'll see our first clients' results here.">Estamos nos preparando para lançar. Em breve você verá aqui os resultados dos nossos primeiros clientes.</p>
+      </div>
+    `;
+    return;
+  }
+
+  conteudo.innerHTML = `
+    <div class="depoimentos-grid">
+      ${DEPOIMENTOS.map((d) => `
+        <div class="depoimento-card">
+          <div class="depoimento-cabecalho">
+            ${d.foto
+              ? `<img class="depoimento-avatar" src="${d.foto}" alt="${d.nome}" loading="lazy">`
+              : `<div class="depoimento-avatar-iniciais" aria-hidden="true">${iniciaisDoNome(d.nome)}</div>`}
+            <div>
+              <div class="depoimento-nome">${d.nome}</div>
+              <div class="depoimento-salao">${d.salao}${d.cidade ? ` · ${d.cidade}` : ''}</div>
+            </div>
+          </div>
+          ${d.estrelas ? `<div class="depoimento-estrelas" aria-label="${d.estrelas} de 5 estrelas">${'★'.repeat(d.estrelas)}${'☆'.repeat(5 - d.estrelas)}</div>` : ''}
+          <p class="depoimento-texto" onclick="this.classList.toggle('expandido')">${d.texto}</p>
+        </div>
+      `).join('')}
+    </div>
+    ${DEPOIMENTOS_LOGOS.length ? `
+      <div class="depoimentos-logos">
+        <p class="depoimentos-logos-titulo" data-pt="Usados por salões em todo o Brasil" data-en="Used by salons across Brazil">Usados por salões em todo o Brasil</p>
+        <div class="depoimentos-logos-grid">
+          ${DEPOIMENTOS_LOGOS.map((l) => `<img src="${l.logo}" alt="${l.nome}" loading="lazy">`).join('')}
+        </div>
+      </div>
+    ` : ''}
+  `;
+}
+
+renderDepoimentos();
+
+// US67 — grade de planos (CA02/CA03) carregada dinamicamente do endpoint
+// público do painel (`${PANEL_ORIGIN}/api/planos`, mesma origem onde o admin
+// edita preço/destaque/badge em /admin/configuracoes) — qualquer alteração
+// ali reflete aqui na próxima carga da página, sem deploy da landing.
+function formatarPrecoPlano(valor) {
+  return `R$ ${Number(valor).toFixed(2).replace('.', ',')}`;
+}
+
+// US74/CA04 — rótulos de limite de uso; singular exato pra valor 1 (sem
+// "Até"), "Até N" pro plural, texto dedicado pra ilimitado (null ou -1,
+// convenção compartilhada com o resto do catálogo de limites/disparos).
+const PLANO_LIMITE_ROTULOS = {
+  conversas_mes: { singular: 'conversa/mês', plural: 'conversas/mês', ilimitado: 'Conversas ilimitadas' },
+  profissionais: { singular: 'profissional', plural: 'profissionais', ilimitado: 'Profissionais ilimitados' },
+  unidades: { singular: 'unidade', plural: 'unidades', ilimitado: 'Unidades ilimitadas' },
+};
+
+function formatarLimite(chave, valor) {
+  const rotulo = PLANO_LIMITE_ROTULOS[chave];
+  if (!rotulo) return '';
+  if (valor == null || valor === -1) return rotulo.ilimitado;
+  if (Number(valor) === 1) return `1 ${rotulo.singular}`;
+  return `Até ${valor} ${rotulo.plural}`;
+}
+
+function renderFeaturesPlano(plano) {
+  if (!plano.features || !plano.features.length) return '';
+  const titulo = plano.herda_de_nome ? `<div class="plano-features-titulo">Tudo do ${plano.herda_de_nome}, mais:</div>` : '';
+  return `
+    <div class="plano-features" data-testid="bloco-features-${plano.slug}">
+      ${titulo}
+      <ul>${plano.features.map((f) => `<li>✓ ${f.label}</li>`).join('')}</ul>
+    </div>
+  `;
+}
+
+function renderLimitesPlano(plano) {
+  if (!plano.limites) return '';
+  const textos = ['conversas_mes', 'profissionais', 'unidades']
+    .filter((chave) => plano.limites[chave] !== undefined)
+    .map((chave) => formatarLimite(chave, plano.limites[chave]));
+  if (!textos.length) return '';
+  return `<div class="plano-limites" data-testid="limites-${plano.slug}">${textos.join(' · ')}</div>`;
+}
+
+// US73 — o card vende o resultado pra cliente do salão (headline_diferencial
+// + frase_beneficio), nunca o meio técnico (o antigo texto de `descricao`,
+// ex: "IA conversacional + número próprio", saiu do card).
+function renderPlanoCard(plano) {
+  return `
+    <article class="plano-card${plano.destaque ? ' destaque' : ''}" data-slug="${plano.slug}" data-testid="plano-${plano.slug}">
+      ${plano.badge ? `<div class="plano-selo">${plano.badge}</div>` : ''}
+      <div class="plano-nome">${plano.nome}</div>
+      ${plano.headline_diferencial ? `<div class="plano-headline" data-testid="headline-${plano.slug}">${plano.headline_diferencial}</div>` : ''}
+      <div class="plano-preco">${formatarPrecoPlano(plano.preco_mensal)}<span data-pt="/mês" data-en="/month">/mês</span></div>
+      ${plano.frase_beneficio ? `<p class="plano-desc" data-testid="frase-beneficio-${plano.slug}">${plano.frase_beneficio}</p>` : ''}
+      ${renderFeaturesPlano(plano)}
+      ${renderLimitesPlano(plano)}
+      <a class="plano-cta" data-testid="cta-${plano.slug}" data-panel-path="/cadastro?plano=${encodeURIComponent(plano.slug)}" href="#" data-pt="Começar grátis" data-en="Start free">Começar grátis</a>
+    </article>
+  `;
+}
+
+async function carregarPlanos() {
+  const grid = document.getElementById('planos-grid');
+  if (!grid) return;
+  try {
+    const res = await fetch(PANEL_ORIGIN + '/api/planos');
+    if (!res.ok) throw new Error('status ' + res.status);
+    const planos = await res.json();
+    grid.innerHTML = planos.map(renderPlanoCard).join('');
+    // Os CTAs acabaram de entrar no DOM depois da injeção do header (que já
+    // rodou resolverLinksDoPortal uma vez) — resolve de novo só pra eles.
+    resolverLinksDoPortal();
+  } catch (erro) {
+    grid.innerHTML = '<p class="precos-carregando" data-pt="Não foi possível carregar os planos agora. Tente novamente em instantes." data-en="Couldn\'t load plans right now. Please try again shortly.">Não foi possível carregar os planos agora. Tente novamente em instantes.</p>';
+  }
+}
+
+carregarPlanos();
+</script>
+</body>
+</html>

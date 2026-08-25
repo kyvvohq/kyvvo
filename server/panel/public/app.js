@@ -12,7 +12,7 @@ document.getElementById('btn-sair').addEventListener('click', async () => {
   localStorage.removeItem('kyvvo_token');
   localStorage.removeItem('kyvvo_nome');
   localStorage.removeItem('kyvvo_email');
-  window.location.href = 'https://kyvvo.com.br';
+  window.location.href = 'https://studio.kyvvo.com.br';
 });
 
 // US20 — guarda de e-mail não validado (CA10) + banner de trial (CA09) + toast

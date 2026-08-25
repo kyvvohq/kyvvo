@@ -11,7 +11,8 @@ Kyvvo é uma plataforma SaaS que permite que negócios (salões de beleza, petsh
 - **Bot WhatsApp**: fluxo conversacional em n8n + WhatsApp Cloud API (oficial da Meta), guia o cliente final pelo agendamento.
 - **Painel do tenant** (`server/panel/public/`): app web onde o dono do negócio gerencia agenda (dia/semana/mês), clientes, serviços, financeiro, perfil e forma de pagamento da assinatura.
 - **Painel admin** (`server/panel/public/admin/`): área interna da Kyvvo para gestão de todos os tenants (busca, detalhe, CRUD).
-- **Landing page** (`server/public/`, `landing/`): página pública e lista de espera.
+- **Landing do Studio** (`server/public-studio/`, `landing/`): página de vendas do produto, servida em studio.kyvvo.com.br junto com o painel.
+- **Landing da plataforma** (`server/public/`): página institucional da Kyvvo em kyvvo.com.br (hoje só esqueleto), publicada via AWS Amplify.
 
 ## Stack
 
