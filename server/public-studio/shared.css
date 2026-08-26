@@ -12,7 +12,12 @@ html{scroll-behavior:smooth}
      mínimo de 4.5:1 pra texto normal. #7484a5 mantém o mesmo tom (só mais
      claro) e passa em 4.7:1+ tanto sobre --bg quanto sobre --surface. */
   --text:#f0eeff;--muted:#7484a5;
-  --font-d:'Syne',sans-serif;--font-b:'DM Sans',sans-serif;
+  --font-d:'Space Grotesk',sans-serif;--font-b:'Inter',sans-serif;
+  /* Escala de espaçamento e radius do Kyvvo DS (fundações) — disponível
+     pra uso em novas telas; conteúdo existente ainda usa valores livres. */
+  --space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-5:24px;--space-6:32px;--space-7:48px;--space-8:64px;
+  --radius-sm:8px;--radius-md:12px;--radius-lg:16px;--radius-xl:24px;--radius-full:999px;
+  --color-success:#12B76A;--color-warning:#F79009;--color-danger:#F04438;--color-info:#22C7F2;--color-whatsapp:#25D366;
 }
 body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-height:1.6;overflow-x:hidden}
 
