@@ -61,6 +61,30 @@ esses:
 --radius-xl:24px; --radius-full:999px;
 ```
 
+## Portal admin (2026-08-27)
+
+Primeira área a receber peças do DS além de cor/tipografia/tokens:
+
+- **Ícones do menu lateral** — biblioteca lucide (igual o DS especifica),
+  18x18, `currentColor`. Paths embutidos em `server/panel/public/admin/
+  shell.js` (`LUCIDE_ICONS`), injetados via `data-icon="..."` em cada
+  `<a class="menu-item">`. Sem lib externa — só os ícones usados.
+- **Tema claro/escuro** — toggle no topbar (só na área admin; o painel do
+  tenant nunca seta `data-theme` e continua sempre escuro). ~260 cores
+  fixas de `style.css` (compartilhado com o painel do tenant) viraram
+  variáveis com par light/dark; verde/vermelho/âmbar do tema claro são
+  tons mais escuros que os do escuro (contraste sobre branco). Aplicado
+  antes do paint (script síncrono no `<head>`) pra não piscar o tema
+  errado; persistido em `localStorage.kyvvo_admin_tema`.
+- **Topbar/rodapé** — viraram cartões (fundo/borda/radius), mesmo
+  tratamento visual do DS ("Barra superior"/rodapé "Base"). Não importa o
+  rodapé institucional completo do DS (colunas Plataforma/Produtos/
+  Empresa/Legal, redes sociais) — não cabe numa ferramenta interna.
+
+Pendente: o resto do painel do tenant (agenda/financeiro/relatórios/
+onboarding) ainda não foi tocado — continua com as cores antigas em hex
+fixo, sem tema claro disponível (o toggle não aparece lá).
+
 ## Componentes
 
 O arquivo pen.dev tem uma biblioteca ampla (botões primário/secundário/
