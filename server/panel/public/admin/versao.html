@@ -6,6 +6,7 @@
   if (!localStorage.getItem('kyvvo_admin_token')) {
     window.location.href = '/login.html';
   }
+  document.documentElement.setAttribute('data-theme', localStorage.getItem('kyvvo_admin_tema') || 'dark');
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Versão — Admin Kyvvo</title>
@@ -21,26 +22,29 @@
     <div class="logo">ky<span class="logo-vv">vv</span>o</div>
     <nav class="menu">
       <div class="menu-secao-titulo">Visão geral</div>
-      <a class="menu-item" href="/dashboard.html">Dashboard</a>
+      <a class="menu-item" data-icon="layout-dashboard" href="/dashboard.html">Dashboard</a>
       <div class="menu-secao-titulo">Clientes</div>
-      <a class="menu-item" href="/painel.html">Tenants</a>
-      <a class="menu-item" href="/usuarios.html">Usuários</a>
-      <a class="menu-item" href="/assinaturas.html">Assinaturas</a>
+      <a class="menu-item" data-icon="building-2" href="/painel.html">Tenants</a>
+      <a class="menu-item" data-icon="users" href="/usuarios.html">Usuários</a>
+      <a class="menu-item" data-icon="credit-card" href="/assinaturas.html">Assinaturas</a>
       <div class="menu-secao-titulo">Operação</div>
-      <a class="menu-item" href="/whatsapp.html">WhatsApp</a>
-      <a class="menu-item" href="/ia-uso.html">IA e consumo</a>
+      <a class="menu-item" data-icon="message-circle" href="/whatsapp.html">WhatsApp</a>
+      <a class="menu-item" data-icon="sparkles" href="/ia-uso.html">IA e consumo</a>
       <div class="menu-secao-titulo">Sistema</div>
-      <a class="menu-item" href="/configuracoes.html">Configurações</a>
-      <a class="menu-item active" href="/versao.html">Versões / Changelog</a>
-      <a class="menu-item" href="/docs" target="_blank" rel="noopener">Swagger</a>
+      <a class="menu-item" data-icon="settings" href="/configuracoes.html">Configurações</a>
+      <a class="menu-item active" data-icon="history" href="/versao.html">Versões / Changelog</a>
+      <a class="menu-item" data-icon="code" href="/docs" target="_blank" rel="noopener">Swagger</a>
     </nav>
   </aside>
   <div class="painel-main">
     <div class="topbar">
       <div class="topbar-textos">
+        <div class="topbar-titulo">Versões / Changelog</div>
         <div class="admin-badge">🛠 Área administrativa</div>
       </div>
-      <div class="user-menu" id="user-menu">
+      <div class="topbar-direita">
+        <button class="btn-topbar-icone" id="btn-tema-toggle"></button>
+        <div class="user-menu" id="user-menu">
         <button class="user-menu-toggle" id="user-menu-toggle">
           <div class="user-menu-avatar" id="user-menu-avatar"></div>
           <div class="user-menu-textos">
@@ -51,6 +55,7 @@
         <div class="user-menu-dropdown" id="user-menu-dropdown" hidden>
           <button class="user-menu-sair" id="btn-sair"><span aria-hidden="true">⎋</span> Sair</button>
         </div>
+      </div>
       </div>
     </div>
     <div class="conteudo" id="conteudo" style="max-width: 800px;"></div>

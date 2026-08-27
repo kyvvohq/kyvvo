@@ -1,9 +1,11 @@
 /* Tokens de marca compartilhados com a landing (server/public/index.html) —
    mesmos valores exatos, pra manter os dois lados do produto visualmente
-   consistentes. Só os tokens com valor já idêntico nas duas páginas viraram
-   variável aqui; --text/--muted/--border/--surface do painel ainda têm tons
-   próprios (mais adequados pra uma UI densa de dados) e não foram unificados
-   ainda — ver nota na task de auditoria de CSS. */
+   consistentes. --text/--muted/--border/--surface do painel têm tons
+   próprios (mais adequados pra uma UI densa de dados) mas seguem o mesmo
+   mecanismo de tema — ver bloco [data-theme="light"] logo abaixo.
+   O tema claro/escuro (US57) só tem toggle exposto no portal admin por
+   ora (shell.js) — o painel do tenant nunca seta data-theme, então
+   continua sempre no escuro de sempre (nenhuma mudança visual lá). */
 :root {
   --bg: #080b14;
   --accent: #7c5cfc;
@@ -14,13 +16,49 @@
   --space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-5:24px;--space-6:32px;--space-7:48px;--space-8:64px;
   --radius-sm:8px;--radius-md:12px;--radius-lg:16px;--radius-xl:24px;--radius-full:999px;
   --color-success:#12B76A;--color-warning:#F79009;--color-danger:#F04438;--color-info:#22C7F2;--color-whatsapp:#25D366;
+  --surface: #12162a;
+  --surface-hover: #1a1f3a;
+  --border: #232847;
+  --border-strong: #2a2f52;
+  --input-bg: #0d1122;
+  --text: #f2f2f7;
+  --text-muted: #a1a5c4;
+  --text-faint: #6b7099;
+  --success: #4ade80;
+  --danger: #ff6b6b;
+  --warn: #f0b354;
+  --warn-yellow: #facc15;
+}
+
+/* Paleta clara (US57) — snow-*/ink-* do Kyvvo DS (docs/design-system.md),
+   com verde/vermelho/âmbar mais escuros que os tons "texto sobre fundo
+   escuro" acima (os originais não têm contraste suficiente sobre branco).
+   Contraste estimado, não medido com ferramenta — reconferir se algum
+   texto pequeno parecer apagado demais, mesmo espírito da auditoria WCAG
+   já feita pra --muted da landing (ver server/public-studio/shared.css). */
+:root[data-theme="light"] {
+  --bg: #F8F9FC;
+  --surface: #FFFFFF;
+  --surface-hover: #F1F3F8;
+  --border: #E7EAF2;
+  --border-strong: #D7DCE8;
+  --input-bg: #FFFFFF;
+  --text: #0F111A;
+  --text-muted: #5A6274;
+  --text-faint: #6B7385;
+  --success: #12B76A;
+  --danger: #DC2626;
+  --warn: #B45309;
+  --warn-yellow: #A16207;
+  --accent-light: #6344E8;
+  --cyan: #0E7490;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
 
 body {
   background: var(--bg);
-  color: #f2f2f7;
+  color: var(--text);
   min-height: 100vh;
   /* Rodapé sempre ancorado no fim da viewport (nunca "flutuando" no meio da
      tela em páginas com pouco conteúdo) — o miolo da página cresce via
@@ -42,8 +80,8 @@ body {
 }
 
 .card {
-  background: #12162a;
-  border: 1px solid #232847;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 16px;
   padding: 32px;
   width: 100%;
@@ -54,7 +92,7 @@ body {
   font-size: 24px;
   font-weight: 800;
   letter-spacing: -0.03em;
-  color: #f2f2f7;
+  color: var(--text);
   margin-bottom: 24px;
   text-align: center;
 }
@@ -78,9 +116,18 @@ body {
   border-radius: 2px;
 }
 
+/* Cartão flutuante (DS: rodapé "Base") — mesmo tratamento do .topbar
+   novo: fundo/borda/radius de cartão em vez da linha divisória simples de
+   antes (US57). Sem reaproveitar o rodapé institucional completo do DS
+   (colunas Plataforma/Produtos/Empresa/Legal, redes sociais) — não faz
+   sentido pra uma ferramenta interna da equipe nem pras telas de auth do
+   tenant; só o tratamento visual (cartão) foi trazido. */
 footer.rodape-app {
-  padding: 32px 24px;
-  border-top: 1px solid #232847;
+  padding: 20px 24px;
+  margin: 24px 24px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -90,7 +137,7 @@ footer.rodape-app {
 
 .rodape-app-copy {
   font-size: 12px;
-  color: #a1a5c4;
+  color: var(--text-muted);
 }
 
 /* Logo substituindo a palavra "Kyvvo" dentro do próprio texto do rodapé
@@ -108,7 +155,7 @@ footer.rodape-app {
 label {
   display: block;
   font-size: 13px;
-  color: #a1a5c4;
+  color: var(--text-muted);
   margin-bottom: 6px;
   margin-top: 16px;
 }
@@ -117,9 +164,9 @@ input {
   width: 100%;
   padding: 12px 14px;
   border-radius: 8px;
-  border: 1px solid #2a2f52;
-  background: #0d1122;
-  color: #f2f2f7;
+  border: 1px solid var(--border-strong);
+  background: var(--input-bg);
+  color: var(--text);
   font-size: 15px;
 }
 
@@ -174,32 +221,74 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .erro {
-  color: #ff6b6b;
+  color: var(--danger);
   font-size: 13px;
   margin-top: 12px;
   min-height: 16px;
 }
 
 .sucesso {
-  color: #4ade80;
+  color: var(--success);
   font-size: 13px;
   margin-top: 12px;
   min-height: 16px;
 }
 
 /* Painel */
+/* Cartão flutuante (Kyvvo DS · "Barra superior") — antes era uma barra full-
+   width com só borda inferior; agora radius/fundo/borda seguem o mesmo
+   tratamento de cartão do resto do DS (US57). Só na área admin: o topbar
+   do painel do tenant reaproveita a mesma classe e ganha o visual novo de
+   graça, não tinha motivo pra divergir. */
 .topbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 24px;
-  border-bottom: 1px solid #232847;
+  gap: 16px;
+  padding: 14px 22px;
+  margin: 16px 24px 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
 }
 
 .topbar-esquerda { display: flex; align-items: center; gap: 14px; }
 .topbar-textos { display: flex; flex-direction: column; gap: 2px; }
 .topbar .logo { margin: 0; font-size: 20px; }
-.saudacao { font-size: 13px; color: #a1a5c4; }
+.saudacao { font-size: 13px; color: var(--text-muted); }
+
+/* Título da página (DS: "Página" 19px Space Grotesk + eyebrow abaixo) —
+   só as páginas admin passam essa div; o painel do tenant continua sem
+   título (ela é opcional, .topbar-textos funciona vazia também). */
+.topbar-titulo {
+  font-family: var(--font-d);
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.topbar-direita { display: flex; align-items: center; gap: 10px; }
+
+/* Botão de ícone genérico do topbar (DS: "Ação bell"/"Ação life-buoy") —
+   38x38, fundo sutil, usado hoje só pelo toggle de tema, mas serve pra
+   qualquer ação futura de ícone único no topbar. */
+.btn-topbar-icone {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.btn-topbar-icone:hover { color: var(--text); border-color: var(--border-strong); }
+.btn-topbar-icone svg { width: 18px; height: 18px; }
 
 /* Logo e botão de ocultar sidebar migraram pro topbar (antes viviam só na
    sidebar) — ambos são <button>, então precisam desfazer o reset genérico
@@ -234,16 +323,16 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #12162a;
-  border: 1px solid #2a2f52;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
   border-radius: 50%;
-  color: #a1a5c4;
+  color: var(--text-muted);
   font-size: 12px;
   line-height: 1;
   cursor: pointer;
   z-index: 5;
 }
-.btn-toggle-sidebar:hover { background: rgba(124, 92, 252, 0.15); color: #f2f2f7; }
+.btn-toggle-sidebar:hover { background: rgba(124, 92, 252, 0.15); color: var(--text); }
 .painel-shell:has(.painel-sidebar.sidebar-oculta) .btn-toggle-sidebar {
   left: 0;
   transform: translateX(0);
@@ -252,15 +341,15 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 /* .topbar-nav-link — desde a US53 o admin não usa mais nav no topbar (virou
    sidebar, como o painel do tenant); a classe sobrevive só pro link "←
    Voltar para lista" dentro do detalhe do tenant (tenant-detalhe.js). */
-.topbar-nav-link { color: #a1a5c4; font-size: 14px; text-decoration: none; }
-.topbar-nav-link:hover { color: #f2f2f7; }
+.topbar-nav-link { color: var(--text-muted); font-size: 14px; text-decoration: none; }
+.topbar-nav-link:hover { color: var(--text); }
 
 /* Área admin da Kyvvo (US16) — distintivo visual pra nunca confundir com o
    portal do tenant (CA04). */
 .admin-badge {
   display: inline-block;
   font-size: 13px;
-  color: #f0b354;
+  color: var(--warn);
   background: rgba(240, 179, 84, 0.12);
   border: 1px solid rgba(240, 179, 84, 0.3);
   border-radius: 100px;
@@ -299,10 +388,12 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 .menu-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 11px;
   padding: 10px 14px;
   cursor: pointer;
-  color: #a1a5c4;
+  color: var(--text-muted);
   font-size: 15px;
   font-weight: 500;
   text-decoration: none;
@@ -310,10 +401,15 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   border-left: 3px solid transparent;
 }
 
-.menu-item:hover { color: #f2f2f7; background: rgba(124, 92, 252, 0.08); }
+/* Ícone do item de menu (DS: "Item de menu / Padrão", 18x18, lucide) —
+   currentColor herda a cor do próprio .menu-item, então o estado
+   hover/active já pinta o ícone junto sem regra extra. */
+.menu-icon { width: 18px; height: 18px; flex-shrink: 0; }
+
+.menu-item:hover { color: var(--text); background: rgba(124, 92, 252, 0.08); }
 
 .menu-item.active {
-  color: #f2f2f7;
+  color: var(--text);
   background: rgba(124, 92, 252, 0.15);
   border-left-color: var(--accent);
 }
@@ -328,7 +424,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.6px;
-  color: #5a5f80;
+  color: var(--text-faint);
 }
 
 .menu-secao-titulo:first-child { padding-top: 4px; }
@@ -342,15 +438,15 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   gap: 8px;
   padding: 10px 14px;
   cursor: pointer;
-  color: #a1a5c4;
+  color: var(--text-muted);
   font-size: 15px;
   font-weight: 500;
   border-radius: 8px;
   border-left: 3px solid transparent;
 }
 
-.menu-item-grupo:hover { color: #f2f2f7; background: rgba(124, 92, 252, 0.08); }
-.menu-item-grupo.tem-filho-ativo { color: #f2f2f7; background: rgba(124, 92, 252, 0.15); border-left-color: var(--accent); }
+.menu-item-grupo:hover { color: var(--text); background: rgba(124, 92, 252, 0.08); }
+.menu-item-grupo.tem-filho-ativo { color: var(--text); background: rgba(124, 92, 252, 0.15); border-left-color: var(--accent); }
 
 /* Ícone antes do texto, glifo trocado de verdade via ::before (não rotação
    de triângulo): ">" recolhido / "⌵" expandido — pedido explícito do
@@ -377,7 +473,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
     width: 100%;
     flex-direction: row;
     align-items: center;
-    border-bottom: 1px solid #232847;
+    border-bottom: 1px solid var(--border);
     padding: 12px 16px;
     overflow-x: auto;
   }
@@ -410,7 +506,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   padding: 8px 16px;
   border-radius: 8px;
   cursor: pointer;
-  color: #a1a5c4;
+  color: var(--text-muted);
   font-size: 14px;
 }
 
@@ -448,7 +544,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* Subtítulo do cabeçalho (só Financeiro por enquanto) — logo abaixo do h2,
    dentro do mesmo wrapper flex que o botão de ação. */
-.financeiro-subtitulo { color: #a1a5c4; font-size: 13px; margin-top: 2px; }
+.financeiro-subtitulo { color: var(--text-muted); font-size: 13px; margin-top: 2px; }
 
 /* Início reformulado em 5 seções — cada uma é um bloco com título pequeno
    em caixa alta (mesmo estilo de .financeiro-resumo-label) e um corpo
@@ -459,7 +555,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: #a1a5c4;
+  color: var(--text-muted);
   margin-bottom: 10px;
 }
 
@@ -475,8 +571,8 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 .inicio-atendimentos-lista { display: flex; flex-direction: column; gap: 10px; }
 
 .inicio-atendimento-item {
-  background: #12162a;
-  border: 1px solid #232847;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 10px;
   padding: 12px 16px;
   display: flex;
@@ -486,8 +582,8 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   flex-wrap: wrap;
 }
 
-.inicio-atendimento-info { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 14px; color: #f2f2f7; }
-.inicio-atendimento-servico { color: #a1a5c4; }
+.inicio-atendimento-info { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 14px; color: var(--text); }
+.inicio-atendimento-servico { color: var(--text-muted); }
 .inicio-atendimento-acoes { display: flex; gap: 8px; flex-shrink: 0; }
 .inicio-atendimento-acoes .btn-secundario { width: auto; margin: 0; }
 
@@ -498,7 +594,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   gap: 14px;
   margin-top: 12px;
   font-size: 13px;
-  color: #a1a5c4;
+  color: var(--text-muted);
 }
 
 .inicio-paginacao .btn-secundario { width: auto; margin: 0; }
@@ -506,8 +602,8 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 .inicio-paginacao select { width: auto; margin: 0; }
 
 .inicio-oportunidade-item {
-  background: #12162a;
-  border: 1px solid #232847;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 10px;
   padding: 12px 16px;
   display: flex;
@@ -522,8 +618,8 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 .inicio-oportunidade-item .btn-secundario { width: auto; margin: 0; flex-shrink: 0; }
 
 .inicio-financeiro-mes {
-  background: #12162a;
-  border: 1px solid #232847;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 10px;
   padding: 16px 20px;
   display: flex;
@@ -533,15 +629,15 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 .inicio-financeiro-mes-valor { font-size: 22px; font-weight: 700; }
-.inicio-financeiro-mes-legenda { color: #a1a5c4; font-size: 14px; }
+.inicio-financeiro-mes-legenda { color: var(--text-muted); font-size: 14px; }
 
-.badge-variacao-positiva { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
-.badge-variacao-negativa { background: rgba(255, 107, 107, 0.15); color: #ff6b6b; }
+.badge-variacao-positiva { background: rgba(74, 222, 128, 0.15); color: var(--success); }
+.badge-variacao-negativa { background: rgba(255, 107, 107, 0.15); color: var(--danger); }
 
 /* ---------- US56 — Onboarding guiado (tela "Primeiros passos") ---------- */
 .onboarding-cabecalho { margin-bottom: 20px; }
 .onboarding-cabecalho h2 { font-size: 20px; margin-bottom: 6px; }
-.onboarding-cabecalho p { color: #a1a5c4; font-size: 14px; margin-bottom: 16px; }
+.onboarding-cabecalho p { color: var(--text-muted); font-size: 14px; margin-bottom: 16px; }
 
 .onboarding-progresso {
   display: flex;
@@ -553,7 +649,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   flex: 1;
   height: 8px;
   border-radius: 100px;
-  background: #232847;
+  background: var(--border);
   overflow: hidden;
 }
 
@@ -564,7 +660,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   transition: width 0.3s ease;
 }
 
-.onboarding-progresso span { font-size: 13px; color: #a1a5c4; white-space: nowrap; }
+.onboarding-progresso span { font-size: 13px; color: var(--text-muted); white-space: nowrap; }
 
 .onboarding-lista { list-style: none; display: flex; flex-direction: column; gap: 12px; }
 
@@ -572,8 +668,8 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   display: flex;
   align-items: flex-start;
   gap: 16px;
-  background: #12162a;
-  border: 1px solid #232847;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 12px;
   padding: 16px 20px;
 }
@@ -587,7 +683,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   width: 26px;
   height: 26px;
   border-radius: 50%;
-  border: 2px solid #2a2f52;
+  border: 2px solid var(--border-strong);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -600,7 +696,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .onboarding-passo-texto { flex: 1; min-width: 0; }
 .onboarding-passo-texto strong { display: block; font-size: 15px; margin-bottom: 4px; }
-.onboarding-passo-texto p { color: #a1a5c4; font-size: 13px; line-height: 1.5; }
+.onboarding-passo-texto p { color: var(--text-muted); font-size: 13px; line-height: 1.5; }
 
 .onboarding-passo-tag {
   display: inline-block;
@@ -619,12 +715,12 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   margin: 20px 0 0;
   padding: 0;
   background: transparent;
-  color: #a1a5c4;
+  color: var(--text-muted);
   font-size: 13px;
   text-decoration: underline;
 }
 
-.link-pular-onboarding:hover { background: transparent; color: #f2f2f7; }
+.link-pular-onboarding:hover { background: transparent; color: var(--text); }
 
 /* US66 — modal de primeiros passos: um pouco mais largo que o modal padrão
    (420px) pra cada passo (ícone + texto + botão) não ficar espremido. Em
@@ -671,10 +767,10 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 .user-menu-textos { display: flex; flex-direction: column; text-align: left; }
-.user-menu-nome { font-weight: 700; font-size: 14px; color: #f2f2f7; }
-.user-menu-empresa { font-size: 12px; color: #a1a5c4; }
+.user-menu-nome { font-weight: 700; font-size: 14px; color: var(--text); }
+.user-menu-empresa { font-size: 12px; color: var(--text-muted); }
 
-.user-menu-chevron { color: #a1a5c4; font-size: 11px; margin-left: 2px; transition: transform 0.15s; }
+.user-menu-chevron { color: var(--text-muted); font-size: 11px; margin-left: 2px; transition: transform 0.15s; }
 .user-menu-toggle.aberto .user-menu-chevron { transform: rotate(180deg); }
 
 .user-menu-dropdown {
@@ -682,8 +778,8 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   top: calc(100% + 8px);
   right: 0;
   min-width: 220px;
-  background: #12162a;
-  border: 1px solid #232847;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 10px;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
   padding: 8px;
@@ -695,12 +791,12 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   border-radius: 8px;
   cursor: pointer;
   font-size: 14px;
-  color: #f2f2f7;
+  color: var(--text);
 }
 
-.user-menu-item:hover { background: #1a1f3a; }
+.user-menu-item:hover { background: var(--surface-hover); }
 
-.user-menu-divisor { height: 1px; background: #232847; margin: 8px 4px; }
+.user-menu-divisor { height: 1px; background: var(--border); margin: 8px 4px; }
 
 /* Ícone e texto vermelhos (pedido explícito) — caractere Unicode simples em
    vez de emoji, porque emoji não herda `color` via CSS. */
@@ -714,7 +810,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   background: transparent;
   border: none;
   border-radius: 8px;
-  color: #ff6b6b;
+  color: var(--danger);
   font-weight: 600;
   font-size: 14px;
   cursor: pointer;
@@ -724,8 +820,8 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 .user-menu-sair:hover { background: rgba(255, 107, 107, 0.08); }
 
 .agendamento-item {
-  background: #12162a;
-  border: 1px solid #232847;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 10px;
   padding: 14px 16px;
   margin-bottom: 10px;
@@ -743,7 +839,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 .agendamento-detalhe {
-  color: #a1a5c4;
+  color: var(--text-muted);
   font-size: 13px;
   margin-top: 4px;
 }
@@ -780,7 +876,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 .servico-acoes button.acao-perigo {
   background: transparent;
   border: 1px solid rgba(255, 107, 107, 0.4);
-  color: #ff6b6b;
+  color: var(--danger);
 }
 
 .servico-acoes button.acao-perigo:hover { background: rgba(255, 107, 107, 0.1); }
@@ -791,7 +887,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 .grade-horarios {
   display: flex;
   flex-direction: column;
-  border: 1px solid #232847;
+  border: 1px solid var(--border);
   border-radius: 10px;
   overflow: hidden;
 }
@@ -810,7 +906,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   flex: 0 0 64px;
   padding: 10px 8px;
   font-size: 12px;
-  color: #a1a5c4;
+  color: var(--text-muted);
   border-right: 1px solid #1c2038;
   display: flex;
   align-items: flex-start;
@@ -825,7 +921,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 .grade-linha-vazia {
-  color: #4ade80;
+  color: var(--success);
   font-size: 12px;
 }
 
@@ -849,7 +945,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .grade-ag-card {
   background: #171b34;
-  border: 1px solid #232847;
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 8px 10px;
   min-width: 0;
@@ -866,7 +962,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .grade-ag-cliente {
   font-size: 12px;
-  color: #f2f2f7;
+  color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -874,7 +970,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .grade-ag-meta {
   font-size: 11px;
-  color: #a1a5c4;
+  color: var(--text-muted);
   margin-top: 2px;
 }
 
@@ -949,7 +1045,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .semana-coluna-cabecalho span {
   font-size: 12px;
-  color: #a1a5c4;
+  color: var(--text-muted);
 }
 
 .semana-coluna-add {
@@ -985,7 +1081,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 .vazio {
-  color: #6b7099;
+  color: var(--text-faint);
   font-size: 14px;
   text-align: center;
   padding: 40px 0;
@@ -1003,7 +1099,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
-  color: #a1a5c4;
+  color: var(--text-muted);
   padding: 4px 0;
 }
 
@@ -1032,15 +1128,15 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
    min-width:auto por padrão, dimensionados pelo min-content. */
 .financeiro-resumo-card {
   min-width: 0;
-  background: #12162a;
-  border: 1px solid #232847;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 10px;
   padding: 14px 16px;
   text-align: center;
 }
 
 .financeiro-resumo-label {
-  color: #a1a5c4;
+  color: var(--text-muted);
   font-size: 12px;
   text-transform: uppercase;
   margin-bottom: 6px;
@@ -1051,8 +1147,8 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   font-weight: 700;
 }
 
-.financeiro-entrada { color: #4ade80; }
-.financeiro-saida { color: #ff6b6b; }
+.financeiro-entrada { color: var(--success); }
+.financeiro-saida { color: var(--danger); }
 .financeiro-previsto { color: var(--cyan); }
 
 /* Menu Relatórios — dashboard mensal em grid multi-coluna (pedido explícito
@@ -1083,8 +1179,8 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 .relatorios-secao {
-  background: #12162a;
-  border: 1px solid #232847;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 10px;
   padding: 16px;
 }
@@ -1099,11 +1195,11 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   display: flex;
   justify-content: space-between;
   font-size: 11px;
-  color: #a1a5c4;
+  color: var(--text-muted);
   margin-top: 4px;
 }
 
-.relatorios-comparacao-mensal { font-size: 13px; color: #a1a5c4; margin: 8px 0 0; }
+.relatorios-comparacao-mensal { font-size: 13px; color: var(--text-muted); margin: 8px 0 0; }
 
 .relatorios-status-lista { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
 .relatorios-status-linha {
@@ -1113,14 +1209,14 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 .relatorios-barra-bloco { margin-bottom: 8px; }
-.relatorios-barra-label { font-size: 12px; color: #a1a5c4; margin-bottom: 6px; }
-.relatorios-barra-valor { font-size: 12px; color: #a1a5c4; margin-top: 4px; }
+.relatorios-barra-label { font-size: 12px; color: var(--text-muted); margin-bottom: 6px; }
+.relatorios-barra-valor { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
 
 /* Aviso de horários perdidos (cancelamentos+faltas) — mesmo tom âmbar do
    badge de falta, chama atenção sem ser um erro de verdade. */
 .relatorios-aviso {
   font-size: 13px;
-  color: #f0b354;
+  color: var(--warn);
   background: rgba(240, 179, 84, 0.1);
   border-radius: 8px;
   padding: 8px 12px;
@@ -1134,7 +1230,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .relatorios-financeiro-linhas { display: flex; flex-direction: column; gap: 8px; }
 .relatorios-financeiro-linha { display: flex; justify-content: space-between; font-size: 15px; }
-.relatorios-financeiro-divisor { border-top: 1px solid #232847; margin: 4px 0; }
+.relatorios-financeiro-divisor { border-top: 1px solid var(--border); margin: 4px 0; }
 .relatorios-financeiro-resultado { font-size: 17px; }
 
 /* Mini-gráfico Receitas × Despesas (Seção 6) — mesmo padrão "divs com
@@ -1150,9 +1246,9 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 .relatorios-mini-barra-coluna { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; }
 .relatorios-mini-barra { width: 40%; border-radius: 3px 3px 0 0; min-height: 2px; align-self: stretch; margin: 0 auto; }
-.relatorios-mini-barra-entrada { background: #4ade80; }
-.relatorios-mini-barra-saida { background: #ff6b6b; }
-.relatorios-mini-barra-label { font-size: 11px; color: #a1a5c4; margin-top: 6px; }
+.relatorios-mini-barra-entrada { background: var(--success); }
+.relatorios-mini-barra-saida { background: var(--danger); }
+.relatorios-mini-barra-label { font-size: 11px; color: var(--text-muted); margin-top: 6px; }
 
 /* Seção "Insights da Kyvvo" — card com destaque na cor de marca, pra ficar
    visualmente diferente das seções de dado puro (é a seção de "o que fazer
@@ -1199,10 +1295,10 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 /* Item de movimentação — hora/data à esquerda, título+detalhe no meio,
    valor+status alinhados à direita (mesmo cartão .agendamento-item). */
 .financeiro-item .agendamento-linha-principal { align-items: flex-start; }
-.financeiro-item-hora { color: #a1a5c4; font-size: 13px; flex-shrink: 0; padding-top: 2px; min-width: 44px; }
+.financeiro-item-hora { color: var(--text-muted); font-size: 13px; flex-shrink: 0; padding-top: 2px; min-width: 44px; }
 .financeiro-item-corpo { flex: 1; min-width: 0; }
 .financeiro-item-valor { text-align: right; flex-shrink: 0; }
-.financeiro-item-status { font-size: 12px; color: #a1a5c4; margin-top: 4px; white-space: nowrap; }
+.financeiro-item-status { font-size: 12px; color: var(--text-muted); margin-top: 4px; white-space: nowrap; }
 
 /* US70 — faixa de 4 cards financeiros na tela inicial, reaproveita o visual
    de .financeiro-resumo-card mas em 4 colunas e clicável (navega pro
@@ -1237,12 +1333,12 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 .financeiro-resumo-card-3linhas .financeiro-resumo-linha2 {
   font-size: 15px;
   font-weight: 700;
-  color: #f2f2f7;
+  color: var(--text);
 }
 .financeiro-resumo-card-3linhas .financeiro-resumo-linha3 {
   font-size: 11px;
   font-weight: 400;
-  color: #a1a5c4;
+  color: var(--text-muted);
   margin-top: 2px;
   white-space: normal;
   overflow-wrap: break-word;
@@ -1251,16 +1347,16 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 /* US46.1 — explica as duas formas de conectar o WhatsApp (self-service vs.
    número pronto) antes do botão de conexão, na tela de onboarding. */
 .whatsapp-planos-info {
-  background: #12162a;
-  border: 1px solid #232847;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 10px;
   padding: 14px 16px;
   margin-top: 16px;
   font-size: 13px;
-  color: #a1a5c4;
+  color: var(--text-muted);
 }
 .whatsapp-planos-info p + p { margin-top: 8px; }
-.whatsapp-planos-info strong { color: #f2f2f7; }
+.whatsapp-planos-info strong { color: var(--text); }
 .whatsapp-planos-info a { color: var(--accent-light); }
 
 /* Card de Status sólido (PR5) — fundo claro + texto escuro e maior, ao
@@ -1301,7 +1397,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   align-items: center;
   gap: 6px;
   background: transparent;
-  border: 1px solid #2a2f52;
+  border: 1px solid var(--border-strong);
   color: #a688ff;
   padding: 8px 16px;
   font-size: 13px;
@@ -1311,8 +1407,8 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 .pagamento-detalhes-conteudo {
   margin-top: 12px;
   padding: 16px;
-  background: #12162a;
-  border: 1px solid #232847;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 10px;
 }
 .pagamento-detalhes-conteudo h4 { margin: 0 0 12px; font-size: 14px; }
@@ -1322,8 +1418,8 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
    status+ação) no lugar dos 3 cards lado a lado de antes; status agora é
    badge (mesmo padrão do histórico) em vez de tingir o card inteiro. */
 .pagamento-plano-card {
-  background: #12162a;
-  border: 1px solid #232847;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 10px;
   padding: 16px;
   margin-bottom: 20px;
@@ -1334,13 +1430,13 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   justify-content: space-between;
   gap: 12px;
 }
-.pagamento-plano-linha + .pagamento-plano-linha { margin-top: 10px; padding-top: 10px; border-top: 1px solid #232847; }
+.pagamento-plano-linha + .pagamento-plano-linha { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
 .pagamento-plano-linha button { width: auto; margin: 0; }
-.pagamento-plano-nome, .pagamento-plano-valor { font-size: 17px; font-weight: 700; color: #f2f2f7; }
-.pagamento-plano-linha-secundaria { font-size: 13px; color: #a1a5c4; }
+.pagamento-plano-nome, .pagamento-plano-valor { font-size: 17px; font-weight: 700; color: var(--text); }
+.pagamento-plano-linha-secundaria { font-size: 13px; color: var(--text-muted); }
 .pagamento-plano-linha-secundaria .badge { margin-left: 0; }
 
-.pagamento-secao-divisor { border-top: 1px solid #232847; margin: 24px 0 20px; }
+.pagamento-secao-divisor { border-top: 1px solid var(--border); margin: 24px 0 20px; }
 
 /* Botões menores lado a lado abaixo do formulário de forma de pagamento
    (redesenho "Plano") — cabem dentro de .modal-acoes, que já é flex+gap. */
@@ -1350,8 +1446,8 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   position: relative;
   min-height: 96px;
   border-radius: 8px;
-  background: #12162a;
-  border: 1px solid #232847;
+  background: var(--surface);
+  border: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1359,7 +1455,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   font-size: 13px;
 }
 
-.dia-cel .num { color: #f2f2f7; }
+.dia-cel .num { color: var(--text); }
 .dia-cel.vazio-cel { background: transparent; border: none; }
 .dia-cel-fechado { opacity: 0.35; }
 
@@ -1415,7 +1511,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 .dia-cel-ag-cancelado {
-  color: #6b7099;
+  color: var(--text-faint);
   text-decoration: line-through;
 }
 
@@ -1433,7 +1529,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   gap: 8px;
   padding: 10px 4px;
   background: #1b2040;
-  border: 1px solid #2a2f52;
+  border: 1px solid var(--border-strong);
   border-radius: 10px;
   cursor: pointer;
 }
@@ -1441,7 +1537,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 .dia-toggle-nome {
   font-size: 12px;
   font-weight: 600;
-  color: #f2f2f7;
+  color: var(--text);
 }
 
 .dia-checkbox {
@@ -1449,7 +1545,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   align-items: center;
   gap: 8px;
   font-size: 14px;
-  color: #f2f2f7;
+  color: var(--text);
   cursor: pointer;
 }
 
@@ -1467,7 +1563,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   align-items: center;
   gap: 10px;
   font-size: 14px;
-  color: #f2f2f7;
+  color: var(--text);
   cursor: pointer;
 }
 
@@ -1511,7 +1607,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   transition: left 0.15s;
 }
 
-.toggle-switch input:checked + .toggle-switch-trilho { background: #4ade80; }
+.toggle-switch input:checked + .toggle-switch-trilho { background: var(--success); }
 .toggle-switch input:checked + .toggle-switch-trilho::after { left: 18px; }
 
 .nav-periodo {
@@ -1530,7 +1626,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .nav-periodo-dia-semana {
   font-size: 12px;
-  color: #a1a5c4;
+  color: var(--text-muted);
   text-transform: capitalize;
 }
 
@@ -1538,7 +1634,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   width: auto;
   margin: 0;
   padding: 6px 12px;
-  background: #232847;
+  background: var(--border);
 }
 
 /* Busca da listagem de tenants (US27) — full width no mobile, até 400px
@@ -1580,19 +1676,19 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   padding: 4px 8px;
   background: transparent;
   border: none;
-  color: #a1a5c4;
+  color: var(--text-muted);
   cursor: pointer;
   font-size: 14px;
 }
 
 .btn-limpar-busca:hover {
-  color: #f2f2f7;
+  color: var(--text);
 }
 
 .perfil-form label { margin-top: 14px; }
 
 /* Asterisco de campo obrigatório (PR5) */
-.obrigatorio { color: #ff6b6b; }
+.obrigatorio { color: var(--danger); }
 
 /* Toggle "Também é WhatsApp?" na frente do campo Telefone, em vez de numa
    linha própria abaixo (PR7). */
@@ -1642,7 +1738,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 .pagamento-grid-3col label { margin-top: 0; }
 .pagamento-span-3 { grid-column: 1 / -1; }
 .pagamento-secao-endereco {
-  border-top: 1px solid #232847;
+  border-top: 1px solid var(--border);
   padding-top: 8px;
   margin-top: 12px !important;
 }
@@ -1650,7 +1746,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   content: 'Endereço de cobrança';
   grid-column: 1 / -1;
   font-size: 11px;
-  color: #6b7099;
+  color: var(--text-faint);
   text-transform: uppercase;
   letter-spacing: .04em;
 }
@@ -1660,7 +1756,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   gap: 8px;
   margin-top: 10px;
   font-size: 13px;
-  color: #a1a5c4;
+  color: var(--text-muted);
 }
 .pagamento-checkbox input { width: auto; margin: 0; }
 @media (max-width: 640px) {
@@ -1725,50 +1821,50 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   flex-shrink: 0;
   vertical-align: middle;
 }
-.status-dot-verde { background: #4ade80; }
-.status-dot-amarelo { background: #facc15; }
-.status-dot-cinza { background: #a1a5c4; }
+.status-dot-verde { background: var(--success); }
+.status-dot-amarelo { background: var(--warn-yellow); }
+.status-dot-cinza { background: var(--text-muted); }
 
 .badge-encaixe { background: rgba(0, 212, 255, 0.15); color: var(--cyan); }
-.badge-cancelado { background: rgba(255, 107, 107, 0.15); color: #ff6b6b; }
+.badge-cancelado { background: rgba(255, 107, 107, 0.15); color: var(--danger); }
 /* US64 — status do agendamento (Concluído) e do lançamento financeiro de
    agendamento (Previsto/Realizado, reaproveita .badge-cancelado). */
-.badge-concluido { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
-.badge-previsto { background: rgba(250, 204, 21, 0.15); color: #facc15; }
-.badge-realizado { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
+.badge-concluido { background: rgba(74, 222, 128, 0.15); color: var(--success); }
+.badge-previsto { background: rgba(250, 204, 21, 0.15); color: var(--warn-yellow); }
+.badge-realizado { background: rgba(74, 222, 128, 0.15); color: var(--success); }
 /* Falta (no-show, migration 060) — âmbar, distinto do verde de concluído e
    do vermelho de cancelado; mesmo tom já usado em .trial-barra-amarela. */
-.badge-falta { background: rgba(240, 179, 84, 0.15); color: #f0b354; }
+.badge-falta { background: rgba(240, 179, 84, 0.15); color: var(--warn); }
 
 .agendamento-cancelado { opacity: 0.55; }
 .agendamento-cancelado .agendamento-hora { text-decoration: line-through; }
 
 /* Listagem de tenants (US26) */
 .badge-status { margin-left: 0; }
-.badge-trial-ativo { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
-.badge-trial-expirado { background: rgba(255, 107, 107, 0.15); color: #ff6b6b; }
+.badge-trial-ativo { background: rgba(74, 222, 128, 0.15); color: var(--success); }
+.badge-trial-expirado { background: rgba(255, 107, 107, 0.15); color: var(--danger); }
 .badge-status-ativo { background: rgba(0, 212, 255, 0.15); color: var(--cyan); }
-.badge-status-inativo { background: rgba(161, 165, 196, 0.15); color: #a1a5c4; }
-.badge-status-suspenso { background: rgba(240, 179, 84, 0.15); color: #f0b354; }
-.badge-status-nao-ativado { background: rgba(250, 204, 21, 0.15); color: #facc15; }
+.badge-status-inativo { background: rgba(161, 165, 196, 0.15); color: var(--text-muted); }
+.badge-status-suspenso { background: rgba(240, 179, 84, 0.15); color: var(--warn); }
+.badge-status-nao-ativado { background: rgba(250, 204, 21, 0.15); color: var(--warn-yellow); }
 /* Pagamentos (US32) */
-.badge-status-inadimplente { background: rgba(255, 107, 107, 0.15); color: #ff6b6b; }
+.badge-status-inadimplente { background: rgba(255, 107, 107, 0.15); color: var(--danger); }
 
 /* Modo de atendimento do tenant — bot (menus, cinza) x ia (conversacional,
    roxo, US69). Usado tanto na listagem admin quanto no portal do salão. */
-.badge-modo-bot { background: rgba(161, 165, 196, 0.15); color: #a1a5c4; }
+.badge-modo-bot { background: rgba(161, 165, 196, 0.15); color: var(--text-muted); }
 .badge-modo-ia { background: rgba(124, 92, 252, 0.15); color: var(--accent); }
 
 /* Status de cada cobrança no histórico da aba de Pagamentos */
-.badge-pagamento-pending { background: rgba(250, 204, 21, 0.15); color: #facc15; }
-.badge-pagamento-confirmado { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
-.badge-pagamento-cancelado { background: rgba(255, 107, 107, 0.15); color: #ff6b6b; }
+.badge-pagamento-pending { background: rgba(250, 204, 21, 0.15); color: var(--warn-yellow); }
+.badge-pagamento-confirmado { background: rgba(74, 222, 128, 0.15); color: var(--success); }
+.badge-pagamento-cancelado { background: rgba(255, 107, 107, 0.15); color: var(--danger); }
 
 /* Indicador de trial somente leitura (US31) */
 .badge-trial-indicador { margin-left: 0; }
 
 /* Bloco de status do trial na aba de pagamentos (US36) */
-.badge-trial-expirando { background: rgba(240, 179, 84, 0.15); color: #f0b354; }
+.badge-trial-expirando { background: rgba(240, 179, 84, 0.15); color: var(--warn); }
 
 .trial-status-bloco {
   background: rgba(124, 92, 252, 0.08);
@@ -1781,22 +1877,22 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 .trial-progresso { margin-top: 12px; }
 
 .trial-progresso-barra {
-  background: #232847;
+  background: var(--border);
   border-radius: 100px;
   height: 8px;
   overflow: hidden;
 }
 
 .trial-progresso-preenchido { height: 100%; border-radius: 100px; }
-.trial-barra-verde { background: #4ade80; }
-.trial-barra-amarela { background: #f0b354; }
-.trial-barra-vermelha { background: #ff6b6b; }
+.trial-barra-verde { background: var(--success); }
+.trial-barra-amarela { background: var(--warn); }
+.trial-barra-vermelha { background: var(--danger); }
 
 .trial-progresso-legenda {
   display: flex;
   justify-content: space-between;
   font-size: 12px;
-  color: #a1a5c4;
+  color: var(--text-muted);
   margin-top: 6px;
 }
 
@@ -1806,7 +1902,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   align-items: baseline;
   margin-top: 8px;
   font-size: 13px;
-  color: #a1a5c4;
+  color: var(--text-muted);
 }
 
 .trial-progresso-dias strong { font-size: 16px; color: #f5f6fa; }
@@ -1833,7 +1929,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   background: #fff;
 }
 
-.toggle-readonly.toggle-on { background: #4ade80; }
+.toggle-readonly.toggle-on { background: var(--success); }
 .toggle-readonly.toggle-on::after { left: 18px; }
 .toggle-readonly.toggle-off { background: #3a3f5c; }
 
@@ -1841,13 +1937,13 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
    pointer-events: none (indicador somente leitura); este reativa o clique. */
 .toggle-clicavel { pointer-events: auto; cursor: pointer; }
 
-.tabela-tenants tbody tr { cursor: pointer; background: #12162a; }
+.tabela-tenants tbody tr { cursor: pointer; background: var(--surface); }
 
 /* Configurações do sistema (US38) */
 .banner-aviso {
   background: rgba(240, 179, 84, 0.12);
   border: 1px solid rgba(240, 179, 84, 0.35);
-  color: #f0b354;
+  color: var(--warn);
   border-radius: 10px;
   padding: 12px 16px;
   font-size: 13px;
@@ -1870,8 +1966,8 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 .celula-limites-plano input { margin-bottom: 6px; }
 .limite-editor-linha { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
 .limite-editor-linha input { width: 70px !important; min-width: 70px !important; }
-.limite-editor-linha label { font-size: 12px; color: #a1a5c4; white-space: nowrap; }
-.lista-features-plano { list-style: none; font-size: 13px; color: #a1a5c4; }
+.limite-editor-linha label { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+.lista-features-plano { list-style: none; font-size: 13px; color: var(--text-muted); }
 .lista-features-plano li { margin-bottom: 2px; }
 
 .tabela-tenants input[type="text"],
@@ -1889,8 +1985,8 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 .titulo-detalhe { font-size: 22px; margin: 16px 0 20px; }
 
 .secao-detalhe {
-  background: #12162a;
-  border: 1px solid #232847;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 10px;
   padding: 16px 20px;
   margin-bottom: 16px;
@@ -1903,12 +1999,12 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .secao-detalhe p {
   font-size: 14px;
-  color: #f2f2f7;
+  color: var(--text);
   margin-top: 6px;
 }
 
 .secao-detalhe p strong {
-  color: #a1a5c4;
+  color: var(--text-muted);
   font-weight: 500;
   margin-right: 4px;
 }
@@ -1929,7 +2025,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   color: var(--accent-light);
 }
 
-.vazio-inline { color: #6b7099; font-size: 14px; }
+.vazio-inline { color: var(--text-faint); font-size: 14px; }
 
 /* US65 — selo do módulo obrigatório na tela de gestão de módulos do tenant */
 .badge-obrigatorio {
@@ -1942,7 +2038,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   border-radius: 100px;
   margin-left: 8px;
   background: rgba(250, 204, 21, 0.15);
-  color: #facc15;
+  color: var(--warn-yellow);
 }
 
 .tabela-wrapper { overflow-x: auto; margin-bottom: 16px; }
@@ -1957,13 +2053,13 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 .tabela-tenants th, .tabela-tenants td {
   text-align: left;
   padding: 10px 12px;
-  border-bottom: 1px solid #232847;
+  border-bottom: 1px solid var(--border);
 }
 
-.tabela-tenants th { color: #a1a5c4; font-weight: 600; }
+.tabela-tenants th { color: var(--text-muted); font-weight: 600; }
 
 /* Fundo por linha (mesmo tom de card do resto do painel, ex: .agendamento-item) */
-.tabela-tenants tbody tr:hover { background: #171c38; }
+.tabela-tenants tbody tr:hover { background: var(--surface-hover); }
 
 /* Equipe reaproveita .tabela-tenants (mesma classe usada no admin), mas sem
    o white-space: nowrap na coluna de ações — os botões (já compactos via
@@ -1994,8 +2090,8 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   padding: 5px 14px;
   border-radius: 100px;
   background: transparent;
-  border: 1px solid #232847;
-  color: #a1a5c4;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
   cursor: pointer;
   text-align: center;
 }
@@ -2011,50 +2107,50 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
    perfil em modal, ver data-cliente-abrir/abrirModalClienteDetalhe). */
 .tabela-clientes td:first-child { white-space: normal; }
 .linha-clicavel { cursor: pointer; }
-.cliente-linha-telefone { font-size: 12px; color: #a1a5c4; margin-top: 2px; }
+.cliente-linha-telefone { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
 .badge-cliente-ativo { background: rgba(0, 212, 255, 0.15); color: var(--cyan); }
-.badge-cliente-novo { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
-.badge-cliente-inativo { background: rgba(161, 165, 196, 0.15); color: #a1a5c4; }
+.badge-cliente-novo { background: rgba(74, 222, 128, 0.15); color: var(--success); }
+.badge-cliente-inativo { background: rgba(161, 165, 196, 0.15); color: var(--text-muted); }
 
 /* Perfil do cliente (modal, abrirModalClienteDetalhe) — seções separadas por
    divisor sutil, igual ao mockup original. */
-.modal-cliente-perfil .cliente-perfil-telefone { color: #a1a5c4; margin-top: -6px; margin-bottom: 12px; }
+.modal-cliente-perfil .cliente-perfil-telefone { color: var(--text-muted); margin-top: -6px; margin-bottom: 12px; }
 .modal-cliente-perfil .cliente-perfil-acoes-topo { display: flex; gap: 8px; margin-bottom: 16px; }
 .modal-cliente-perfil .cliente-perfil-acoes-topo button { margin: 0; }
-.cliente-perfil-secao { padding: 14px 0; border-top: 1px solid #232847; }
-.cliente-perfil-secao h4 { margin: 0 0 6px; font-size: 13px; color: #a1a5c4; }
+.cliente-perfil-secao { padding: 14px 0; border-top: 1px solid var(--border); }
+.cliente-perfil-secao h4 { margin: 0 0 6px; font-size: 13px; color: var(--text-muted); }
 .cliente-perfil-secao p { margin: 0; }
 .cliente-perfil-secao textarea { width: 100%; }
 .cliente-perfil-historico { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
-.cliente-perfil-secao-titulo-editar { margin: 16px 0 4px; padding-top: 14px; border-top: 1px solid #232847; font-size: 13px; color: #a1a5c4; }
+.cliente-perfil-secao-titulo-editar { margin: 16px 0 4px; padding-top: 14px; border-top: 1px solid var(--border); font-size: 13px; color: var(--text-muted); }
 
 .th-ordenar {
   width: auto;
   margin: 0;
   padding: 0;
   background: transparent;
-  color: #a1a5c4;
+  color: var(--text-muted);
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   text-align: left;
 }
 
-.th-ordenar:hover { background: transparent; color: #f2f2f7; }
+.th-ordenar:hover { background: transparent; color: var(--text); }
 .th-ordenar-ativo { color: var(--accent-light); }
 
 .btn-ver-detalhes {
   display: inline-block;
   padding: 6px 12px;
   border-radius: 8px;
-  background: #232847;
-  color: #f2f2f7;
+  background: var(--border);
+  color: var(--text);
   font-size: 13px;
   font-weight: 600;
   text-decoration: none;
 }
 
-.btn-ver-detalhes:hover { background: #2a2f52; }
+.btn-ver-detalhes:hover { background: var(--border-strong); }
 
 .td-acoes { display: flex; flex-wrap: wrap; gap: 6px; white-space: nowrap; }
 
@@ -2065,28 +2161,28 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   margin: 0;
   border-radius: 8px;
   background: transparent;
-  border: 1px solid #2a2f52;
-  color: #f2f2f7;
+  border: 1px solid var(--border-strong);
+  color: var(--text);
   font-size: 13px;
   font-weight: 600;
 }
 
-.btn-acao-tabela:hover { background: #232847; }
-.btn-acao-tabela.acao-perigo { color: #ff6b6b; border-color: rgba(255, 107, 107, 0.4); }
+.btn-acao-tabela:hover { background: var(--border); }
+.btn-acao-tabela.acao-perigo { color: var(--danger); border-color: rgba(255, 107, 107, 0.4); }
 
 .btn-acoes {
   width: auto;
   margin: 0;
   padding: 4px 10px;
   background: transparent;
-  border: 1px solid #2a2f52;
-  color: #a1a5c4;
+  border: 1px solid var(--border-strong);
+  color: var(--text-muted);
   font-size: 16px;
   line-height: 1;
   flex-shrink: 0;
 }
 
-.btn-acoes:hover { background: #232847; }
+.btn-acoes:hover { background: var(--border); }
 
 .menu-acoes {
   display: none;
@@ -2094,7 +2190,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   gap: 4px;
   margin-top: 10px;
   padding-top: 10px;
-  border-top: 1px solid #232847;
+  border-top: 1px solid var(--border);
 }
 
 .menu-acoes.aberto { display: flex; }
@@ -2103,15 +2199,15 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   width: 100%;
   margin: 0;
   padding: 8px 12px;
-  background: #1a1f3a;
-  color: #f2f2f7;
+  background: var(--surface-hover);
+  color: var(--text);
   font-weight: 500;
   font-size: 13px;
   text-align: left;
 }
 
-.menu-acoes button:hover { background: #232847; }
-.menu-acoes button.acao-perigo { color: #ff6b6b; }
+.menu-acoes button:hover { background: var(--border); }
+.menu-acoes button.acao-perigo { color: var(--danger); }
 
 /* Modais (US08) */
 .modal-overlay {
@@ -2132,8 +2228,8 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   max-width: 420px;
   max-height: 90vh;
   overflow-y: auto;
-  background: #12162a;
-  border: 1px solid #232847;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 16px;
   padding: 28px;
 }
@@ -2150,21 +2246,21 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   padding: 0;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.06);
-  color: #f2f2f7;
+  color: var(--text);
   font-size: 15px;
 }
 
 .modal-close:hover { background: rgba(255, 255, 255, 0.12); }
 
 .modal-texto {
-  color: #a1a5c4;
+  color: var(--text-muted);
   font-size: 14px;
   line-height: 1.6;
   margin-top: 16px;
 }
 
 .modal-subtitulo {
-  color: #a1a5c4;
+  color: var(--text-muted);
   font-size: 13px;
   margin-top: 4px;
 }
@@ -2205,7 +2301,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 .chat-bolha-hora {
-  color: #a1a5c4;
+  color: var(--text-muted);
   font-size: 11px;
   margin-top: 4px;
   text-align: right;
@@ -2227,12 +2323,12 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   justify-content: space-between;
   gap: 12px;
   padding: 16px 20px;
-  border-bottom: 1px solid #2a2f52;
+  border-bottom: 1px solid var(--border-strong);
   flex-shrink: 0;
 }
 
 .atendimento-header-nome { font-weight: 600; font-size: 16px; }
-.atendimento-header-telefone { color: #a1a5c4; font-size: 13px; margin-top: 2px; }
+.atendimento-header-telefone { color: var(--text-muted); font-size: 13px; margin-top: 2px; }
 
 .atendimento-header-acoes { display: flex; gap: 8px; flex-shrink: 0; }
 
@@ -2259,7 +2355,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   display: flex;
   gap: 10px;
   padding: 16px 20px;
-  border-top: 1px solid #2a2f52;
+  border-top: 1px solid var(--border-strong);
   flex-shrink: 0;
 }
 
@@ -2276,14 +2372,14 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .atendimento-encerrado {
   text-align: center;
-  color: #a1a5c4;
+  color: var(--text-muted);
   font-size: 13px;
   padding: 12px;
-  border-top: 1px solid #2a2f52;
+  border-top: 1px solid var(--border-strong);
 }
 
 .modal-erro {
-  color: #ff6b6b;
+  color: var(--danger);
   font-size: 13px;
   min-height: 16px;
   margin-top: 8px;
@@ -2305,10 +2401,10 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   align-items: center;
   gap: 10px;
   padding: 10px 14px;
-  border: 1px solid #232847;
+  border: 1px solid var(--border);
   border-radius: 8px;
   cursor: pointer;
-  color: #f2f2f7;
+  color: var(--text);
   font-size: 14px;
 }
 .forma-pagamento-opcao:has(input:checked) { border-color: var(--accent); background: rgba(124, 92, 252, 0.06); }
@@ -2326,7 +2422,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   align-items: flex-start;
   gap: 14px;
   padding: 16px 18px;
-  border: 1px solid #232847;
+  border: 1px solid var(--border);
   border-radius: 12px;
   cursor: pointer;
 }
@@ -2374,8 +2470,8 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 .plano-opcao-icone-3 { background: rgba(0, 212, 255, 0.12); }
 
 .plano-opcao-corpo { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
-.plano-opcao-nome { color: #f2f2f7; font-weight: 700; font-size: 16px; }
-.plano-opcao-desc { color: #a1a5c4; font-size: 13px; line-height: 1.4; }
+.plano-opcao-nome { color: var(--text); font-weight: 700; font-size: 16px; }
+.plano-opcao-desc { color: var(--text-muted); font-size: 13px; line-height: 1.4; }
 .plano-opcao-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
 .plano-opcao-badge {
   display: inline-flex;
@@ -2383,16 +2479,16 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   gap: 4px;
   padding: 3px 10px;
   background: #1c2140;
-  border: 1px solid #2a2f52;
+  border: 1px solid var(--border-strong);
   border-radius: 999px;
-  color: #a1a5c4;
+  color: var(--text-muted);
   font-size: 11.5px;
   white-space: nowrap;
 }
 
 .plano-opcao-preco { flex-shrink: 0; text-align: right; }
-.plano-opcao-preco-valor { display: block; color: #f2f2f7; font-weight: 800; font-size: 18px; }
-.plano-opcao-preco-valor small { font-weight: 500; font-size: 12px; color: #a1a5c4; }
+.plano-opcao-preco-valor { display: block; color: var(--text); font-weight: 800; font-size: 18px; }
+.plano-opcao-preco-valor small { font-weight: 500; font-size: 12px; color: var(--text-muted); }
 .plano-opcao-preco-nota { display: block; color: #6f7396; font-size: 11px; margin-top: 2px; }
 
 /* Caixa de reforço abaixo da lista, explicando de novo a regra de cobrança
@@ -2420,8 +2516,8 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   font-size: 15px;
 }
 .plano-troca-aviso-texto { display: flex; flex-direction: column; gap: 2px; }
-.plano-troca-aviso-texto strong { color: #f2f2f7; font-size: 13.5px; }
-.plano-troca-aviso-desc { color: #a1a5c4; font-size: 12.5px; line-height: 1.5; }
+.plano-troca-aviso-texto strong { color: var(--text); font-size: 13.5px; }
+.plano-troca-aviso-desc { color: var(--text-muted); font-size: 12.5px; line-height: 1.5; }
 
 @media (max-width: 640px) {
   .plano-opcao { flex-wrap: wrap; }
@@ -2431,7 +2527,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 /* US73 — contador de caracteres dos campos de copy de diferencial dos
    planos (headline/frase de benefício) no admin. */
 .contador-caracteres {
-  color: #a1a5c4;
+  color: var(--text-muted);
   font-size: 11px;
   margin-top: 4px;
 }
@@ -2446,13 +2542,13 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 .trial-banner-cobranca-futura p {
-  color: #a1a5c4;
+  color: var(--text-muted);
   font-size: 13px;
   line-height: 1.5;
 }
 
 .trial-banner-cobranca-futura p:not(:last-child) { margin-bottom: 6px; }
-.trial-banner-cobranca-futura p:first-child { color: #4ade80; font-weight: 600; }
+.trial-banner-cobranca-futura p:first-child { color: var(--success); font-weight: 600; }
 
 .modal-acoes {
   display: flex;
@@ -2462,8 +2558,8 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .modal-acoes button { margin-top: 0; }
 
-.btn-secundario { background: #232847; }
-.btn-secundario:hover { background: #2a2f52; }
+.btn-secundario { background: var(--border); }
+.btn-secundario:hover { background: var(--border-strong); }
 .btn-perigo { background: #e0455a; }
 .btn-perigo:hover { background: #c93a4d; }
 .btn-primario { background: var(--accent); }
@@ -2472,9 +2568,9 @@ select {
   width: 100%;
   padding: 12px 14px;
   border-radius: 8px;
-  border: 1px solid #2a2f52;
-  background: #0d1122;
-  color: #f2f2f7;
+  border: 1px solid var(--border-strong);
+  background: var(--input-bg);
+  color: var(--text);
   font-size: 15px;
 }
 
@@ -2484,9 +2580,9 @@ textarea {
   width: 100%;
   padding: 12px 14px;
   border-radius: 8px;
-  border: 1px solid #2a2f52;
-  background: #0d1122;
-  color: #f2f2f7;
+  border: 1px solid var(--border-strong);
+  background: var(--input-bg);
+  color: var(--text);
   font-size: 15px;
   font-family: inherit;
   resize: vertical;
@@ -2497,15 +2593,15 @@ textarea:focus { outline: none; border-color: var(--accent); }
 /* Destaque de campo obrigatório não preenchido (ST09.2) */
 .campo-invalido,
 .campo-invalido:focus {
-  border-color: #ff6b6b;
+  border-color: var(--danger);
 }
 
 /* Skeleton loader do dropdown de horários enquanto os slots carregam (ST09.3) */
 .skeleton-horario {
   height: 46px;
   border-radius: 8px;
-  border: 1px solid #2a2f52;
-  background: linear-gradient(90deg, #0d1122 25%, #1a1f3a 37%, #0d1122 63%);
+  border: 1px solid var(--border-strong);
+  background: linear-gradient(90deg, var(--input-bg) 25%, var(--surface-hover) 37%, var(--input-bg) 63%);
   background-size: 400% 100%;
   animation: skeleton-brilho 1.4s ease infinite;
 }
@@ -2519,7 +2615,7 @@ textarea:focus { outline: none; border-color: var(--accent); }
 
 /* Aviso inline abaixo do horário (ex.: nenhum slot livre na data — ST09.3) */
 .campo-aviso {
-  color: #f0b354;
+  color: var(--warn);
   font-size: 13px;
   min-height: 16px;
   margin-top: 6px;
@@ -2536,7 +2632,7 @@ textarea:focus { outline: none; border-color: var(--accent); }
 }
 
 .campo-periodo input { width: auto; flex: 1; margin: 0; }
-.periodo-separador { color: #a1a5c4; font-size: 13px; flex-shrink: 0; }
+.periodo-separador { color: var(--text-muted); font-size: 13px; flex-shrink: 0; }
 
 .spinner {
   display: inline-block;
@@ -2571,8 +2667,8 @@ textarea:focus { outline: none; border-color: var(--accent); }
   animation: toast-entrar 0.25s ease both;
 }
 
-.toast-sucesso { background: #1c3a2e; color: #4ade80; border: 1px solid #2a5c44; }
-.toast-erro { background: #3a1c22; color: #ff6b6b; border: 1px solid #5c2a33; }
+.toast-sucesso { background: #1c3a2e; color: var(--success); border: 1px solid #2a5c44; }
+.toast-erro { background: #3a1c22; color: var(--danger); border: 1px solid #5c2a33; }
 
 .toast-saindo { animation: toast-sair 0.25s ease both; }
 
@@ -2620,14 +2716,14 @@ textarea:focus { outline: none; border-color: var(--accent); }
 
 .bloqueio-explicacao {
   font-size: 13px;
-  color: #a1a5c4;
+  color: var(--text-muted);
   line-height: 1.6;
   margin-bottom: 16px;
 }
 
 .bloqueio-suporte {
   font-size: 12px;
-  color: #a1a5c4;
+  color: var(--text-muted);
   text-align: center;
   margin-top: 16px;
 }
@@ -2641,7 +2737,7 @@ textarea:focus { outline: none; border-color: var(--accent); }
 
 .cadastro-sub {
   font-size: 13px;
-  color: #a1a5c4;
+  color: var(--text-muted);
   text-align: center;
   margin-bottom: 8px;
   line-height: 1.5;
@@ -2677,7 +2773,7 @@ textarea:focus { outline: none; border-color: var(--accent); }
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #a1a5c4;
+  color: var(--text-muted);
 }
 
 .cadastro-plano-nome {
@@ -2691,7 +2787,7 @@ textarea:focus { outline: none; border-color: var(--accent); }
 
 .cadastro-plano-trocar-label {
   font-size: 11px;
-  color: #a1a5c4;
+  color: var(--text-muted);
   white-space: nowrap;
 }
 
@@ -2708,7 +2804,7 @@ textarea:focus { outline: none; border-color: var(--accent); }
   margin: 8px 0 0;
   padding: 0;
   font-size: 12px;
-  color: #a1a5c4;
+  color: var(--text-muted);
 }
 
 .senha-requisitos li {
@@ -2725,17 +2821,17 @@ textarea:focus { outline: none; border-color: var(--accent); }
 }
 
 .senha-requisitos li.atendido {
-  color: #4ade80;
+  color: var(--success);
 }
 
 .senha-requisitos li.atendido::before {
   content: '✓';
-  color: #4ade80;
+  color: var(--success);
 }
 
 /* Erro inline por campo (CA02). O input inválido ganha borda vermelha. */
 .field-error {
-  color: #ff6b6b;
+  color: var(--danger);
   font-size: 12px;
   margin-top: 6px;
   min-height: 14px;
@@ -2743,18 +2839,18 @@ textarea:focus { outline: none; border-color: var(--accent); }
 
 /* US77 — texto de apoio abaixo de um campo (ex: WhatsApp no cadastro). */
 .field-apoio {
-  color: #a1a5c4;
+  color: var(--text-muted);
   font-size: 12px;
   margin-top: 6px;
 }
 
 input.invalid, select.invalid {
-  border-color: #ff6b6b;
+  border-color: var(--danger);
 }
 
 .cadastro-legal {
   font-size: 12px;
-  color: #a1a5c4;
+  color: var(--text-muted);
   text-align: center;
   margin-top: 14px;
   line-height: 1.5;
@@ -2773,7 +2869,7 @@ input.invalid, select.invalid {
   align-items: flex-start;
   gap: 8px;
   font-size: 12.5px;
-  color: #a1a5c4;
+  color: var(--text-muted);
   line-height: 1.5;
   margin-top: 10px;
   cursor: pointer;
@@ -2805,7 +2901,7 @@ input.invalid, select.invalid {
 
 .cadastro-rodape {
   font-size: 13px;
-  color: #a1a5c4;
+  color: var(--text-muted);
   text-align: center;
   margin-top: 20px;
 }
@@ -2840,15 +2936,15 @@ input.invalid, select.invalid {
 }
 
 .contador-reenvio {
-  color: #a1a5c4;
+  color: var(--text-muted);
   font-size: 12px;
 }
 
 /* Banner de trial no topo do portal (CA09). */
 .trial-banner {
   background: linear-gradient(90deg, rgba(124, 92, 252, 0.22), rgba(0, 212, 255, 0.14));
-  border-bottom: 1px solid #2a2f52;
-  color: #f2f2f7;
+  border-bottom: 1px solid var(--border-strong);
+  color: var(--text);
   font-size: 14px;
   font-weight: 500;
   text-align: center;
@@ -2865,7 +2961,7 @@ input.invalid, select.invalid {
   justify-content: center;
   gap: 12px;
   background: rgba(255, 107, 107, 0.14);
-  border-bottom: 1px solid #2a2f52;
+  border-bottom: 1px solid var(--border-strong);
   color: #ffb4b4;
   font-size: 14px;
   font-weight: 500;
@@ -2920,7 +3016,7 @@ body.conta-bloqueada .btn-novo-agendamento:not(#btn-cadastrar-pagamento) {
   gap: 16px;
   padding: 10px 24px;
   font-size: 14px;
-  border-bottom: 1px solid #2a2f52;
+  border-bottom: 1px solid var(--border-strong);
 }
 
 .aviso-critico {
@@ -2985,7 +3081,7 @@ button.loading::after {
 /* Linha de crescimento do card "Total" nos cards de estatística (reaproveita
    .financeiro-resumo-card/.financeiro-resumo-label) — só aparece quando há
    tenants novos no mês corrente. */
-.resumo-delta { color: #4ade80; font-size: 12px; font-weight: 600; margin-top: 4px; }
+.resumo-delta { color: var(--success); font-size: 12px; font-weight: 600; margin-top: 4px; }
 
 /* Linha de busca + selects de filtro (Status/Plano/Modo) + "Novo tenant",
    acima da tabela de Tenants — mesmo padrão de .clientes-filtros, estendido
@@ -3005,8 +3101,8 @@ button.loading::after {
   right: 0;
   z-index: 20;
   min-width: 220px;
-  background: #12162a;
-  border: 1px solid #232847;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 10px;
   padding: 6px;
   box-shadow: 0 8px 24px rgba(5, 7, 14, 0.5);
@@ -3019,26 +3115,26 @@ button.loading::after {
   margin: 0;
   padding: 8px 10px;
   background: transparent;
-  color: #f2f2f7;
+  color: var(--text);
   font-weight: 500;
   font-size: 13px;
   text-align: left;
   border-radius: 6px;
 }
 
-.tabela-acoes-dropdown button:hover { background: #232847; }
-.tabela-acoes-dropdown button.acao-perigo { color: #ff6b6b; }
-.tabela-acoes-divisor { height: 1px; background: #232847; margin: 4px 2px; }
+.tabela-acoes-dropdown button:hover { background: var(--border); }
+.tabela-acoes-dropdown button.acao-perigo { color: var(--danger); }
+.tabela-acoes-divisor { height: 1px; background: var(--border); margin: 4px 2px; }
 
 /* Contato (responsável + e-mail) em duas linhas na mesma célula — mesmo
    espírito de .agendamento-item-info (linha principal + linha secundária
    apagada), só que dentro de uma <td>. */
-.tabela-contato-nome { color: #f2f2f7; }
-.tabela-contato-email { color: #a1a5c4; font-size: 12px; margin-top: 2px; }
+.tabela-contato-nome { color: var(--text); }
+.tabela-contato-email { color: var(--text-muted); font-size: 12px; margin-top: 2px; }
 
 /* Painel lateral "Ver detalhes" — desliza da direita, ao contrário do modal
    centralizado (.modal-overlay/.modal-card) usado pro resto do CRUD. Reusa
-   a mesma paleta (bg #12162a, borda #232847) pra manter consistência visual
+   a mesma paleta (bg var(--surface), borda var(--border)) pra manter consistência visual
    com o resto do admin. */
 .drawer-overlay {
   position: fixed;
@@ -3056,8 +3152,8 @@ button.loading::after {
   width: 100%;
   max-width: 420px;
   overflow-y: auto;
-  background: #12162a;
-  border-left: 1px solid #232847;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
   padding: 28px;
 }
 
@@ -3071,7 +3167,7 @@ button.loading::after {
   padding: 0;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.06);
-  color: #f2f2f7;
+  color: var(--text);
   font-size: 15px;
 }
 
@@ -3082,11 +3178,11 @@ button.loading::after {
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: #a1a5c4;
+  color: var(--text-muted);
   margin-bottom: 8px;
 }
 .drawer-secao p { font-size: 14px; margin: 4px 0; }
-.drawer-secao p strong { color: #a1a5c4; font-weight: 500; margin-right: 4px; }
+.drawer-secao p strong { color: var(--text-muted); font-weight: 500; margin-right: 4px; }
 
 @media (max-width: 480px) {
   .drawer-painel { max-width: 100%; }
