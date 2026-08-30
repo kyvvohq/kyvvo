@@ -12,9 +12,12 @@ alter table planos add constraint planos_produto_check check (produto in ('studi
 -- pra cobrar via assinatura recorrente, então não vira linha aqui (fica só
 -- como copy estática "fale conosco" no front do People). Só Start/
 -- Professional são contratáveis por cartão/Pix.
-insert into planos (chave, produto, nome, descricao, preco_mensal, ativo) values
-  ('people_start', 'people', 'Start', 'Até 3 vagas ativas simultâneas', 197.00, true),
-  ('people_professional', 'people', 'Professional', 'Até 10 vagas ativas simultâneas', 497.00, true);
+-- `slug` é not null + unique na tabela toda (não só dentro de um produto) —
+-- planos.slug já usa hífen nos existentes (essencial, smart-plus etc.),
+-- segue o mesmo padrão aqui.
+insert into planos (chave, produto, slug, nome, descricao, preco_mensal, ativo) values
+  ('people_start', 'people', 'people-start', 'Start', 'Até 3 vagas ativas simultâneas', 197.00, true),
+  ('people_professional', 'people', 'people-professional', 'Professional', 'Até 10 vagas ativas simultâneas', 497.00, true);
 
 -- plano_limites.chave tinha um CHECK fechado nas 3 chaves do Studio
 -- (conversas_mes/profissionais/unidades) — precisa abrir pras 2 novas do
