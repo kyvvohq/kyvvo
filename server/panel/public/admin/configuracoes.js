@@ -81,6 +81,13 @@ const TIPO_NUMERO_LABELS = { proprio: 'Número próprio', kyvvo: 'Número Kyvvo'
 const PLANO_LIMITE_CHAVES = ['conversas_mes', 'profissionais', 'unidades'];
 const PLANO_LIMITE_ROTULOS = { conversas_mes: 'Conversas/mês', profissionais: 'Profissionais', unidades: 'Unidades' };
 
+// Planos do Kyvvo People (produto separado, migration 064) — mesma tabela
+// `planos`/`plano_limites`, mesma rota de PATCH, mas com menos campos (sem a
+// grade 2x2 de marketing do Studio — tecnologia/tipo_numero/features/
+// headline não fazem sentido pro People ainda) e limites diferentes.
+const PLANO_LIMITE_CHAVES_PEOPLE = ['vagas_ativas', 'candidatos_notificados_mes'];
+const PLANO_LIMITE_ROTULOS_PEOPLE = { vagas_ativas: 'Vagas ativas simultâneas', candidatos_notificados_mes: 'Candidatos notificados/mês (WhatsApp)' };
+
 function formatarLimiteAdmin(valor) {
   return valor == null ? 'Ilimitado' : String(valor);
 }
@@ -119,10 +126,12 @@ async function carregar() {
 }
 
 function render() {
+  const planosStudio = dados.planos.filter((p) => p.produto !== 'people');
+  const planosPeople = dados.planos.filter((p) => p.produto === 'people');
   const html = `
     <h2 class="titulo-detalhe">Configurações do sistema</h2>
     <section class="secao-detalhe">
-      <h3>Preços dos planos</h3>
+      <h3>Preços dos planos — Studio</h3>
       <div class="tabela-wrapper">
         <table class="tabela-tenants">
           <thead>
@@ -130,7 +139,20 @@ function render() {
               <th>Plano</th><th>Descrição</th><th>Destaque</th><th>Ativo</th><th></th>
             </tr>
           </thead>
-          <tbody>${dados.planos.map(renderLinhaPlano).join('')}</tbody>
+          <tbody>${planosStudio.map(renderLinhaPlano).join('')}</tbody>
+        </table>
+      </div>
+    </section>
+    <section class="secao-detalhe">
+      <h3>Preços dos planos — People</h3>
+      <div class="tabela-wrapper">
+        <table class="tabela-tenants">
+          <thead>
+            <tr>
+              <th>Plano</th><th>Preço/mês</th><th>Vagas ativas</th><th>Notificados/mês</th><th>Ativo</th><th></th>
+            </tr>
+          </thead>
+          <tbody>${planosPeople.map(renderLinhaPlanoPeople).join('') || '<tr><td colspan="6">Nenhum plano People cadastrado.</td></tr>'}</tbody>
         </table>
       </div>
     </section>
@@ -181,6 +203,115 @@ function renderLinhaPlano(plano) {
       </td>
     </tr>
   `;
+}
+
+function renderLinhaPlanoPeople(plano) {
+  const toggleAtivoClasse = plano.ativo ? 'toggle-on' : 'toggle-off';
+  const limites = plano.limites || {};
+  return `
+    <tr data-plano="${plano.chave}">
+      <td>${escapeHtml(plano.nome)}</td>
+      <td>${formatarPreco(plano.preco_mensal)}</td>
+      <td>${formatarLimiteAdmin(limites.vagas_ativas)}</td>
+      <td>${formatarLimiteAdmin(limites.candidatos_notificados_mes)}</td>
+      <td><span class="toggle-readonly ${toggleAtivoClasse}" data-testid="ativo-${plano.chave}" title="${plano.ativo ? 'Ativo' : 'Inativo'}"></span></td>
+      <td class="celula-acoes-plano">
+        <button class="btn-secundario btn-tabela" data-testid="editar-${plano.chave}" data-acao="editar-plano-people" data-chave="${plano.chave}">Editar</button>
+      </td>
+    </tr>
+  `;
+}
+
+// ---------- Modal "Editar plano People" (versão enxuta — sem a grade 2x2 de marketing do Studio) ----------
+function abrirModalEditarPlanoPeople(chave) {
+  const plano = dados.planos.find((p) => p.chave === chave);
+  if (!plano) return;
+
+  const limites = plano.limites || {};
+  const camposLimites = PLANO_LIMITE_CHAVES_PEOPLE.map((chaveLimite) => `
+    <div>
+      <label for="plano-people-limite-${chaveLimite}">${PLANO_LIMITE_ROTULOS_PEOPLE[chaveLimite]}</label>
+      <input type="number" min="0" id="plano-people-limite-${chaveLimite}" value="${limites[chaveLimite] ?? ''}" placeholder="ilimitado">
+    </div>
+  `).join('');
+
+  abrirModal(
+    '<h3>Editar plano People</h3>',
+    `
+      <div class="modal-erro" id="plano-people-erro"></div>
+      <form id="form-editar-plano-people">
+        <label for="plano-people-nome">Nome *</label>
+        <input type="text" id="plano-people-nome" value="${escapeHtml(plano.nome)}">
+
+        <label for="plano-people-descricao">Descrição</label>
+        <input type="text" id="plano-people-descricao" value="${escapeHtml(plano.descricao || '')}">
+
+        <label for="plano-people-preco">Preço mensal *</label>
+        <input type="number" step="0.01" min="1" id="plano-people-preco" value="${plano.preco_mensal}">
+
+        <label>Limites de uso</label>
+        <div class="pagamento-grid-2col">${camposLimites}</div>
+
+        <label class="toggle-linha"><span class="toggle-switch"><input type="checkbox" id="plano-people-ativo" ${plano.ativo ? 'checked' : ''}><span class="toggle-switch-trilho"></span></span> Ativo</label>
+
+        <p class="modal-texto">⚠️ Alterações de preço afetam apenas novas assinaturas — quem já assina continua pagando o valor original.</p>
+
+        <div class="modal-acoes">
+          <button type="button" class="btn-secundario" id="btn-sair-editar-plano-people">Sair</button>
+          <button type="submit" class="btn-primario" id="btn-salvar-editar-plano-people">Salvar</button>
+        </div>
+      </form>
+    `
+  );
+
+  document.getElementById('btn-sair-editar-plano-people').addEventListener('click', fecharModal);
+  document.getElementById('form-editar-plano-people').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    await salvarPlanoPeople(chave);
+  });
+}
+
+async function salvarPlanoPeople(chave) {
+  const nome = document.getElementById('plano-people-nome').value.trim();
+  const descricao = document.getElementById('plano-people-descricao').value.trim();
+  const precoMensal = document.getElementById('plano-people-preco').value;
+  const ativo = document.getElementById('plano-people-ativo').checked;
+  const limites = Object.fromEntries(
+    PLANO_LIMITE_CHAVES_PEOPLE.map((chaveLimite) => {
+      const valorBruto = document.getElementById(`plano-people-limite-${chaveLimite}`).value.trim();
+      return [chaveLimite, valorBruto === '' ? null : Number(valorBruto)];
+    })
+  );
+  const erroEl = document.getElementById('plano-people-erro');
+  erroEl.textContent = '';
+
+  if (!nome) {
+    erroEl.textContent = 'Nome do plano não pode ficar em branco.';
+    return;
+  }
+  if (!(Number(precoMensal) >= 1)) {
+    erroEl.textContent = 'Preço mensal deve ser no mínimo R$ 1,00.';
+    return;
+  }
+
+  const btn = document.getElementById('btn-salvar-editar-plano-people');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>';
+
+  const resultado = await api(`/api/configuracoes/planos/${chave}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ nome, descricao, preco_mensal: Number(precoMensal), ativo, limites }),
+  });
+
+  if (resultado && !resultado.error) {
+    fecharModal();
+    mostrarToast('Plano atualizado com sucesso.', 'sucesso');
+    await carregar();
+  } else {
+    erroEl.textContent = (resultado && resultado.error) || 'Erro ao salvar plano.';
+    btn.disabled = false;
+    btn.textContent = 'Salvar';
+  }
 }
 
 // ---------- Modal "Editar plano" (todos os campos, Salvar/Sair) ----------
@@ -332,6 +463,9 @@ function renderLinhaSistema(chave) {
 function wireEventos() {
   conteudo.querySelectorAll('[data-acao="editar-plano"]').forEach((btn) => {
     btn.addEventListener('click', () => abrirModalEditarPlano(btn.dataset.chave));
+  });
+  conteudo.querySelectorAll('[data-acao="editar-plano-people"]').forEach((btn) => {
+    btn.addEventListener('click', () => abrirModalEditarPlanoPeople(btn.dataset.chave));
   });
 
   conteudo.querySelectorAll('[data-acao="editar-config"]').forEach((btn) => {

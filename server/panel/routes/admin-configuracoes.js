@@ -21,9 +21,9 @@ const CONFIGURACOES_SISTEMA_CHAVES = [
 function registerAdminConfiguracoesRoutes(fastify, pool) {
   fastify.get('/admin/api/configuracoes', { preHandler: [fastify.authenticateAdmin] }, async () => {
     const { rows: planosRows } = await pool.query(
-      `SELECT chave, slug, nome, descricao, tecnologia, tipo_numero, preco_mensal,
+      `SELECT chave, produto, slug, nome, descricao, tecnologia, tipo_numero, preco_mensal,
               limite_disparos, destaque, badge, headline_diferencial, frase_beneficio, herda_de, ativo, atualizado_em
-       FROM planos ORDER BY preco_mensal ASC`
+       FROM planos ORDER BY produto ASC, preco_mensal ASC`
     );
     // US74/CA05 — features/limites por plano, pro admin editar (mesma forma
     // de junção em JS usada em GET /api/planos).
@@ -57,7 +57,12 @@ function registerAdminConfiguracoesRoutes(fastify, pool) {
   // identificadores estruturais e não são aceitos aqui (somente leitura).
   // Preço mínimo de R$1 (CA03), e cada campo alterado grava uma linha própria
   // no log de auditoria (CA05/CA07) na mesma transação da atualização.
-  const PLANO_LIMITES_CHAVES_VALIDAS = ['conversas_mes', 'profissionais', 'unidades'];
+  // conversas_mes/profissionais/unidades são do Studio; vagas_ativas/
+  // candidatos_notificados_mes são do People (migration 064) — mesma rota
+  // de PATCH serve os dois produtos, então a lista de chaves válidas é a
+  // união (o CHECK de plano_limites.chave é a garantia final de qualquer
+  // jeito, isso só evita um round-trip de erro genérico de constraint).
+  const PLANO_LIMITES_CHAVES_VALIDAS = ['conversas_mes', 'profissionais', 'unidades', 'vagas_ativas', 'candidatos_notificados_mes'];
 
   fastify.patch('/admin/api/configuracoes/planos/:chave', { preHandler: [fastify.authenticateAdmin] }, async (request, reply) => {
     const { chave } = request.params;

@@ -61,10 +61,34 @@ function registerPublicoRoutes(fastify, pool) {
               p.herda_de, base.nome AS herda_de_nome
          FROM planos p
          LEFT JOIN planos base ON base.chave = p.herda_de
-        WHERE p.ativo = true
+        WHERE p.ativo = true AND p.produto = 'studio'
         ORDER BY p.preco_mensal ASC`
     );
     return anexarFeaturesELimites(rows);
+  });
+
+  // Catálogo público do Kyvvo People (produto separado, migration 064) —
+  // consumido pelo próprio backend do People (KYVVO_APP_URL + esta rota,
+  // mesmo padrão já usado pra checar acesso ao módulo em
+  // GET /api/auth/people/acesso) pra nunca hardcodar preço lá. Mantém
+  // `chave` na resposta (diferente de /api/planos) porque o People usa ela
+  // direto como identificador — não tem uma tela de marketing com slug.
+  fastify.get('/api/planos/people', async () => {
+    const { rows } = await pool.query(
+      `SELECT chave, nome, descricao, preco_mensal
+         FROM planos
+        WHERE ativo = true AND produto = 'people'
+        ORDER BY preco_mensal ASC`
+    );
+    const chaves = rows.map((p) => p.chave);
+    const { rows: limitesRows } = chaves.length
+      ? await pool.query(`SELECT plano_chave, chave, valor FROM plano_limites WHERE plano_chave = ANY($1)`, [chaves])
+      : { rows: [] };
+    return rows.map((p) => ({
+      ...p,
+      preco_mensal: Number(p.preco_mensal),
+      limites: Object.fromEntries(limitesRows.filter((l) => l.plano_chave === p.chave).map((l) => [l.chave, l.valor])),
+    }));
   });
 
   // US72/CA02 — resolve um slug pra um plano único, aceitando tanto o slug
