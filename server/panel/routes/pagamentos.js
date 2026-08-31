@@ -436,11 +436,20 @@ function registerPagamentosRoutes(fastify, pool) {
     PAYMENT_RECEIVED: 'ativo',
     PAYMENT_OVERDUE: 'inadimplente',
     PAYMENT_DELETED: 'suspenso',
+    // Estorno/chargeback também precisam suspender — sem isso o tenant fica
+    // 'ativo' pra sempre depois de um estorno (achado no kyvvo-people em
+    // 2026-08-31, mesmo desenho de webhook, mesmo bug de mapeamento faltando
+    // aqui até agora).
+    PAYMENT_REFUNDED: 'suspenso',
+    PAYMENT_CHARGEBACK_REQUESTED: 'suspenso',
     // CA05 (US35) — confirma um cancelamento que já foi feito por aqui (rota
     // acima) ou cancelado direto no painel da Asaas; 'cancelado' (não mais
     // 'suspenso') pra não sobrescrever o estado que a US35 já deixa
     // consistente do lado de cá.
-    SUBSCRIPTION_CANCELLED: 'cancelado',
+    // SUBSCRIPTION_CANCELLED não existe na API da Asaas (achado 2026-08-31,
+    // consultando GET /v3/webhooks no kyvvo-people) — o evento real disparado
+    // no DELETE /subscriptions/:id é SUBSCRIPTION_DELETED.
+    SUBSCRIPTION_DELETED: 'cancelado',
   };
 
   fastify.post('/webhooks/asaas', async (request, reply) => {
@@ -456,6 +465,9 @@ function registerPagamentosRoutes(fastify, pool) {
     // assinatura pra identificar o tenant: apenas confirma o recebimento —
     // é assim que a Asaas espera 200 pra não reenviar o mesmo evento.
     if (!novoStatus) {
+      // Loga em vez de só ignorar — foi assim que PAYMENT_REFUNDED passou
+      // batido antes (evento sem mapeamento nunca deixava rastro nenhum).
+      console.log(`[pagamentos] webhook Asaas: evento "${event}" sem mapeamento, ignorado`);
       return { ok: true };
     }
     const subscriptionId = (payment && payment.subscription) || (subscription && subscription.id);
