@@ -431,26 +431,13 @@ function registerPagamentosRoutes(fastify, pool) {
   // CA10 — webhook da Asaas: atualiza o status do tenant conforme o evento da
   // cobrança/assinatura. Sem fastify.authenticate — quem chama é a Asaas, não
   // um usuário logado; a validação é pelo token no header (CA12).
-  const ASAAS_EVENTO_PARA_STATUS = {
-    PAYMENT_CONFIRMED: 'ativo',
-    PAYMENT_RECEIVED: 'ativo',
-    PAYMENT_OVERDUE: 'inadimplente',
-    PAYMENT_DELETED: 'suspenso',
-    // Estorno/chargeback também precisam suspender — sem isso o tenant fica
-    // 'ativo' pra sempre depois de um estorno (achado no kyvvo-people em
-    // 2026-08-31, mesmo desenho de webhook, mesmo bug de mapeamento faltando
-    // aqui até agora).
-    PAYMENT_REFUNDED: 'suspenso',
-    PAYMENT_CHARGEBACK_REQUESTED: 'suspenso',
-    // CA05 (US35) — confirma um cancelamento que já foi feito por aqui (rota
-    // acima) ou cancelado direto no painel da Asaas; 'cancelado' (não mais
-    // 'suspenso') pra não sobrescrever o estado que a US35 já deixa
-    // consistente do lado de cá.
-    // SUBSCRIPTION_CANCELLED não existe na API da Asaas (achado 2026-08-31,
-    // consultando GET /v3/webhooks no kyvvo-people) — o evento real disparado
-    // no DELETE /subscriptions/:id é SUBSCRIPTION_DELETED.
-    SUBSCRIPTION_DELETED: 'cancelado',
-  };
+  // Mapa evento do webhook -> status do tenant: @kyvvohq/asaas (EVENTO_STATUS),
+  // congelado e único pros dois produtos. Inclui PAYMENT_REFUNDED e
+  // PAYMENT_CHARGEBACK_REQUESTED (estorno/chargeback também suspendem) e
+  // SUBSCRIPTION_DELETED — SUBSCRIPTION_CANCELLED não existe na API da Asaas
+  // (achado 2026-08-31, GET /v3/webhooks); o evento real do DELETE
+  // /subscriptions/:id é SUBSCRIPTION_DELETED.
+  const ASAAS_EVENTO_PARA_STATUS = asaasService.EVENTO_STATUS;
 
   fastify.post('/webhooks/asaas', async (request, reply) => {
     const tokenEsperado = process.env.ASAAS_WEBHOOK_TOKEN;
