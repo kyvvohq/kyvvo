@@ -75,6 +75,19 @@ for DB in $POSTGRES_DBS; do
   fi
 done
 
+# --- Retenção local: apaga dumps além de BACKUP_RETENTION_DAYS (default 30).
+# 0 desativa. A retenção no S3 é feita por lifecycle policy no bucket, não
+# aqui (lida melhor com versionamento) — ver docs/backup.md.
+RET_DAYS="${BACKUP_RETENTION_DAYS:-30}"
+case "$RET_DAYS" in
+  ''|*[!0-9]*) echo "BACKUP_RETENTION_DAYS inválido ('$RET_DAYS') — retenção local pulada" >&2 ;;
+  0) : ;;
+  *)
+    find "$BACKUP_DIR" -maxdepth 1 -type f -name '*.sql.gz' -mtime +"$RET_DAYS" \
+      -print -delete 2>/dev/null | sed 's/^/Expirado (local): /' || true
+    ;;
+esac
+
 if [ -z "$BACKUP_S3_BUCKET" ]; then
   echo "BACKUP_S3_BUCKET não definido — backups só locais em $BACKUP_DIR." >&2
 fi
