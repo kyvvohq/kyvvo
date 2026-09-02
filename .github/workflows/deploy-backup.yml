@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'server/scripts/backup-db.sh'
+      - "server/scripts/backup-db.sh"
   workflow_dispatch:
 
 jobs:
@@ -12,21 +12,34 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Preparar chave SSH
+        id: sshkey
+        run: |
+          KEY="$(printf '%s' '${{ secrets.EC2_SSH_KEY_B64 }}' | base64 -d)"
+          while IFS= read -r line; do [ -n "$line" ] && echo "::add-mask::$line"; done <<< "$KEY"
+          {
+            echo 'value<<KEYEOF'
+            printf '%s\n' "$KEY"
+            echo 'KEYEOF'
+          } >> "$GITHUB_OUTPUT"
+
       - name: Copiar script de backup pra EC2
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
+          key: ${{ steps.sshkey.outputs.value }}
           source: "server/scripts/backup-db.sh"
           target: "/opt/kyvvo/scripts"
           strip_components: 2
+
       - name: Instalar permissão e agendamento via cron
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
+          key: ${{ steps.sshkey.outputs.value }}
           script: |
             chmod +x /opt/kyvvo/scripts/backup-db.sh
             mkdir -p /opt/kyvvo/backups
