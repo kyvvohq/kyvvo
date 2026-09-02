@@ -31,16 +31,26 @@ jobs:
 
   deploy-landing:
     needs: changes
-    if: needs.changes.outputs.landing == 'true'
+    if: needs.changes.outputs.landing == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Preparar chave SSH
+        id: sshkey
+        run: |
+          KEY="$(printf '%s' '${{ secrets.EC2_SSH_KEY_B64 }}' | base64 -d)"
+          while IFS= read -r line; do [ -n "$line" ] && echo "::add-mask::$line"; done <<< "$KEY"
+          {
+            echo 'value<<KEYEOF'
+            printf '%s\n' "$KEY"
+            echo 'KEYEOF'
+          } >> "$GITHUB_OUTPUT"
       - name: Copiar arquivos da landing page pra EC2
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
+          key: ${{ steps.sshkey.outputs.value }}
           source: "server/index.js,server/package.json,server/public-studio/**"
           target: "/opt/kyvvo/landing"
           strip_components: 1
@@ -49,15 +59,25 @@ jobs:
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
+          key: ${{ steps.sshkey.outputs.value }}
           script: cd /opt/kyvvo && sudo docker compose restart landing
 
   deploy-panel:
     needs: changes
-    if: needs.changes.outputs.panel == 'true'
+    if: needs.changes.outputs.panel == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Preparar chave SSH
+        id: sshkey
+        run: |
+          KEY="$(printf '%s' '${{ secrets.EC2_SSH_KEY_B64 }}' | base64 -d)"
+          while IFS= read -r line; do [ -n "$line" ] && echo "::add-mask::$line"; done <<< "$KEY"
+          {
+            echo 'value<<KEYEOF'
+            printf '%s\n' "$KEY"
+            echo 'KEYEOF'
+          } >> "$GITHUB_OUTPUT"
       - name: Gravar versão do deploy (US54)
         run: |
           COMMIT_CURTO="${GITHUB_SHA::7}"
@@ -68,7 +88,7 @@ jobs:
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
+          key: ${{ steps.sshkey.outputs.value }}
           source: "server/panel/**"
           target: "/opt/kyvvo/panel"
           strip_components: 2
@@ -77,5 +97,5 @@ jobs:
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
+          key: ${{ steps.sshkey.outputs.value }}
           script: cd /opt/kyvvo && sudo docker compose restart panel
