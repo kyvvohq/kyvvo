@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -11,6 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/ds/tokens.css">
 <link rel="stylesheet" href="/shared.css">
 <style>
 html,body{height:100%;overflow-x:hidden}
@@ -32,9 +33,9 @@ html,body{height:100%;overflow-x:hidden}
 .card{position:relative;z-index:1;width:100%;max-width:480px;animation:slideUp .5s cubic-bezier(.4,0,.2,1) both}
 @keyframes slideUp{from{opacity:0;transform:translateY(28px)}to{opacity:1;transform:translateY(0)}}
 
-.step-label{font-size:.72rem;color:var(--accent-light);font-weight:600;letter-spacing:.1em;text-transform:uppercase;margin-bottom:14px}
+.step-label{font-size:.72rem;color:var(--accent-dark);font-weight:600;letter-spacing:.1em;text-transform:uppercase;margin-bottom:14px}
 
-.question{font-family:var(--font-d);font-size:clamp(1.35rem,5vw,1.75rem);font-weight:700;line-height:1.25;letter-spacing:-.025em;margin-bottom:8px}
+.question{font-family:var(--font-display);font-size:clamp(1.35rem,5vw,1.75rem);font-weight:700;line-height:1.25;letter-spacing:-.025em;margin-bottom:8px}
 
 .sub{font-size:.88rem;color:var(--muted);margin-bottom:28px;line-height:1.6}
 
@@ -43,10 +44,10 @@ html,body{height:100%;overflow-x:hidden}
 
 .opt{
   display:flex;align-items:center;gap:14px;
-  background:var(--surface);border:1.5px solid var(--border);
+  background:var(--card);border:1.5px solid var(--border);
   border-radius:12px;padding:14px 18px;
   cursor:pointer;transition:all .18s;user-select:none;text-align:left;
-  font-family:var(--font-b);font-size:.95rem;color:var(--text);
+  font-family:var(--font-ui);font-size:.95rem;color:var(--text);
   width:100%;
 }
 .opt:hover{border-color:rgba(124,92,252,.5);background:rgba(124,92,252,.06);transform:translateX(3px)}
@@ -60,9 +61,9 @@ html,body{height:100%;overflow-x:hidden}
 /* INPUT */
 .input-wrap{margin-bottom:24px}
 .input-wrap input,.input-wrap textarea{
-  width:100%;background:var(--surface);border:1.5px solid var(--border);
+  width:100%;background:var(--card);border:1.5px solid var(--border);
   border-radius:12px;padding:14px 18px;
-  color:var(--text);font-family:var(--font-b);font-size:.95rem;
+  color:var(--text);font-family:var(--font-ui);font-size:.95rem;
   outline:none;transition:border-color .18s;resize:none;
 }
 .input-wrap input:focus,.input-wrap textarea:focus{border-color:var(--accent)}
@@ -73,7 +74,7 @@ html,body{height:100%;overflow-x:hidden}
   width:100%;padding:15px;
   background:linear-gradient(135deg,var(--accent),#5b3fd4);
   color:#fff;border:none;border-radius:12px;
-  font-family:var(--font-b);font-size:1rem;font-weight:600;
+  font-family:var(--font-ui);font-size:1rem;font-weight:600;
   cursor:pointer;transition:all .2s;
   display:flex;align-items:center;justify-content:center;gap:8px;
   box-shadow:0 4px 20px rgba(124,92,252,.3);
@@ -89,38 +90,38 @@ html,body{height:100%;overflow-x:hidden}
 
 .result-header{text-align:center;margin-bottom:32px}
 .result-emoji{font-size:3rem;display:block;margin-bottom:12px}
-.result-title{font-family:var(--font-d);font-size:1.6rem;font-weight:800;letter-spacing:-.03em;margin-bottom:8px}
+.result-title{font-family:var(--font-display);font-size:1.6rem;font-weight:800;letter-spacing:-.03em;margin-bottom:8px}
 .result-sub{font-size:.9rem;color:var(--muted);line-height:1.6}
 
-.score-bar{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:16px}
+.score-bar{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:16px}
 .score-label{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}
 .score-track{height:8px;background:var(--border);border-radius:100px;overflow:hidden;margin-bottom:6px}
 .score-fill{height:100%;border-radius:100px;background:linear-gradient(90deg,var(--accent),var(--cyan));transition:width 1s 0.3s ease}
-.score-value{font-family:var(--font-d);font-size:1.1rem;font-weight:700}
+.score-value{font-family:var(--font-display);font-size:1.1rem;font-weight:700}
 
 .dores{margin-bottom:24px}
 .dores-title{font-size:.8rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;font-weight:600}
-.dor-item{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:8px;font-size:.88rem;line-height:1.5}
+.dor-item{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;background:var(--card);border:1px solid var(--border);border-radius:10px;margin-bottom:8px;font-size:.88rem;line-height:1.5}
 .dor-icon{flex-shrink:0;margin-top:1px}
 
 .cta-box{background:linear-gradient(135deg,rgba(124,92,252,.15),rgba(0,212,255,.08));border:1px solid rgba(124,92,252,.3);border-radius:14px;padding:24px;text-align:center;margin-bottom:20px}
-.cta-box h3{font-family:var(--font-d);font-size:1.1rem;font-weight:700;margin-bottom:8px}
+.cta-box h3{font-family:var(--font-display);font-size:1.1rem;font-weight:700;margin-bottom:8px}
 .cta-box p{font-size:.85rem;color:var(--muted);line-height:1.6;margin-bottom:16px}
 
 .btn-whatsapp{background:linear-gradient(135deg,#25D366,#128C7E);box-shadow:0 4px 20px rgba(37,211,102,.3)}
 .btn-whatsapp:hover{box-shadow:0 10px 30px rgba(37,211,102,.45)}
 
-.name-display{color:var(--accent-light);font-weight:600}
+.name-display{color:var(--accent-dark);font-weight:600}
 
 /* INTRO */
 .intro{width:100%;max-width:480px;text-align:center;animation:slideUp .5s ease both}
-.intro-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(124,92,252,.12);border:1px solid rgba(124,92,252,.28);border-radius:100px;padding:6px 16px;font-size:.75rem;font-weight:600;color:var(--accent-light);letter-spacing:.06em;text-transform:uppercase;margin-bottom:24px}
-.intro h1{font-family:var(--font-d);font-size:clamp(1.8rem,7vw,2.4rem);font-weight:800;letter-spacing:-.035em;line-height:1.15;margin-bottom:14px}
+.intro-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(124,92,252,.12);border:1px solid rgba(124,92,252,.28);border-radius:100px;padding:6px 16px;font-size:.75rem;font-weight:600;color:var(--accent-dark);letter-spacing:.06em;text-transform:uppercase;margin-bottom:24px}
+.intro h1{font-family:var(--font-display);font-size:clamp(1.8rem,7vw,2.4rem);font-weight:800;letter-spacing:-.035em;line-height:1.15;margin-bottom:14px}
 .intro p{font-size:.95rem;color:var(--muted);line-height:1.7;margin-bottom:32px;max-width:380px;margin-left:auto;margin-right:auto}
 .intro-meta{display:flex;gap:24px;justify-content:center;margin-bottom:32px;flex-wrap:wrap}
 .meta-item{font-size:.78rem;color:var(--muted);display:flex;align-items:center;gap:5px}
 .intro-alt{font-size:.82rem;color:var(--muted);margin-top:16px}
-.intro-alt a{color:var(--accent-light);font-weight:600;text-decoration:none}
+.intro-alt a{color:var(--accent-dark);font-weight:600;text-decoration:none}
 .intro-alt a:hover{text-decoration:underline}
 
 @media(max-width:400px){.question{font-size:1.2rem}.opt{padding:12px 14px}}
@@ -449,7 +450,7 @@ function renderResult() {
     <div class="cta-box">
       <h3>A Kyvvo resolve tudo isso</h3>
       <p>Com base no seu diagnóstico, o plano <strong>${plano}</strong> se encaixa perfeitamente.<br>${planoDesc}</p>
-      <p style="font-size:.8rem;color:var(--accent-light);margin-bottom:16px">✨ 14 dias grátis, sem cartão de crédito</p>
+      <p style="font-size:.8rem;color:var(--accent-dark);margin-bottom:16px">✨ 14 dias grátis, sem cartão de crédito</p>
       <button class="btn btn-whatsapp" id="btnWhatsapp">💬 Falar com a equipe Kyvvo</button>
     </div>
 
