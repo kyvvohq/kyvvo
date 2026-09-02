@@ -98,4 +98,4 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ steps.sshkey.outputs.value }}
-          script: cd /opt/kyvvo && sudo docker compose restart panel
+          script: cd /opt/kyvvo && sudo docker compose restart studio
