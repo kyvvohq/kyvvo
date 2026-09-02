@@ -27,7 +27,7 @@ Se algum desses valores mudar no `docker-compose.yml`/`.env` reais da EC2,
 ajuste via variáveis de ambiente antes de rodar o script, ou defina-as no
 `/opt/kyvvo/.env` (o script carrega esse arquivo automaticamente se existir):
 `POSTGRES_SERVICE`, `POSTGRES_USER`, `POSTGRES_DBS` (lista separada por
-espaço), `BACKUP_DIR`.
+espaço), `BACKUP_DIR`, `BACKUP_RETENTION_DAYS` (default 30, `0` desativa).
 
 ### Envio para S3
 
@@ -47,15 +47,26 @@ alternativa, `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` no `.env`).
 /opt/kyvvo/scripts/backup-db.sh
 ```
 
-## Pendências (subtasks relacionadas)
+## Retenção
 
-- Rotina de retenção, descartando backups locais/remotos além do período
-  definido — ver task ST14.3.
-- ~~Teste de restauração real + procedimento documentado — ver task ST14.4.~~
-  **Feito 2026-09-02** — ver `docs/restore.md` (drill executado, backup íntegro).
-- ~~Cobrir o banco `kyvvo_people`~~ — **feito 2026-09-03** (`POSTGRES_DBS`).
-- Enviar o backup pro S3: o script já suporta, mas a EC2 hoje **não tem
-  `aws-cli` nem IAM role**, e o `.env` não tem `BACKUP_S3_BUCKET` — o backup
-  vive só no disco da própria instância. Falta: criar o bucket, dar
-  `s3:PutObject` à instância (IAM role) ou pôr credenciais no `.env`,
-  instalar o `aws-cli`, e setar `BACKUP_S3_BUCKET`.
+- **Local** (ST14.3): o script apaga `*.sql.gz` em `BACKUP_DIR` com mais de
+  `BACKUP_RETENTION_DAYS` dias (default 30; `0` desativa). Ajuste no
+  `/opt/kyvvo/.env`.
+- **S3**: feita por *lifecycle policy* no bucket (lida melhor com
+  versionamento), não pelo script. Aplicar uma vez, no CloudShell:
+  ```bash
+  aws s3api put-bucket-lifecycle-configuration \
+    --bucket kyvvo-db-backups-241019175404 \
+    --lifecycle-configuration '{"Rules":[{"ID":"expire-kyvvo-db","Filter":{"Prefix":"kyvvo-db/"},"Status":"Enabled","Expiration":{"Days":90},"NoncurrentVersionExpiration":{"NoncurrentDays":30}}]}'
+  ```
+  (mantém 90 dias no S3, mais folga que os 30 locais.)
+
+## Estado (2026-09-03)
+
+- ✅ Restauração testada + documentada (`docs/restore.md`, ST14.4).
+- ✅ `kyvvo_people` coberto (`POSTGRES_DBS`).
+- ✅ Envio pro S3 ligado — bucket `kyvvo-db-backups-241019175404`, instance
+  profile `kyvvo-ec2-backup-role` (`s3:PutObject`), `aws-cli` no host,
+  `BACKUP_S3_BUCKET` no `.env`.
+- ✅ Retenção local (`BACKUP_RETENTION_DAYS`).
+- Pendente: aplicar a lifecycle policy no S3 (comando acima).
