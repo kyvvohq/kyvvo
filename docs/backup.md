@@ -47,4 +47,8 @@ alternativa, `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` no `.env`).
 
 - Rotina de retenção, descartando backups locais/remotos além do período
   definido — ver task ST14.3.
-- Teste de restauração real + procedimento documentado — ver task ST14.4.
+- ~~Teste de restauração real + procedimento documentado — ver task ST14.4.~~
+  **Feito 2026-09-02** — ver `docs/restore.md` (drill executado, backup íntegro).
+- Enviar o backup pro S3 (o script já suporta; hoje o `.env` da EC2 não tem
+  `BACKUP_S3_BUCKET`, então o backup vive só no disco da própria instância).
+- Cobrir o banco `kyvvo_people` — hoje o script só dumpa `railway`.
