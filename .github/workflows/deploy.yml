@@ -60,7 +60,9 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ steps.sshkey.outputs.value }}
-          script: cd /opt/kyvvo && sudo docker compose restart landing
+          script: |
+            sudo /opt/kyvvo/scripts/gen-env-from-ssm.sh
+            cd /opt/kyvvo && sudo docker compose up -d --force-recreate landing
 
   deploy-panel:
     needs: changes
@@ -98,4 +100,6 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ steps.sshkey.outputs.value }}
-          script: cd /opt/kyvvo && sudo docker compose restart studio
+          script: |
+            sudo /opt/kyvvo/scripts/gen-env-from-ssm.sh
+            cd /opt/kyvvo && sudo docker compose up -d --force-recreate studio
