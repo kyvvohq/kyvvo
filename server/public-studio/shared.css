@@ -5,21 +5,16 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html{scroll-behavior:smooth}
 :root{
-  --bg:#080b14;--bg2:#0d1120;--surface:#111827;--border:#1e2d4a;
-  --accent:#7c5cfc;--accent-light:#a688ff;--cyan:#00d4ff;
-  /* --muted clareado de #6b7a99 pra #7484a5 (US49/CA — auditoria WCAG AA):
-     o tom original tinha só 4.11:1 de contraste sobre --surface, abaixo do
-     mínimo de 4.5:1 pra texto normal. #7484a5 mantém o mesmo tom (só mais
-     claro) e passa em 4.7:1+ tanto sobre --bg quanto sobre --surface. */
-  --text:#f0eeff;--muted:#7484a5;
-  --font-d:'Space Grotesk',sans-serif;--font-b:'Inter',sans-serif;
-  /* Escala de espaçamento e radius do Kyvvo DS (fundações) — disponível
-     pra uso em novas telas; conteúdo existente ainda usa valores livres. */
-  --space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-5:24px;--space-6:32px;--space-7:48px;--space-8:64px;
-  --radius-sm:8px;--radius-md:12px;--radius-lg:16px;--radius-xl:24px;--radius-full:999px;
-  --color-success:#12B76A;--color-warning:#F79009;--color-danger:#F04438;--color-info:#22C7F2;--color-whatsapp:#25D366;
+  /* Tokens (cor, superfície, texto, escalas, fontes, semânticos) vêm do
+     @kyvvohq/design-system — <link href="/ds/tokens.css"> ANTES deste arquivo
+     nas páginas. A landing é só escura: cada página seta data-theme="dark"
+     no <html>. Só overrides locais aqui.
+     --muted mais claro (#6b7a99 -> #7484a5, US49/CA — auditoria WCAG AA); o
+     --muted do DS (#7C8497) não passou por esse audit sobre o fundo da
+     landing, então mantém-se o valor auditado. */
+  --muted:#7484a5;
 }
-body{background:var(--bg);color:var(--text);font-family:var(--font-b);line-height:1.6;overflow-x:hidden}
+body{background:var(--bg);color:var(--text);font-family:var(--font-ui);line-height:1.6;overflow-x:hidden}
 
 /* Seletor de classe (não tag "nav" pura) — o rodapé (partials/footer.html)
    também usa um <nav class="footer-links"> pros links legais; um seletor
@@ -31,24 +26,24 @@ nav.site-header{
   background:rgba(8,11,20,0.85);backdrop-filter:blur(20px);
   border-bottom:1px solid rgba(255,255,255,0.04);
 }
-.logo{font-family:var(--font-d);font-size:1.5rem;font-weight:800;letter-spacing:-.03em;text-decoration:none;color:var(--text);display:flex;align-items:center}
-.logo-vv{color:var(--accent-light);position:relative}
+.logo{font-family:var(--font-display);font-size:1.5rem;font-weight:800;letter-spacing:-.03em;text-decoration:none;color:var(--text);display:flex;align-items:center}
+.logo-vv{color:var(--accent-dark);position:relative}
 .logo-vv::after{content:'';position:absolute;bottom:-2px;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--accent),var(--cyan));border-radius:2px}
 .nav-right{display:flex;align-items:center;gap:14px}
-.lang-toggle{display:flex;align-items:center;gap:4px;background:var(--surface);border:1px solid var(--border);border-radius:100px;padding:4px;cursor:pointer}
-.lang-btn{padding:5px 12px;border-radius:100px;font-size:.78rem;font-weight:500;font-family:var(--font-b);border:none;cursor:pointer;transition:all .2s;color:var(--muted);background:transparent}
+.lang-toggle{display:flex;align-items:center;gap:4px;background:var(--card);border:1px solid var(--border);border-radius:100px;padding:4px;cursor:pointer}
+.lang-btn{padding:5px 12px;border-radius:100px;font-size:.78rem;font-weight:500;font-family:var(--font-ui);border:none;cursor:pointer;transition:all .2s;color:var(--muted);background:transparent}
 .lang-btn.active{background:var(--accent);color:#fff}
 /* "Entrar": CTA secundário no header, contorno em vez de preenchido. */
-.btn-login{padding:9px 20px;border-radius:100px;font-size:.82rem;font-weight:600;font-family:var(--font-b);color:var(--text);background:transparent;border:1px solid var(--border);cursor:pointer;transition:all .2s;white-space:nowrap}
+.btn-login{padding:9px 20px;border-radius:100px;font-size:.82rem;font-weight:600;font-family:var(--font-ui);color:var(--text);background:transparent;border:1px solid var(--border);cursor:pointer;transition:all .2s;white-space:nowrap}
 .btn-login:hover{border-color:rgba(124,92,252,.5);transform:translateY(-1px)}
 /* "Criar conta grátis": CTA principal do header, preenchido em gradiente. */
-.btn-cadastro{padding:9px 20px;border-radius:100px;font-size:.82rem;font-weight:600;font-family:var(--font-b);color:#fff;background:linear-gradient(135deg,var(--accent),#5b3fd4);border:none;cursor:pointer;transition:all .2s;white-space:nowrap;text-decoration:none;box-shadow:0 4px 14px rgba(124,92,252,.3)}
+.btn-cadastro{padding:9px 20px;border-radius:100px;font-size:.82rem;font-weight:600;font-family:var(--font-ui);color:#fff;background:linear-gradient(135deg,var(--accent),#5b3fd4);border:none;cursor:pointer;transition:all .2s;white-space:nowrap;text-decoration:none;box-shadow:0 4px 14px rgba(124,92,252,.3)}
 .btn-cadastro:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(124,92,252,.4)}
 
 .login-modal-overlay{display:none;position:fixed;inset:0;z-index:1000;background:rgba(5,7,14,.72);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:20px}
 .login-modal-overlay.open{display:flex}
-.login-modal{position:relative;width:100%;max-width:420px;height:min(560px,90vh);background:var(--bg2);border:1px solid var(--border);border-radius:16px;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,.5)}
-.login-modal iframe{width:100%;height:100%;border:none;background:var(--bg2)}
+.login-modal{position:relative;width:100%;max-width:420px;height:min(560px,90vh);background:var(--surface-muted);border:1px solid var(--border);border-radius:16px;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,.5)}
+.login-modal iframe{width:100%;height:100%;border:none;background:var(--surface-muted)}
 .login-modal-close{position:absolute;top:10px;right:12px;z-index:1;width:32px;height:32px;border-radius:50%;border:none;background:rgba(255,255,255,.08);color:var(--text);font-size:1.1rem;line-height:1;cursor:pointer;transition:background .2s}
 .login-modal-close:hover{background:rgba(255,255,255,.16)}
 

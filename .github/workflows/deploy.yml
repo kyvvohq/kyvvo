@@ -6,6 +6,7 @@ on:
     paths:
       - 'server/index.js'
       - 'server/package.json'
+      - 'server/.npmrc'
       - 'server/public-studio/**'
       - 'server/panel/**'
   workflow_dispatch:
@@ -25,6 +26,7 @@ jobs:
             landing:
               - 'server/index.js'
               - 'server/package.json'
+              - 'server/.npmrc'
               - 'server/public-studio/**'
             panel:
               - 'server/panel/**'
@@ -51,7 +53,7 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ steps.sshkey.outputs.value }}
-          source: "server/index.js,server/package.json,server/public-studio/**"
+          source: "server/index.js,server/package.json,server/.npmrc,server/public-studio/**"
           target: "/opt/kyvvo/landing"
           strip_components: 1
       - name: Reiniciar container da landing
