@@ -1,58 +1,8 @@
-/* Tokens de marca compartilhados com a landing (server/public/index.html) —
-   mesmos valores exatos, pra manter os dois lados do produto visualmente
-   consistentes. --text/--muted/--border/--surface do painel têm tons
-   próprios (mais adequados pra uma UI densa de dados) mas seguem o mesmo
-   mecanismo de tema — ver bloco [data-theme="light"] logo abaixo.
-   O tema claro/escuro (US57) só tem toggle exposto no portal admin por
-   ora (shell.js) — o painel do tenant nunca seta data-theme, então
-   continua sempre no escuro de sempre (nenhuma mudança visual lá). */
-:root {
-  --bg: #080b14;
-  --accent: #7c5cfc;
-  --accent-light: #a688ff;
-  --cyan: #00d4ff;
-  --font-d: 'Space Grotesk', sans-serif;
-  --font-b: 'Inter', sans-serif;
-  --space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-5:24px;--space-6:32px;--space-7:48px;--space-8:64px;
-  --radius-sm:8px;--radius-md:12px;--radius-lg:16px;--radius-xl:24px;--radius-full:999px;
-  --color-success:#12B76A;--color-warning:#F79009;--color-danger:#F04438;--color-info:#22C7F2;--color-whatsapp:#25D366;
-  --surface: #12162a;
-  --surface-hover: #1a1f3a;
-  --border: #232847;
-  --border-strong: #2a2f52;
-  --input-bg: #0d1122;
-  --text: #f2f2f7;
-  --text-muted: #a1a5c4;
-  --text-faint: #6b7099;
-  --success: #4ade80;
-  --danger: #ff6b6b;
-  --warn: #f0b354;
-  --warn-yellow: #facc15;
-}
-
-/* Paleta clara (US57) — snow-* / ink-* do Kyvvo DS (docs/design-system.md),
-   com verde/vermelho/âmbar mais escuros que os tons "texto sobre fundo
-   escuro" acima (os originais não têm contraste suficiente sobre branco).
-   Contraste estimado, não medido com ferramenta — reconferir se algum
-   texto pequeno parecer apagado demais, mesmo espírito da auditoria WCAG
-   já feita pra --muted da landing (ver server/public-studio/shared.css). */
-:root[data-theme="light"] {
-  --bg: #F8F9FC;
-  --surface: #FFFFFF;
-  --surface-hover: #F1F3F8;
-  --border: #E7EAF2;
-  --border-strong: #D7DCE8;
-  --input-bg: #FFFFFF;
-  --text: #0F111A;
-  --text-muted: #5A6274;
-  --text-faint: #6B7385;
-  --success: #12B76A;
-  --danger: #DC2626;
-  --warn: #B45309;
-  --warn-yellow: #A16207;
-  --accent-light: #6344E8;
-  --cyan: #0E7490;
-}
+/* Tokens (cor, superfície, texto, tema claro/escuro, escalas, fontes,
+   semânticos) vêm do @kyvvohq/design-system — <link href="/ds/tokens.css">
+   no <head> ANTES deste arquivo. Aqui só regras. O painel do tenant seta
+   data-theme="dark" fixo no <html>; o admin faz o toggle claro/escuro
+   (kyvvo_admin_tema). */
 
 * { box-sizing: border-box; margin: 0; padding: 0; font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
 
@@ -80,7 +30,7 @@ body {
 }
 
 .card {
-  background: var(--surface);
+  background: var(--card);
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 32px;
@@ -101,7 +51,7 @@ body {
    index.html) — só o "vv" do meio fica na cor de destaque, com o
    sublinhado em gradiente. */
 .logo-vv {
-  color: var(--accent-light);
+  color: var(--accent-dark);
   position: relative;
 }
 
@@ -125,7 +75,7 @@ body {
 footer.rodape-app {
   padding: 20px 24px;
   margin: 24px 24px 20px;
-  background: var(--surface);
+  background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   display: flex;
@@ -137,7 +87,7 @@ footer.rodape-app {
 
 .rodape-app-copy {
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--muted-strong);
 }
 
 /* Logo substituindo a palavra "Kyvvo" dentro do próprio texto do rodapé
@@ -155,7 +105,7 @@ footer.rodape-app {
 label {
   display: block;
   font-size: 13px;
-  color: var(--text-muted);
+  color: var(--muted-strong);
   margin-bottom: 6px;
   margin-top: 16px;
 }
@@ -216,7 +166,7 @@ button {
   cursor: pointer;
 }
 
-button:hover { background: #6a4ce0; }
+button:hover { background: var(--accent-hover); }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
 input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 
@@ -247,7 +197,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   gap: 16px;
   padding: 14px 22px;
   margin: 16px 24px 0;
-  background: var(--surface);
+  background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
 }
@@ -255,13 +205,13 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 .topbar-esquerda { display: flex; align-items: center; gap: 14px; }
 .topbar-textos { display: flex; flex-direction: column; gap: 2px; }
 .topbar .logo { margin: 0; font-size: 20px; }
-.saudacao { font-size: 13px; color: var(--text-muted); }
+.saudacao { font-size: 13px; color: var(--muted-strong); }
 
 /* Título da página (DS: "Página" 19px Space Grotesk + eyebrow abaixo) —
    só as páginas admin passam essa div; o painel do tenant continua sem
    título (ela é opcional, .topbar-textos funciona vazia também). */
 .topbar-titulo {
-  font-family: var(--font-d);
+  font-family: var(--font-display);
   font-size: 19px;
   font-weight: 700;
   color: var(--text);
@@ -284,7 +234,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   background: var(--surface-hover);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  color: var(--text-muted);
+  color: var(--muted-strong);
   cursor: pointer;
 }
 .btn-topbar-icone:hover { color: var(--text); border-color: var(--border-strong); }
@@ -323,16 +273,16 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--surface);
+  background: var(--card);
   border: 1px solid var(--border-strong);
   border-radius: 50%;
-  color: var(--text-muted);
+  color: var(--muted-strong);
   font-size: 12px;
   line-height: 1;
   cursor: pointer;
   z-index: 5;
 }
-.btn-toggle-sidebar:hover { background: rgba(124, 92, 252, 0.15); color: var(--text); }
+.btn-toggle-sidebar:hover { background: rgba(var(--accent-rgb), 0.15); color: var(--text); }
 .painel-shell:has(.painel-sidebar.sidebar-oculta) .btn-toggle-sidebar {
   left: 0;
   transform: translateX(0);
@@ -341,7 +291,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 /* .topbar-nav-link — desde a US53 o admin não usa mais nav no topbar (virou
    sidebar, como o painel do tenant); a classe sobrevive só pro link "←
    Voltar para lista" dentro do detalhe do tenant (tenant-detalhe.js). */
-.topbar-nav-link { color: var(--text-muted); font-size: 14px; text-decoration: none; }
+.topbar-nav-link { color: var(--muted-strong); font-size: 14px; text-decoration: none; }
 .topbar-nav-link:hover { color: var(--text); }
 
 /* Área admin da Kyvvo (US16) — distintivo visual pra nunca confundir com o
@@ -349,9 +299,9 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 .admin-badge {
   display: inline-block;
   font-size: 13px;
-  color: var(--warn);
-  background: rgba(240, 179, 84, 0.12);
-  border: 1px solid rgba(240, 179, 84, 0.3);
+  color: var(--warning);
+  background: rgba(var(--warning-rgb), 0.12);
+  border: 1px solid rgba(var(--warning-rgb), 0.3);
   border-radius: 100px;
   padding: 3px 12px;
   margin-top: 4px;
@@ -393,7 +343,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   gap: 11px;
   padding: 10px 14px;
   cursor: pointer;
-  color: var(--text-muted);
+  color: var(--muted-strong);
   font-size: 15px;
   font-weight: 500;
   text-decoration: none;
@@ -406,11 +356,11 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
    hover/active já pinta o ícone junto sem regra extra. */
 .menu-icon { width: 18px; height: 18px; flex-shrink: 0; }
 
-.menu-item:hover { color: var(--text); background: rgba(124, 92, 252, 0.08); }
+.menu-item:hover { color: var(--text); background: rgba(var(--accent-rgb), 0.08); }
 
 .menu-item.active {
   color: var(--text);
-  background: rgba(124, 92, 252, 0.15);
+  background: rgba(var(--accent-rgb), 0.15);
   border-left-color: var(--accent);
 }
 
@@ -424,7 +374,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.6px;
-  color: var(--text-faint);
+  color: var(--muted);
 }
 
 .menu-secao-titulo:first-child { padding-top: 4px; }
@@ -438,15 +388,15 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   gap: 8px;
   padding: 10px 14px;
   cursor: pointer;
-  color: var(--text-muted);
+  color: var(--muted-strong);
   font-size: 15px;
   font-weight: 500;
   border-radius: 8px;
   border-left: 3px solid transparent;
 }
 
-.menu-item-grupo:hover { color: var(--text); background: rgba(124, 92, 252, 0.08); }
-.menu-item-grupo.tem-filho-ativo { color: var(--text); background: rgba(124, 92, 252, 0.15); border-left-color: var(--accent); }
+.menu-item-grupo:hover { color: var(--text); background: rgba(var(--accent-rgb), 0.08); }
+.menu-item-grupo.tem-filho-ativo { color: var(--text); background: rgba(var(--accent-rgb), 0.15); border-left-color: var(--accent); }
 
 /* Ícone antes do texto, glifo trocado de verdade via ::before (não rotação
    de triângulo): ">" recolhido / "⌵" expandido — pedido explícito do
@@ -506,7 +456,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   padding: 8px 16px;
   border-radius: 8px;
   cursor: pointer;
-  color: var(--text-muted);
+  color: var(--muted-strong);
   font-size: 14px;
 }
 
@@ -521,10 +471,10 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   background: var(--accent);
   color: #fff;
   border-radius: 8px;
-  box-shadow: 0 4px 14px rgba(124, 92, 252, 0.35);
+  box-shadow: 0 4px 14px rgba(var(--accent-rgb), 0.35);
 }
 
-.btn-novo-agendamento:hover { background: #6a4ce0; }
+.btn-novo-agendamento:hover { background: var(--accent-hover); }
 
 .conteudo { padding: 24px; max-width: 720px; margin: 0 auto; width: 100%; flex: 1; }
 
@@ -544,7 +494,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* Subtítulo do cabeçalho (só Financeiro por enquanto) — logo abaixo do h2,
    dentro do mesmo wrapper flex que o botão de ação. */
-.financeiro-subtitulo { color: var(--text-muted); font-size: 13px; margin-top: 2px; }
+.financeiro-subtitulo { color: var(--muted-strong); font-size: 13px; margin-top: 2px; }
 
 /* Início reformulado em 5 seções — cada uma é um bloco com título pequeno
    em caixa alta (mesmo estilo de .financeiro-resumo-label) e um corpo
@@ -555,7 +505,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: var(--text-muted);
+  color: var(--muted-strong);
   margin-bottom: 10px;
 }
 
@@ -571,7 +521,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 .inicio-atendimentos-lista { display: flex; flex-direction: column; gap: 10px; }
 
 .inicio-atendimento-item {
-  background: var(--surface);
+  background: var(--card);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 12px 16px;
@@ -583,7 +533,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 .inicio-atendimento-info { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 14px; color: var(--text); }
-.inicio-atendimento-servico { color: var(--text-muted); }
+.inicio-atendimento-servico { color: var(--muted-strong); }
 .inicio-atendimento-acoes { display: flex; gap: 8px; flex-shrink: 0; }
 .inicio-atendimento-acoes .btn-secundario { width: auto; margin: 0; }
 
@@ -594,7 +544,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   gap: 14px;
   margin-top: 12px;
   font-size: 13px;
-  color: var(--text-muted);
+  color: var(--muted-strong);
 }
 
 .inicio-paginacao .btn-secundario { width: auto; margin: 0; }
@@ -602,7 +552,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 .inicio-paginacao select { width: auto; margin: 0; }
 
 .inicio-oportunidade-item {
-  background: var(--surface);
+  background: var(--card);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 12px 16px;
@@ -618,7 +568,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 .inicio-oportunidade-item .btn-secundario { width: auto; margin: 0; flex-shrink: 0; }
 
 .inicio-financeiro-mes {
-  background: var(--surface);
+  background: var(--card);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 16px 20px;
@@ -629,15 +579,15 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 .inicio-financeiro-mes-valor { font-size: 22px; font-weight: 700; }
-.inicio-financeiro-mes-legenda { color: var(--text-muted); font-size: 14px; }
+.inicio-financeiro-mes-legenda { color: var(--muted-strong); font-size: 14px; }
 
-.badge-variacao-positiva { background: rgba(74, 222, 128, 0.15); color: var(--success); }
-.badge-variacao-negativa { background: rgba(255, 107, 107, 0.15); color: var(--danger); }
+.badge-variacao-positiva { background: rgba(var(--success-rgb), 0.15); color: var(--success); }
+.badge-variacao-negativa { background: rgba(var(--danger-rgb), 0.15); color: var(--danger); }
 
 /* ---------- US56 — Onboarding guiado (tela "Primeiros passos") ---------- */
 .onboarding-cabecalho { margin-bottom: 20px; }
 .onboarding-cabecalho h2 { font-size: 20px; margin-bottom: 6px; }
-.onboarding-cabecalho p { color: var(--text-muted); font-size: 14px; margin-bottom: 16px; }
+.onboarding-cabecalho p { color: var(--muted-strong); font-size: 14px; margin-bottom: 16px; }
 
 .onboarding-progresso {
   display: flex;
@@ -660,7 +610,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   transition: width 0.3s ease;
 }
 
-.onboarding-progresso span { font-size: 13px; color: var(--text-muted); white-space: nowrap; }
+.onboarding-progresso span { font-size: 13px; color: var(--muted-strong); white-space: nowrap; }
 
 .onboarding-lista { list-style: none; display: flex; flex-direction: column; gap: 12px; }
 
@@ -668,13 +618,13 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   display: flex;
   align-items: flex-start;
   gap: 16px;
-  background: var(--surface);
+  background: var(--card);
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 16px 20px;
 }
 
-.onboarding-passo-recomendado { border-color: var(--accent); background: rgba(124, 92, 252, 0.08); }
+.onboarding-passo-recomendado { border-color: var(--accent); background: rgba(var(--accent-rgb), 0.08); }
 
 .onboarding-passo-feito { opacity: 0.6; }
 
@@ -696,7 +646,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .onboarding-passo-texto { flex: 1; min-width: 0; }
 .onboarding-passo-texto strong { display: block; font-size: 15px; margin-bottom: 4px; }
-.onboarding-passo-texto p { color: var(--text-muted); font-size: 13px; line-height: 1.5; }
+.onboarding-passo-texto p { color: var(--muted-strong); font-size: 13px; line-height: 1.5; }
 
 .onboarding-passo-tag {
   display: inline-block;
@@ -705,7 +655,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--accent-light);
+  color: var(--accent-dark);
 }
 
 .onboarding-passo .btn-secundario { width: auto; margin: 0; flex-shrink: 0; align-self: center; }
@@ -715,7 +665,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   margin: 20px 0 0;
   padding: 0;
   background: transparent;
-  color: var(--text-muted);
+  color: var(--muted-strong);
   font-size: 13px;
   text-decoration: underline;
 }
@@ -750,7 +700,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   cursor: pointer;
 }
 
-.user-menu-toggle:hover { background: rgba(124, 92, 252, 0.08); }
+.user-menu-toggle:hover { background: rgba(var(--accent-rgb), 0.08); }
 
 .user-menu-avatar {
   width: 36px;
@@ -768,9 +718,9 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .user-menu-textos { display: flex; flex-direction: column; text-align: left; }
 .user-menu-nome { font-weight: 700; font-size: 14px; color: var(--text); }
-.user-menu-empresa { font-size: 12px; color: var(--text-muted); }
+.user-menu-empresa { font-size: 12px; color: var(--muted-strong); }
 
-.user-menu-chevron { color: var(--text-muted); font-size: 11px; margin-left: 2px; transition: transform 0.15s; }
+.user-menu-chevron { color: var(--muted-strong); font-size: 11px; margin-left: 2px; transition: transform 0.15s; }
 .user-menu-toggle.aberto .user-menu-chevron { transform: rotate(180deg); }
 
 .user-menu-dropdown {
@@ -778,7 +728,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   top: calc(100% + 8px);
   right: 0;
   min-width: 220px;
-  background: var(--surface);
+  background: var(--card);
   border: 1px solid var(--border);
   border-radius: 10px;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
@@ -817,10 +767,10 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   text-align: left;
 }
 
-.user-menu-sair:hover { background: rgba(255, 107, 107, 0.08); }
+.user-menu-sair:hover { background: rgba(var(--danger-rgb), 0.08); }
 
 .agendamento-item {
-  background: var(--surface);
+  background: var(--card);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 14px 16px;
@@ -830,7 +780,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 /* Linha clicável genérica (ex.: menu Clientes, abre o detalhe) — sem
    afetar .agendamento-item nos outros contextos, que não são clicáveis. */
 .item-clicavel { cursor: pointer; transition: border-color 0.15s; }
-.item-clicavel:hover { border-color: rgba(124, 92, 252, 0.4); }
+.item-clicavel:hover { border-color: rgba(var(--accent-rgb), 0.4); }
 
 .agendamento-hora {
   color: var(--cyan);
@@ -839,7 +789,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 .agendamento-detalhe {
-  color: var(--text-muted);
+  color: var(--muted-strong);
   font-size: 13px;
   margin-top: 4px;
 }
@@ -875,11 +825,11 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .servico-acoes button.acao-perigo {
   background: transparent;
-  border: 1px solid rgba(255, 107, 107, 0.4);
+  border: 1px solid rgba(var(--danger-rgb), 0.4);
   color: var(--danger);
 }
 
-.servico-acoes button.acao-perigo:hover { background: rgba(255, 107, 107, 0.1); }
+.servico-acoes button.acao-perigo:hover { background: rgba(var(--danger-rgb), 0.1); }
 
 /* Grade de horários (Dia — PR2, e cada coluna da Semana — PR3): uma linha
    por horário do intervalo abertura→fechamento (menos almoço), com o(s)
@@ -906,7 +856,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   flex: 0 0 64px;
   padding: 10px 8px;
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--muted-strong);
   border-right: 1px solid #1c2038;
   display: flex;
   align-items: flex-start;
@@ -928,7 +878,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 /* Destaque da linha de horário atual (PR2) — mesma borda de acento usada
    em elementos "ativos" no resto do painel, sem introduzir cor nova. */
 .grade-linha-hora-atual {
-  background: rgba(124, 92, 252, 0.08);
+  background: rgba(var(--accent-rgb), 0.08);
   box-shadow: inset 3px 0 0 var(--accent);
 }
 
@@ -970,7 +920,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .grade-ag-meta {
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--muted-strong);
   margin-top: 2px;
 }
 
@@ -1045,7 +995,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .semana-coluna-cabecalho span {
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--muted-strong);
 }
 
 .semana-coluna-add {
@@ -1081,7 +1031,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 .vazio {
-  color: var(--text-faint);
+  color: var(--muted);
   font-size: 14px;
   text-align: center;
   padding: 40px 0;
@@ -1099,7 +1049,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: var(--muted-strong);
   padding: 4px 0;
 }
 
@@ -1128,7 +1078,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
    min-width:auto por padrão, dimensionados pelo min-content. */
 .financeiro-resumo-card {
   min-width: 0;
-  background: var(--surface);
+  background: var(--card);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 14px 16px;
@@ -1136,7 +1086,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 .financeiro-resumo-label {
-  color: var(--text-muted);
+  color: var(--muted-strong);
   font-size: 12px;
   text-transform: uppercase;
   margin-bottom: 6px;
@@ -1179,7 +1129,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 .relatorios-secao {
-  background: var(--surface);
+  background: var(--card);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 16px;
@@ -1195,11 +1145,11 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   display: flex;
   justify-content: space-between;
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--muted-strong);
   margin-top: 4px;
 }
 
-.relatorios-comparacao-mensal { font-size: 13px; color: var(--text-muted); margin: 8px 0 0; }
+.relatorios-comparacao-mensal { font-size: 13px; color: var(--muted-strong); margin: 8px 0 0; }
 
 .relatorios-status-lista { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
 .relatorios-status-linha {
@@ -1209,15 +1159,15 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 .relatorios-barra-bloco { margin-bottom: 8px; }
-.relatorios-barra-label { font-size: 12px; color: var(--text-muted); margin-bottom: 6px; }
-.relatorios-barra-valor { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+.relatorios-barra-label { font-size: 12px; color: var(--muted-strong); margin-bottom: 6px; }
+.relatorios-barra-valor { font-size: 12px; color: var(--muted-strong); margin-top: 4px; }
 
 /* Aviso de horários perdidos (cancelamentos+faltas) — mesmo tom âmbar do
    badge de falta, chama atenção sem ser um erro de verdade. */
 .relatorios-aviso {
   font-size: 13px;
-  color: var(--warn);
-  background: rgba(240, 179, 84, 0.1);
+  color: var(--warning);
+  background: rgba(var(--warning-rgb), 0.1);
   border-radius: 8px;
   padding: 8px 12px;
   margin: 8px 0 0;
@@ -1248,21 +1198,21 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 .relatorios-mini-barra { width: 40%; border-radius: 3px 3px 0 0; min-height: 2px; align-self: stretch; margin: 0 auto; }
 .relatorios-mini-barra-entrada { background: var(--success); }
 .relatorios-mini-barra-saida { background: var(--danger); }
-.relatorios-mini-barra-label { font-size: 11px; color: var(--text-muted); margin-top: 6px; }
+.relatorios-mini-barra-label { font-size: 11px; color: var(--muted-strong); margin-top: 6px; }
 
 /* Seção "Insights da Kyvvo" — card com destaque na cor de marca, pra ficar
    visualmente diferente das seções de dado puro (é a seção de "o que fazer
    com isso", não só números). */
 .relatorios-insights {
-  border-color: rgba(124, 92, 252, 0.4);
-  background: linear-gradient(135deg, rgba(124, 92, 252, 0.08), rgba(0, 212, 255, 0.04));
+  border-color: rgba(var(--accent-rgb), 0.4);
+  background: linear-gradient(135deg, rgba(var(--accent-rgb), 0.08), rgba(0, 212, 255, 0.04));
 }
 .relatorios-insight-item {
   display: flex;
   align-items: flex-start;
   gap: 10px;
   padding: 10px 0;
-  border-top: 1px solid rgba(124, 92, 252, 0.15);
+  border-top: 1px solid rgba(var(--accent-rgb), 0.15);
   font-size: 14px;
 }
 .relatorios-insight-item:first-child { border-top: none; padding-top: 0; }
@@ -1295,10 +1245,10 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 /* Item de movimentação — hora/data à esquerda, título+detalhe no meio,
    valor+status alinhados à direita (mesmo cartão .agendamento-item). */
 .financeiro-item .agendamento-linha-principal { align-items: flex-start; }
-.financeiro-item-hora { color: var(--text-muted); font-size: 13px; flex-shrink: 0; padding-top: 2px; min-width: 44px; }
+.financeiro-item-hora { color: var(--muted-strong); font-size: 13px; flex-shrink: 0; padding-top: 2px; min-width: 44px; }
 .financeiro-item-corpo { flex: 1; min-width: 0; }
 .financeiro-item-valor { text-align: right; flex-shrink: 0; }
-.financeiro-item-status { font-size: 12px; color: var(--text-muted); margin-top: 4px; white-space: nowrap; }
+.financeiro-item-status { font-size: 12px; color: var(--muted-strong); margin-top: 4px; white-space: nowrap; }
 
 /* US70 — faixa de 4 cards financeiros na tela inicial, reaproveita o visual
    de .financeiro-resumo-card mas em 4 colunas e clicável (navega pro
@@ -1310,7 +1260,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   margin: 4px 0 20px;
 }
 .inicio-financeiro-resumo .financeiro-resumo-card { cursor: pointer; transition: border-color 0.15s; }
-.inicio-financeiro-resumo .financeiro-resumo-card:hover { border-color: var(--accent-light); }
+.inicio-financeiro-resumo .financeiro-resumo-card:hover { border-color: var(--accent-dark); }
 
 @media (max-width: 640px) {
   .inicio-financeiro-resumo { grid-template-columns: repeat(2, 1fr); }
@@ -1338,7 +1288,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 .financeiro-resumo-card-3linhas .financeiro-resumo-linha3 {
   font-size: 11px;
   font-weight: 400;
-  color: var(--text-muted);
+  color: var(--muted-strong);
   margin-top: 2px;
   white-space: normal;
   overflow-wrap: break-word;
@@ -1347,17 +1297,17 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 /* US46.1 — explica as duas formas de conectar o WhatsApp (self-service vs.
    número pronto) antes do botão de conexão, na tela de onboarding. */
 .whatsapp-planos-info {
-  background: var(--surface);
+  background: var(--card);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 14px 16px;
   margin-top: 16px;
   font-size: 13px;
-  color: var(--text-muted);
+  color: var(--muted-strong);
 }
 .whatsapp-planos-info p + p { margin-top: 8px; }
 .whatsapp-planos-info strong { color: var(--text); }
-.whatsapp-planos-info a { color: var(--accent-light); }
+.whatsapp-planos-info a { color: var(--accent-dark); }
 
 /* Card de Status sólido (PR5) — fundo claro + texto escuro e maior, ao
    contrário do resto do painel (tema escuro): pedido explícito pra chamar
@@ -1407,7 +1357,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 .pagamento-detalhes-conteudo {
   margin-top: 12px;
   padding: 16px;
-  background: var(--surface);
+  background: var(--card);
   border: 1px solid var(--border);
   border-radius: 10px;
 }
@@ -1418,7 +1368,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
    status+ação) no lugar dos 3 cards lado a lado de antes; status agora é
    badge (mesmo padrão do histórico) em vez de tingir o card inteiro. */
 .pagamento-plano-card {
-  background: var(--surface);
+  background: var(--card);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 16px;
@@ -1433,7 +1383,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 .pagamento-plano-linha + .pagamento-plano-linha { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
 .pagamento-plano-linha button { width: auto; margin: 0; }
 .pagamento-plano-nome, .pagamento-plano-valor { font-size: 17px; font-weight: 700; color: var(--text); }
-.pagamento-plano-linha-secundaria { font-size: 13px; color: var(--text-muted); }
+.pagamento-plano-linha-secundaria { font-size: 13px; color: var(--muted-strong); }
 .pagamento-plano-linha-secundaria .badge { margin-left: 0; }
 
 .pagamento-secao-divisor { border-top: 1px solid var(--border); margin: 24px 0 20px; }
@@ -1446,7 +1396,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   position: relative;
   min-height: 96px;
   border-radius: 8px;
-  background: var(--surface);
+  background: var(--card);
   border: 1px solid var(--border);
   display: flex;
   flex-direction: column;
@@ -1511,7 +1461,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 .dia-cel-ag-cancelado {
-  color: var(--text-faint);
+  color: var(--muted);
   text-decoration: line-through;
 }
 
@@ -1626,7 +1576,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .nav-periodo-dia-semana {
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--muted-strong);
   text-transform: capitalize;
 }
 
@@ -1676,7 +1626,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   padding: 4px 8px;
   background: transparent;
   border: none;
-  color: var(--text-muted);
+  color: var(--muted-strong);
   cursor: pointer;
   font-size: 14px;
 }
@@ -1746,7 +1696,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   content: 'Endereço de cobrança';
   grid-column: 1 / -1;
   font-size: 11px;
-  color: var(--text-faint);
+  color: var(--muted);
   text-transform: uppercase;
   letter-spacing: .04em;
 }
@@ -1756,7 +1706,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   gap: 8px;
   margin-top: 10px;
   font-size: 13px;
-  color: var(--text-muted);
+  color: var(--muted-strong);
 }
 .pagamento-checkbox input { width: auto; margin: 0; }
 @media (max-width: 640px) {
@@ -1822,53 +1772,53 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   vertical-align: middle;
 }
 .status-dot-verde { background: var(--success); }
-.status-dot-amarelo { background: var(--warn-yellow); }
-.status-dot-cinza { background: var(--text-muted); }
+.status-dot-amarelo { background: var(--warning-text); }
+.status-dot-cinza { background: var(--muted-strong); }
 
 .badge-encaixe { background: rgba(0, 212, 255, 0.15); color: var(--cyan); }
-.badge-cancelado { background: rgba(255, 107, 107, 0.15); color: var(--danger); }
+.badge-cancelado { background: rgba(var(--danger-rgb), 0.15); color: var(--danger); }
 /* US64 — status do agendamento (Concluído) e do lançamento financeiro de
    agendamento (Previsto/Realizado, reaproveita .badge-cancelado). */
-.badge-concluido { background: rgba(74, 222, 128, 0.15); color: var(--success); }
-.badge-previsto { background: rgba(250, 204, 21, 0.15); color: var(--warn-yellow); }
-.badge-realizado { background: rgba(74, 222, 128, 0.15); color: var(--success); }
+.badge-concluido { background: rgba(var(--success-rgb), 0.15); color: var(--success); }
+.badge-previsto { background: rgba(250, 204, 21, 0.15); color: var(--warning-text); }
+.badge-realizado { background: rgba(var(--success-rgb), 0.15); color: var(--success); }
 /* Falta (no-show, migration 060) — âmbar, distinto do verde de concluído e
    do vermelho de cancelado; mesmo tom já usado em .trial-barra-amarela. */
-.badge-falta { background: rgba(240, 179, 84, 0.15); color: var(--warn); }
+.badge-falta { background: rgba(var(--warning-rgb), 0.15); color: var(--warning); }
 
 .agendamento-cancelado { opacity: 0.55; }
 .agendamento-cancelado .agendamento-hora { text-decoration: line-through; }
 
 /* Listagem de tenants (US26) */
 .badge-status { margin-left: 0; }
-.badge-trial-ativo { background: rgba(74, 222, 128, 0.15); color: var(--success); }
-.badge-trial-expirado { background: rgba(255, 107, 107, 0.15); color: var(--danger); }
+.badge-trial-ativo { background: rgba(var(--success-rgb), 0.15); color: var(--success); }
+.badge-trial-expirado { background: rgba(var(--danger-rgb), 0.15); color: var(--danger); }
 .badge-status-ativo { background: rgba(0, 212, 255, 0.15); color: var(--cyan); }
-.badge-status-inativo { background: rgba(161, 165, 196, 0.15); color: var(--text-muted); }
-.badge-status-suspenso { background: rgba(240, 179, 84, 0.15); color: var(--warn); }
-.badge-status-nao-ativado { background: rgba(250, 204, 21, 0.15); color: var(--warn-yellow); }
+.badge-status-inativo { background: rgba(161, 165, 196, 0.15); color: var(--muted-strong); }
+.badge-status-suspenso { background: rgba(var(--warning-rgb), 0.15); color: var(--warning); }
+.badge-status-nao-ativado { background: rgba(250, 204, 21, 0.15); color: var(--warning-text); }
 /* Pagamentos (US32) */
-.badge-status-inadimplente { background: rgba(255, 107, 107, 0.15); color: var(--danger); }
+.badge-status-inadimplente { background: rgba(var(--danger-rgb), 0.15); color: var(--danger); }
 
 /* Modo de atendimento do tenant — bot (menus, cinza) x ia (conversacional,
    roxo, US69). Usado tanto na listagem admin quanto no portal do salão. */
-.badge-modo-bot { background: rgba(161, 165, 196, 0.15); color: var(--text-muted); }
-.badge-modo-ia { background: rgba(124, 92, 252, 0.15); color: var(--accent); }
+.badge-modo-bot { background: rgba(161, 165, 196, 0.15); color: var(--muted-strong); }
+.badge-modo-ia { background: rgba(var(--accent-rgb), 0.15); color: var(--accent); }
 
 /* Status de cada cobrança no histórico da aba de Pagamentos */
-.badge-pagamento-pending { background: rgba(250, 204, 21, 0.15); color: var(--warn-yellow); }
-.badge-pagamento-confirmado { background: rgba(74, 222, 128, 0.15); color: var(--success); }
-.badge-pagamento-cancelado { background: rgba(255, 107, 107, 0.15); color: var(--danger); }
+.badge-pagamento-pending { background: rgba(250, 204, 21, 0.15); color: var(--warning-text); }
+.badge-pagamento-confirmado { background: rgba(var(--success-rgb), 0.15); color: var(--success); }
+.badge-pagamento-cancelado { background: rgba(var(--danger-rgb), 0.15); color: var(--danger); }
 
 /* Indicador de trial somente leitura (US31) */
 .badge-trial-indicador { margin-left: 0; }
 
 /* Bloco de status do trial na aba de pagamentos (US36) */
-.badge-trial-expirando { background: rgba(240, 179, 84, 0.15); color: var(--warn); }
+.badge-trial-expirando { background: rgba(var(--warning-rgb), 0.15); color: var(--warning); }
 
 .trial-status-bloco {
-  background: rgba(124, 92, 252, 0.08);
-  border: 1px solid rgba(124, 92, 252, 0.25);
+  background: rgba(var(--accent-rgb), 0.08);
+  border: 1px solid rgba(var(--accent-rgb), 0.25);
   border-radius: 10px;
   padding: 16px;
   margin-bottom: 16px;
@@ -1885,14 +1835,14 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .trial-progresso-preenchido { height: 100%; border-radius: 100px; }
 .trial-barra-verde { background: var(--success); }
-.trial-barra-amarela { background: var(--warn); }
+.trial-barra-amarela { background: var(--warning); }
 .trial-barra-vermelha { background: var(--danger); }
 
 .trial-progresso-legenda {
   display: flex;
   justify-content: space-between;
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--muted-strong);
   margin-top: 6px;
 }
 
@@ -1902,7 +1852,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   align-items: baseline;
   margin-top: 8px;
   font-size: 13px;
-  color: var(--text-muted);
+  color: var(--muted-strong);
 }
 
 .trial-progresso-dias strong { font-size: 16px; color: #f5f6fa; }
@@ -1937,13 +1887,13 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
    pointer-events: none (indicador somente leitura); este reativa o clique. */
 .toggle-clicavel { pointer-events: auto; cursor: pointer; }
 
-.tabela-tenants tbody tr { cursor: pointer; background: var(--surface); }
+.tabela-tenants tbody tr { cursor: pointer; background: var(--card); }
 
 /* Configurações do sistema (US38) */
 .banner-aviso {
-  background: rgba(240, 179, 84, 0.12);
-  border: 1px solid rgba(240, 179, 84, 0.35);
-  color: var(--warn);
+  background: rgba(var(--warning-rgb), 0.12);
+  border: 1px solid rgba(var(--warning-rgb), 0.35);
+  color: var(--warning);
   border-radius: 10px;
   padding: 12px 16px;
   font-size: 13px;
@@ -1966,8 +1916,8 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 .celula-limites-plano input { margin-bottom: 6px; }
 .limite-editor-linha { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
 .limite-editor-linha input { width: 70px !important; min-width: 70px !important; }
-.limite-editor-linha label { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
-.lista-features-plano { list-style: none; font-size: 13px; color: var(--text-muted); }
+.limite-editor-linha label { font-size: 12px; color: var(--muted-strong); white-space: nowrap; }
+.lista-features-plano { list-style: none; font-size: 13px; color: var(--muted-strong); }
 .lista-features-plano li { margin-bottom: 2px; }
 
 .tabela-tenants input[type="text"],
@@ -1985,7 +1935,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 .titulo-detalhe { font-size: 22px; margin: 16px 0 20px; }
 
 .secao-detalhe {
-  background: var(--surface);
+  background: var(--card);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 16px 20px;
@@ -2004,7 +1954,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 .secao-detalhe p strong {
-  color: var(--text-muted);
+  color: var(--muted-strong);
   font-weight: 500;
   margin-right: 4px;
 }
@@ -2021,11 +1971,11 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   font-weight: 600;
   padding: 4px 12px;
   border-radius: 100px;
-  background: rgba(124, 92, 252, 0.15);
-  color: var(--accent-light);
+  background: rgba(var(--accent-rgb), 0.15);
+  color: var(--accent-dark);
 }
 
-.vazio-inline { color: var(--text-faint); font-size: 14px; }
+.vazio-inline { color: var(--muted); font-size: 14px; }
 
 /* US65 — selo do módulo obrigatório na tela de gestão de módulos do tenant */
 .badge-obrigatorio {
@@ -2038,7 +1988,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   border-radius: 100px;
   margin-left: 8px;
   background: rgba(250, 204, 21, 0.15);
-  color: var(--warn-yellow);
+  color: var(--warning-text);
 }
 
 .tabela-wrapper { overflow-x: auto; margin-bottom: 16px; }
@@ -2056,7 +2006,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   border-bottom: 1px solid var(--border);
 }
 
-.tabela-tenants th { color: var(--text-muted); font-weight: 600; }
+.tabela-tenants th { color: var(--muted-strong); font-weight: 600; }
 
 /* Fundo por linha (mesmo tom de card do resto do painel, ex: .agendamento-item) */
 .tabela-tenants tbody tr:hover { background: var(--surface-hover); }
@@ -2091,12 +2041,12 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   border-radius: 100px;
   background: transparent;
   border: 1px solid var(--border);
-  color: var(--text-muted);
+  color: var(--muted-strong);
   cursor: pointer;
   text-align: center;
 }
 .chip-status:hover { border-color: var(--accent); color: #fff; }
-.chip-status-ativo { background: rgba(124, 92, 252, 0.15); border-color: var(--accent); color: var(--accent-light); }
+.chip-status-ativo { background: rgba(var(--accent-rgb), 0.15); border-color: var(--accent); color: var(--accent-dark); }
 
 @media (max-width: 640px) {
   .clientes-status-pills { grid-template-columns: repeat(2, 1fr); }
@@ -2107,29 +2057,29 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
    perfil em modal, ver data-cliente-abrir/abrirModalClienteDetalhe). */
 .tabela-clientes td:first-child { white-space: normal; }
 .linha-clicavel { cursor: pointer; }
-.cliente-linha-telefone { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.cliente-linha-telefone { font-size: 12px; color: var(--muted-strong); margin-top: 2px; }
 .badge-cliente-ativo { background: rgba(0, 212, 255, 0.15); color: var(--cyan); }
-.badge-cliente-novo { background: rgba(74, 222, 128, 0.15); color: var(--success); }
-.badge-cliente-inativo { background: rgba(161, 165, 196, 0.15); color: var(--text-muted); }
+.badge-cliente-novo { background: rgba(var(--success-rgb), 0.15); color: var(--success); }
+.badge-cliente-inativo { background: rgba(161, 165, 196, 0.15); color: var(--muted-strong); }
 
 /* Perfil do cliente (modal, abrirModalClienteDetalhe) — seções separadas por
    divisor sutil, igual ao mockup original. */
-.modal-cliente-perfil .cliente-perfil-telefone { color: var(--text-muted); margin-top: -6px; margin-bottom: 12px; }
+.modal-cliente-perfil .cliente-perfil-telefone { color: var(--muted-strong); margin-top: -6px; margin-bottom: 12px; }
 .modal-cliente-perfil .cliente-perfil-acoes-topo { display: flex; gap: 8px; margin-bottom: 16px; }
 .modal-cliente-perfil .cliente-perfil-acoes-topo button { margin: 0; }
 .cliente-perfil-secao { padding: 14px 0; border-top: 1px solid var(--border); }
-.cliente-perfil-secao h4 { margin: 0 0 6px; font-size: 13px; color: var(--text-muted); }
+.cliente-perfil-secao h4 { margin: 0 0 6px; font-size: 13px; color: var(--muted-strong); }
 .cliente-perfil-secao p { margin: 0; }
 .cliente-perfil-secao textarea { width: 100%; }
 .cliente-perfil-historico { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
-.cliente-perfil-secao-titulo-editar { margin: 16px 0 4px; padding-top: 14px; border-top: 1px solid var(--border); font-size: 13px; color: var(--text-muted); }
+.cliente-perfil-secao-titulo-editar { margin: 16px 0 4px; padding-top: 14px; border-top: 1px solid var(--border); font-size: 13px; color: var(--muted-strong); }
 
 .th-ordenar {
   width: auto;
   margin: 0;
   padding: 0;
   background: transparent;
-  color: var(--text-muted);
+  color: var(--muted-strong);
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
@@ -2137,7 +2087,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 .th-ordenar:hover { background: transparent; color: var(--text); }
-.th-ordenar-ativo { color: var(--accent-light); }
+.th-ordenar-ativo { color: var(--accent-dark); }
 
 .btn-ver-detalhes {
   display: inline-block;
@@ -2168,7 +2118,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 .btn-acao-tabela:hover { background: var(--border); }
-.btn-acao-tabela.acao-perigo { color: var(--danger); border-color: rgba(255, 107, 107, 0.4); }
+.btn-acao-tabela.acao-perigo { color: var(--danger); border-color: rgba(var(--danger-rgb), 0.4); }
 
 .btn-acoes {
   width: auto;
@@ -2176,7 +2126,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   padding: 4px 10px;
   background: transparent;
   border: 1px solid var(--border-strong);
-  color: var(--text-muted);
+  color: var(--muted-strong);
   font-size: 16px;
   line-height: 1;
   flex-shrink: 0;
@@ -2228,7 +2178,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   max-width: 420px;
   max-height: 90vh;
   overflow-y: auto;
-  background: var(--surface);
+  background: var(--card);
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 28px;
@@ -2253,14 +2203,14 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 .modal-close:hover { background: rgba(255, 255, 255, 0.12); }
 
 .modal-texto {
-  color: var(--text-muted);
+  color: var(--muted-strong);
   font-size: 14px;
   line-height: 1.6;
   margin-top: 16px;
 }
 
 .modal-subtitulo {
-  color: var(--text-muted);
+  color: var(--muted-strong);
   font-size: 13px;
   margin-top: 4px;
 }
@@ -2291,7 +2241,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .chat-bolha-atendente {
   align-self: flex-end;
-  background: rgba(124, 92, 252, 0.25);
+  background: rgba(var(--accent-rgb), 0.25);
   border-bottom-right-radius: 2px;
 }
 
@@ -2301,7 +2251,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 .chat-bolha-hora {
-  color: var(--text-muted);
+  color: var(--muted-strong);
   font-size: 11px;
   margin-top: 4px;
   text-align: right;
@@ -2328,7 +2278,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 .atendimento-header-nome { font-weight: 600; font-size: 16px; }
-.atendimento-header-telefone { color: var(--text-muted); font-size: 13px; margin-top: 2px; }
+.atendimento-header-telefone { color: var(--muted-strong); font-size: 13px; margin-top: 2px; }
 
 .atendimento-header-acoes { display: flex; gap: 8px; flex-shrink: 0; }
 
@@ -2372,7 +2322,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .atendimento-encerrado {
   text-align: center;
-  color: var(--text-muted);
+  color: var(--muted-strong);
   font-size: 13px;
   padding: 12px;
   border-top: 1px solid var(--border-strong);
@@ -2407,7 +2357,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   color: var(--text);
   font-size: 14px;
 }
-.forma-pagamento-opcao:has(input:checked) { border-color: var(--accent); background: rgba(124, 92, 252, 0.06); }
+.forma-pagamento-opcao:has(input:checked) { border-color: var(--accent); background: rgba(var(--accent-rgb), 0.06); }
 .forma-pagamento-opcao input { width: auto; margin: 0; }
 
 /* Lista de planos no modal "Trocar de plano" */
@@ -2426,9 +2376,9 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   border-radius: 12px;
   cursor: pointer;
 }
-.plano-opcao:has(input:not(:disabled)):hover { border-color: rgba(124, 92, 252, 0.4); }
+.plano-opcao:has(input:not(:disabled)):hover { border-color: rgba(var(--accent-rgb), 0.4); }
 .plano-opcao:has(input:disabled) { cursor: default; }
-.plano-opcao:has(input:checked) { border-color: var(--accent); background: rgba(124, 92, 252, 0.06); }
+.plano-opcao:has(input:checked) { border-color: var(--accent); background: rgba(var(--accent-rgb), 0.06); }
 
 /* Radio nativo com aparência custom (anel roxo + miolo preenchido quando
    marcado) em vez do radio padrão do navegador. */
@@ -2464,14 +2414,14 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   justify-content: center;
   border-radius: 12px;
   font-size: 20px;
-  background: rgba(124, 92, 252, 0.15);
+  background: rgba(var(--accent-rgb), 0.15);
 }
 .plano-opcao-icone-2 { background: rgba(0, 212, 255, 0.12); }
 .plano-opcao-icone-3 { background: rgba(0, 212, 255, 0.12); }
 
 .plano-opcao-corpo { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 .plano-opcao-nome { color: var(--text); font-weight: 700; font-size: 16px; }
-.plano-opcao-desc { color: var(--text-muted); font-size: 13px; line-height: 1.4; }
+.plano-opcao-desc { color: var(--muted-strong); font-size: 13px; line-height: 1.4; }
 .plano-opcao-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
 .plano-opcao-badge {
   display: inline-flex;
@@ -2481,14 +2431,14 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   background: #1c2140;
   border: 1px solid var(--border-strong);
   border-radius: 999px;
-  color: var(--text-muted);
+  color: var(--muted-strong);
   font-size: 11.5px;
   white-space: nowrap;
 }
 
 .plano-opcao-preco { flex-shrink: 0; text-align: right; }
 .plano-opcao-preco-valor { display: block; color: var(--text); font-weight: 800; font-size: 18px; }
-.plano-opcao-preco-valor small { font-weight: 500; font-size: 12px; color: var(--text-muted); }
+.plano-opcao-preco-valor small { font-weight: 500; font-size: 12px; color: var(--muted-strong); }
 .plano-opcao-preco-nota { display: block; color: #6f7396; font-size: 11px; margin-top: 2px; }
 
 /* Caixa de reforço abaixo da lista, explicando de novo a regra de cobrança
@@ -2500,8 +2450,8 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   gap: 12px;
   margin-top: 16px;
   padding: 14px 16px;
-  background: rgba(124, 92, 252, 0.08);
-  border: 1px solid rgba(124, 92, 252, 0.25);
+  background: rgba(var(--accent-rgb), 0.08);
+  border: 1px solid rgba(var(--accent-rgb), 0.25);
   border-radius: 12px;
 }
 .plano-troca-aviso-icone {
@@ -2512,12 +2462,12 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   align-items: center;
   justify-content: center;
   border-radius: 8px;
-  background: rgba(124, 92, 252, 0.15);
+  background: rgba(var(--accent-rgb), 0.15);
   font-size: 15px;
 }
 .plano-troca-aviso-texto { display: flex; flex-direction: column; gap: 2px; }
 .plano-troca-aviso-texto strong { color: var(--text); font-size: 13.5px; }
-.plano-troca-aviso-desc { color: var(--text-muted); font-size: 12.5px; line-height: 1.5; }
+.plano-troca-aviso-desc { color: var(--muted-strong); font-size: 12.5px; line-height: 1.5; }
 
 @media (max-width: 640px) {
   .plano-opcao { flex-wrap: wrap; }
@@ -2527,22 +2477,22 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 /* US73 — contador de caracteres dos campos de copy de diferencial dos
    planos (headline/frase de benefício) no admin. */
 .contador-caracteres {
-  color: var(--text-muted);
+  color: var(--muted-strong);
   font-size: 11px;
   margin-top: 4px;
 }
 
 /* Banner de cobrança futura no modal de pagamento durante o trial (US37) */
 .trial-banner-cobranca-futura {
-  background: rgba(74, 222, 128, 0.08);
-  border: 1px solid rgba(74, 222, 128, 0.25);
+  background: rgba(var(--success-rgb), 0.08);
+  border: 1px solid rgba(var(--success-rgb), 0.25);
   border-radius: 10px;
   padding: 12px 14px;
   margin-bottom: 16px;
 }
 
 .trial-banner-cobranca-futura p {
-  color: var(--text-muted);
+  color: var(--muted-strong);
   font-size: 13px;
   line-height: 1.5;
 }
@@ -2615,7 +2565,7 @@ textarea:focus { outline: none; border-color: var(--accent); }
 
 /* Aviso inline abaixo do horário (ex.: nenhum slot livre na data — ST09.3) */
 .campo-aviso {
-  color: var(--warn);
+  color: var(--warning);
   font-size: 13px;
   min-height: 16px;
   margin-top: 6px;
@@ -2632,7 +2582,7 @@ textarea:focus { outline: none; border-color: var(--accent); }
 }
 
 .campo-periodo input { width: auto; flex: 1; margin: 0; }
-.periodo-separador { color: var(--text-muted); font-size: 13px; flex-shrink: 0; }
+.periodo-separador { color: var(--muted-strong); font-size: 13px; flex-shrink: 0; }
 
 .spinner {
   display: inline-block;
@@ -2716,14 +2666,14 @@ textarea:focus { outline: none; border-color: var(--accent); }
 
 .bloqueio-explicacao {
   font-size: 13px;
-  color: var(--text-muted);
+  color: var(--muted-strong);
   line-height: 1.6;
   margin-bottom: 16px;
 }
 
 .bloqueio-suporte {
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--muted-strong);
   text-align: center;
   margin-top: 16px;
 }
@@ -2737,7 +2687,7 @@ textarea:focus { outline: none; border-color: var(--accent); }
 
 .cadastro-sub {
   font-size: 13px;
-  color: var(--text-muted);
+  color: var(--muted-strong);
   text-align: center;
   margin-bottom: 8px;
   line-height: 1.5;
@@ -2755,8 +2705,8 @@ textarea:focus { outline: none; border-color: var(--accent); }
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  background: rgba(124, 92, 252, 0.08);
-  border: 1px solid rgba(124, 92, 252, 0.3);
+  background: rgba(var(--accent-rgb), 0.08);
+  border: 1px solid rgba(var(--accent-rgb), 0.3);
   border-radius: 10px;
   padding: 12px 14px;
   margin-bottom: 16px;
@@ -2773,7 +2723,7 @@ textarea:focus { outline: none; border-color: var(--accent); }
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--text-muted);
+  color: var(--muted-strong);
 }
 
 .cadastro-plano-nome {
@@ -2782,12 +2732,12 @@ textarea:focus { outline: none; border-color: var(--accent); }
 
 .cadastro-plano-preco {
   font-size: 12px;
-  color: var(--accent-light);
+  color: var(--accent-dark);
 }
 
 .cadastro-plano-trocar-label {
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--muted-strong);
   white-space: nowrap;
 }
 
@@ -2804,7 +2754,7 @@ textarea:focus { outline: none; border-color: var(--accent); }
   margin: 8px 0 0;
   padding: 0;
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--muted-strong);
 }
 
 .senha-requisitos li {
@@ -2839,7 +2789,7 @@ textarea:focus { outline: none; border-color: var(--accent); }
 
 /* US77 — texto de apoio abaixo de um campo (ex: WhatsApp no cadastro). */
 .field-apoio {
-  color: var(--text-muted);
+  color: var(--muted-strong);
   font-size: 12px;
   margin-top: 6px;
 }
@@ -2850,14 +2800,14 @@ input.invalid, select.invalid {
 
 .cadastro-legal {
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--muted-strong);
   text-align: center;
   margin-top: 14px;
   line-height: 1.5;
 }
 
 .cadastro-legal a {
-  color: var(--accent-light);
+  color: var(--accent-dark);
   text-decoration: none;
 }
 
@@ -2869,7 +2819,7 @@ input.invalid, select.invalid {
   align-items: flex-start;
   gap: 8px;
   font-size: 12.5px;
-  color: var(--text-muted);
+  color: var(--muted-strong);
   line-height: 1.5;
   margin-top: 10px;
   cursor: pointer;
@@ -2893,7 +2843,7 @@ input.invalid, select.invalid {
 }
 
 .checkbox-label a {
-  color: var(--accent-light);
+  color: var(--accent-dark);
   text-decoration: none;
 }
 
@@ -2901,13 +2851,13 @@ input.invalid, select.invalid {
 
 .cadastro-rodape {
   font-size: 13px;
-  color: var(--text-muted);
+  color: var(--muted-strong);
   text-align: center;
   margin-top: 20px;
 }
 
 .cadastro-rodape a {
-  color: var(--accent-light);
+  color: var(--accent-dark);
   font-weight: 600;
   text-decoration: none;
 }
@@ -2920,7 +2870,7 @@ input.invalid, select.invalid {
   font-size: 28px;
   font-weight: 700;
   letter-spacing: 12px;
-  font-family: var(--font-d);
+  font-family: var(--font-display);
 }
 
 .otp-input::placeholder {
@@ -2936,13 +2886,13 @@ input.invalid, select.invalid {
 }
 
 .contador-reenvio {
-  color: var(--text-muted);
+  color: var(--muted-strong);
   font-size: 12px;
 }
 
 /* Banner de trial no topo do portal (CA09). */
 .trial-banner {
-  background: linear-gradient(90deg, rgba(124, 92, 252, 0.22), rgba(0, 212, 255, 0.14));
+  background: linear-gradient(90deg, rgba(var(--accent-rgb), 0.22), rgba(0, 212, 255, 0.14));
   border-bottom: 1px solid var(--border-strong);
   color: var(--text);
   font-size: 14px;
@@ -2960,7 +2910,7 @@ input.invalid, select.invalid {
   align-items: center;
   justify-content: center;
   gap: 12px;
-  background: rgba(255, 107, 107, 0.14);
+  background: rgba(var(--danger-rgb), 0.14);
   border-bottom: 1px solid var(--border-strong);
   color: #ffb4b4;
   font-size: 14px;
@@ -3020,12 +2970,12 @@ body.conta-bloqueada .btn-novo-agendamento:not(#btn-cadastrar-pagamento) {
 }
 
 .aviso-critico {
-  background: rgba(255, 107, 107, 0.14);
+  background: rgba(var(--danger-rgb), 0.14);
   color: #ffb4b4;
 }
 
 .aviso-info {
-  background: rgba(124, 92, 252, 0.1);
+  background: rgba(var(--accent-rgb), 0.1);
   color: #d8d2ff;
 }
 
@@ -3101,7 +3051,7 @@ button.loading::after {
   right: 0;
   z-index: 20;
   min-width: 220px;
-  background: var(--surface);
+  background: var(--card);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 6px;
@@ -3130,11 +3080,11 @@ button.loading::after {
    espírito de .agendamento-item-info (linha principal + linha secundária
    apagada), só que dentro de uma <td>. */
 .tabela-contato-nome { color: var(--text); }
-.tabela-contato-email { color: var(--text-muted); font-size: 12px; margin-top: 2px; }
+.tabela-contato-email { color: var(--muted-strong); font-size: 12px; margin-top: 2px; }
 
 /* Painel lateral "Ver detalhes" — desliza da direita, ao contrário do modal
    centralizado (.modal-overlay/.modal-card) usado pro resto do CRUD. Reusa
-   a mesma paleta (bg var(--surface), borda var(--border)) pra manter consistência visual
+   a mesma paleta (bg var(--card), borda var(--border)) pra manter consistência visual
    com o resto do admin. */
 .drawer-overlay {
   position: fixed;
@@ -3152,7 +3102,7 @@ button.loading::after {
   width: 100%;
   max-width: 420px;
   overflow-y: auto;
-  background: var(--surface);
+  background: var(--card);
   border-left: 1px solid var(--border);
   padding: 28px;
 }
@@ -3178,11 +3128,11 @@ button.loading::after {
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: var(--text-muted);
+  color: var(--muted-strong);
   margin-bottom: 8px;
 }
 .drawer-secao p { font-size: 14px; margin: 4px 0; }
-.drawer-secao p strong { color: var(--text-muted); font-weight: 500; margin-right: 4px; }
+.drawer-secao p strong { color: var(--muted-strong); font-weight: 500; margin-right: 4px; }
 
 @media (max-width: 480px) {
   .drawer-painel { max-width: 100%; }

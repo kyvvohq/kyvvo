@@ -186,13 +186,16 @@ async function start() {
     extensions: ['html'],
   });
   // Tokens do design system, servidos crus de node_modules (não há bundler).
-  // Também cobre /ds/* de studio.kyvvo.com.br, que cai aqui (:3001) porque o
-  // nginx só manda a lista branca da landing pro :3000.
-  await fastify.register(staticPlugin, {
-    root: path.join(__dirname, 'node_modules', '@kyvvohq', 'design-system'),
-    prefix: '/ds/',
-    decorateReply: false,
-  });
+  // /ds/ cobre studio.kyvvo.com.br (cai aqui, :3001, porque o nginx só manda
+  // a lista branca da landing pro :3000). /admin/ds/ cobre admin.kyvvo.com.br,
+  // cujo nginx prefixa /admin/ em tudo antes de proxiar.
+  for (const dsPrefix of ['/ds/', '/admin/ds/']) {
+    await fastify.register(staticPlugin, {
+      root: path.join(__dirname, 'node_modules', '@kyvvohq', 'design-system'),
+      prefix: dsPrefix,
+      decorateReply: false,
+    });
+  }
 
   // Documentação interativa da API (Swagger/OpenAPI) — precisa registrar
   // ANTES de qualquer rota (inclusive as dos routes/*.js exigidos abaixo),
