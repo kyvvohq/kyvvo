@@ -185,6 +185,14 @@ async function start() {
     // antigos com `.html`: continuam resolvendo normalmente também.
     extensions: ['html'],
   });
+  // Tokens do design system, servidos crus de node_modules (não há bundler).
+  // Também cobre /ds/* de studio.kyvvo.com.br, que cai aqui (:3001) porque o
+  // nginx só manda a lista branca da landing pro :3000.
+  await fastify.register(staticPlugin, {
+    root: path.join(__dirname, 'node_modules', '@kyvvohq', 'design-system'),
+    prefix: '/ds/',
+    decorateReply: false,
+  });
 
   // Documentação interativa da API (Swagger/OpenAPI) — precisa registrar
   // ANTES de qualquer rota (inclusive as dos routes/*.js exigidos abaixo),
