@@ -50,23 +50,38 @@ Cada salão é um tenant isolado via Row Level Security (Supabase).
 
 ## Infraestrutura (AWS)
 
-| Serviço | Imagem | Porta |
-|---|---|---|
-| n8n | n8nio/n8n:latest | 5678 |
-| PostgreSQL | container Docker | 5432 |
+| Serviço (container) | Imagem | Porta | Hostname |
+|---|---|---|---|
+| `landing` | node:20-alpine | 3000 | `studio.kyvvo.com.br` (landing) / `api.kyvvo.com.br` |
+| `studio` (ex-`panel`) | node:20-alpine | 3001 | `studio.kyvvo.com.br` (painel) / `admin.kyvvo.com.br` |
+| `people` (ex-`rh`) | node:20-alpine | 3002 | `people.kyvvo.com.br` — repo `kyvvo-people`, bind `/opt/rh` |
+| `n8n` | n8nio/n8n:latest | 5678 | `n8n.kyvvo.com.br` |
+| `evolution-api` | evoapicloud/evolution-api | 8080 | `manager.kyvvo.com.br` |
+| `postgres` | postgres:16 | 5432 | — |
 
-Todos os serviços rodam via Docker Compose no mesmo host EC2 que já serve a landing page e o painel (`/opt/kyvvo`, ver deploy em `.github/workflows/deploy.yml`).
+Todos rodam via Docker Compose no mesmo host EC2 (`/opt/kyvvo`, instância
+`i-0488342ed54b47d7a`, Elastic IP `54.165.165.150`). nginx nativo no host
+roteia por porta. Os apps usam a imagem `node` stock com o código
+bind-montado (sem build de imagem). Deploy: `.github/workflows/deploy.yml`
+(Studio/landing) e o `deploy.yml` do repo `kyvvo-people`.
+
+**Migração polyrepo (2026-09)**: código comum extraído pra pacotes
+`@kyvvohq/*` (GitHub Packages privado, org `kyvvohq`) — ver
+`kyvvohq/kyvvo-infra` para o espelho redigido do compose/nginx, e
+`project_kyvvo_polyrepo` na memória de sessão para o plano P0–P5.
 
 ## Backup e restauração do banco
 
-Backup diário automático (US14): dump via `pg_dump` + `cron` na EC2, salvo
-localmente e enviado pra um bucket S3 dedicado. Detalhes operacionais
-completos (recursos AWS provisionados, como rodar/verificar manualmente,
-troubleshooting) em `docs/backup.md` e na página
-[Backup do banco de produção](https://app.notion.com/p/3acb5df9cb5d81828d07fcf59f7ec998)
-do Wiki. Procedimento de restauração ainda não testado nem documentado
-formalmente (ST14.4, pendente).
+Backup diário automático: `pg_dump` de `railway` **e** `kyvvo_people` via
+`cron` na EC2 (03:15 UTC), gzip local em `/opt/kyvvo/backups/` + bucket S3
+`kyvvo-db-backups-241019175404`. Retenção local 30 dias
+(`BACKUP_RETENTION_DAYS`). Restauração testada e documentada em
+`docs/restore.md` (drill 2026-09-02, ST14.4 fechado). Detalhes em
+`docs/backup.md`.
 
 ## Variáveis de ambiente sensíveis
 
-Nunca commitar no repositório. Configurar direto no `docker-compose.yml`/`.env` do host EC2.
+Nunca commitar. Vivem no **AWS SSM Parameter Store** como `SecureString` em
+`/kyvvo/<serviço>/<KEY>`; `server/scripts/gen-env-from-ssm.sh` gera os
+`/opt/kyvvo/env/<serviço>.env` que o `docker-compose.yml` consome via
+`env_file`. Ver `docs/ssm-cutover.md`.
