@@ -5,12 +5,14 @@ Procedimento verificado de restaurar um backup gerado por
 
 ## O que é o backup
 
-- `pg_dump -U postgres -d railway --no-owner --no-privileges` → **SQL puro**,
-  gzipado. Um arquivo por dia, `kyvvo_<YYYYMMDD>_<HHMMSS>.sql.gz`.
+- `pg_dump -U postgres -d <db> --no-owner --no-privileges` → **SQL puro**,
+  gzipado. Um arquivo por banco por dia: `<db>_<YYYYMMDD>_<HHMMSS>.sql.gz`
+  (ex: `railway_20260903_031501.sql.gz`, `kyvvo_people_20260903_031501.sql.gz`).
 - Local: `/opt/kyvvo/backups/` no host EC2. Cron diário às 03:15 UTC
   (crontab do usuário `ubuntu`), log em `/opt/kyvvo/backups/backup.log`.
-- Cobre **apenas o banco `railway`** (Studio + admin). **Não** cobre
-  `kyvvo_people` (banco do Kyvvo People) — ver "Lacunas conhecidas".
+- Cobre `railway` (Studio + admin) **e** `kyvvo_people` (Kyvvo People) — a
+  lista está em `POSTGRES_DBS` no script. Backups anteriores a 2026-09-03
+  cobrem só `railway` e têm o nome antigo `kyvvo_<ts>.sql.gz`.
 - `--no-owner --no-privileges`: o restore não depende de roles/globais, roda
   como `postgres` e não precisa de `pg_dumpall`.
 
@@ -21,7 +23,8 @@ instância nova (a EC2 é apertada de RAM). O banco `railway` tem ~9 MB, o
 restore leva segundos.
 
 ```bash
-LATEST=$(ls -t /opt/kyvvo/backups/kyvvo_*.sql.gz | head -1)
+# banco a conferir: railway (Studio) ou kyvvo_people (People)
+LATEST=$(ls -t /opt/kyvvo/backups/railway_*.sql.gz | head -1)
 echo "usando $LATEST"
 
 sudo docker exec kyvvo-postgres-1 psql -U postgres \
@@ -44,6 +47,10 @@ sudo docker exec kyvvo-postgres-1 psql -U postgres -d restore_drill -c "$Q"
 sudo docker exec kyvvo-postgres-1 psql -U postgres -d railway       -c "$Q"
 ```
 
+Para o `kyvvo_people` a query de sanidade é outra (tabelas diferentes), ex:
+`SELECT count(*) FROM assinaturas; SELECT count(*) FROM pessoas;` — compare
+`restore_drill` contra o banco `kyvvo_people` vivo.
+
 Limpar:
 
 ```bash
@@ -63,7 +70,7 @@ sudo docker exec kyvvo-postgres-1 psql -U postgres -c "DROP DATABASE restore_dri
    ```
 3. Restaurar:
    ```bash
-   LATEST=$(ls -t /opt/kyvvo/backups/kyvvo_*.sql.gz | head -1)
+   LATEST=$(ls -t /opt/kyvvo/backups/railway_*.sql.gz | head -1)
    gunzip -c "$LATEST" | sudo docker exec -i kyvvo-postgres-1 \
      psql -U postgres -d railway -v ON_ERROR_STOP=1 -q
    ```
@@ -88,10 +95,10 @@ gerenciado) para failover + point-in-time.
 ## Lacunas conhecidas
 
 - **Sem cópia off-host.** O backup vive só em `/opt/kyvvo/backups/` na mesma
-  instância que o banco — perda do disco/instância leva os dois. Habilitar o
-  envio pro S3 (o script já suporta: `BACKUP_S3_BUCKET`/`BACKUP_S3_PREFIX` no
-  `/opt/kyvvo/.env`, precisa de `aws-cli` + IAM role com `s3:PutObject`).
-- **`kyvvo_people` não tem backup.** O `backup-db.sh` só dumpa `railway`.
-  Estender pra também dumpar `kyvvo_people` (mesmo container Postgres, role
-  `people_app`).
+  instância que o banco — perda do disco/instância leva os dois. O script já
+  suporta S3 (`BACKUP_S3_BUCKET`/`BACKUP_S3_PREFIX` no `/opt/kyvvo/.env`,
+  precisa de `aws-cli` no host + IAM role/credenciais com `s3:PutObject`);
+  falta criar o bucket e configurar.
+- **Sem PITR.** Só snapshot diário — perde tudo entre 03:15 UTC e o desastre.
+  Point-in-time + failover é o P4 do runbook de migração (Postgres gerenciado).
 - **Sem retenção** — os `.sql.gz` acumulam pra sempre (ST14.3).
