@@ -1,14 +1,17 @@
-name: Deploy backup script to EC2
+name: Deploy scripts to EC2
+
+# Espelha server/scripts/** pra /opt/kyvvo/scripts/ na EC2 (backup-db.sh,
+# gen-env-from-ssm.sh, ...) e (re)instala o cron do backup.
 
 on:
   push:
     branches: [main]
     paths:
-      - "server/scripts/backup-db.sh"
+      - "server/scripts/**"
   workflow_dispatch:
 
 jobs:
-  deploy-backup-script:
+  deploy-scripts:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,23 +27,23 @@ jobs:
             echo 'KEYEOF'
           } >> "$GITHUB_OUTPUT"
 
-      - name: Copiar script de backup pra EC2
+      - name: Copiar scripts pra EC2
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ steps.sshkey.outputs.value }}
-          source: "server/scripts/backup-db.sh"
+          source: "server/scripts/*"
           target: "/opt/kyvvo/scripts"
           strip_components: 2
 
-      - name: Instalar permissão e agendamento via cron
+      - name: Permissão + cron do backup
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ steps.sshkey.outputs.value }}
           script: |
-            chmod +x /opt/kyvvo/scripts/backup-db.sh
+            chmod +x /opt/kyvvo/scripts/*.sh
             mkdir -p /opt/kyvvo/backups
             ( crontab -l 2>/dev/null | grep -v 'backup-db.sh' ; echo "15 3 * * * /opt/kyvvo/scripts/backup-db.sh >> /opt/kyvvo/backups/backup.log 2>&1" ) | crontab -

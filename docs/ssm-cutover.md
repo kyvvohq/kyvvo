@@ -12,8 +12,16 @@ e passa a resolvê-los do SSM. Item do P2.
   inline `kyvvo-ssm`: `ssm:{Put,Get,GetParameters,GetParametersByPath,Delete}Parameter`
   em `/kyvvo/*` + `kms:{Encrypt,Decrypt}` via `ssm.us-east-1`.
 - ✅ **Script de geração** — `server/scripts/gen-env-from-ssm.sh`, deployado
-  em `/opt/kyvvo/scripts/`.
-- ⬜ **Cutover** (abaixo) — ainda não feito.
+  em `/opt/kyvvo/scripts/` (via `deploy-scripts.yml` / `deploy-backup.yml`).
+- ✅ **Cutover feito 2026-09-02** — os 6 serviços do `/opt/kyvvo/docker-compose.yml`
+  usam `env_file: ./env/<svc>.env`; nenhum segredo inline. `people` recriado
+  do zero e validado (sobe do env_file, 200). `landing`/`studio`/`postgres`/
+  `n8n`/`evolution-api` não recriaram no `up -d` (config resolvida idêntica) —
+  pegam do env_file no próximo `--force-recreate`/deploy.
+- ✅ **Deploys** — `deploy.yml` (landing + painel) roda `gen-env-from-ssm.sh`
+  e `docker compose up -d --force-recreate <svc>` (não `restart`).
+
+O passo-a-passo abaixo fica como referência de rebuild.
 
 ## Re-popular o SSM a partir do compose (se `environment:` mudar)
 
