@@ -72,17 +72,6 @@ jobs:
           source: "server/panel/**"
           target: "/opt/kyvvo/panel"
           strip_components: 2
-      - name: Instalar deps novas do painel na EC2
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          # .npmrc (copiado no scp acima) usa NPM_PACKAGES_TOKEN pra puxar
-          # @kyvvohq/* do GitHub Packages privado. Instala só o que falta;
-          # sem lockfile no repo, evita reinstalar tudo.
-          script: cd /opt/kyvvo/panel && NPM_PACKAGES_TOKEN='${{ secrets.NPM_PACKAGES_TOKEN }}' npm install --omit=dev --no-audit --no-fund
-
       - name: Reiniciar container do painel
         uses: appleboy/ssh-action@v1.0.3
         with:
