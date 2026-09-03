@@ -60,6 +60,8 @@ const configSistema = require('./lib/configuracoes-sistema');
 const trialConta = require('./lib/trial-conta');
 const planos = require('./lib/planos');
 const eventos = require('./lib/eventos');
+const platform = require('./lib/platform');
+const { resolverClaims } = require('./lib/resolver-sessao');
 const { registerBloqueiosRoutes } = require('./routes/bloqueios');
 // Fase 2 da modularização
 const profissionaisLib = require('./lib/profissionais');
@@ -265,11 +267,27 @@ async function start() {
   ]);
 
   fastify.decorate('authenticate', async (request, reply) => {
-    try {
-      await request.jwtVerify();
-    } catch (err) {
+    // Corte P3: verifica o token RS256 no serviço kyvvo-platform (JWKS local),
+    // com fallback pro HS256 legado do painel enquanto sessões de 7 dias
+    // abertas antes do corte ainda circulam (lib/resolver-sessao.js). O resto
+    // do decorator — lookup em banco de token_version/role/bloqueio — é igual.
+    const claims = await resolverClaims({
+      authorizationHeader: request.headers.authorization,
+      verificarRs256: (token) => platform.verifyToken(token),
+      verificarHs256: async () => {
+        await request.jwtVerify();
+        return request.user;
+      },
+    });
+    if (!claims) {
       return reply.code(401).send({ error: 'Não autenticado' });
     }
+    request.user = {
+      userId: claims.userId,
+      tenantId: claims.tenantId,
+      email: claims.email,
+      tokenVersion: claims.tokenVersion,
+    };
 
     const { rows } = await pool.query(
       `SELECT u.token_version, u.email_verified, u.role, u.ativo,
