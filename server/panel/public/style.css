@@ -1,8 +1,8 @@
-/* Tokens (cor, superfície, texto, tema claro/escuro, escalas, fontes,
-   semânticos) vêm do @kyvvohq/design-system — <link href="/ds/tokens.css">
-   no <head> ANTES deste arquivo. Aqui só regras. O painel do tenant seta
-   data-theme="dark" fixo no <html>; o admin faz o toggle claro/escuro
-   (kyvvo_admin_tema). */
+/* Tokens (cor, superfície, texto, escalas, fontes, semânticos) vêm do
+   @kyvvohq/design-system — <link href="/ds/tokens.css"> no <head> ANTES
+   deste arquivo. Aqui só regras. O painel (tenant + admin) usa o layout
+   claro do Kyvvo People, modo único: nenhum data-theme é setado, então
+   vale o :root (claro) do pacote. */
 
 * { box-sizing: border-box; margin: 0; padding: 0; font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
 
@@ -72,17 +72,16 @@ body {
    (colunas Plataforma/Produtos/Empresa/Legal, redes sociais) — não faz
    sentido pra uma ferramenta interna da equipe nem pras telas de auth do
    tenant; só o tratamento visual (cartão) foi trazido. */
+/* Rodapé de área logada — versão mínima (padrão Kyvvo People): linha de
+   borda no topo, centralizado, sem cartão. */
 footer.rodape-app {
-  padding: 20px 24px;
-  margin: 24px 24px 20px;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  padding: 22px var(--space-5);
+  border-top: 1px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: 8px;
 }
 
 .rodape-app-copy {
@@ -190,16 +189,20 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
    tratamento de cartão do resto do DS (US57). Só na área admin: o topbar
    do painel do tenant reaproveita a mesma classe e ganha o visual novo de
    graça, não tinha motivo pra divergir. */
+/* Cabeçalho — padrão Kyvvo People: barra fixa no topo, logo à esquerda,
+   menu de perfil à direita, borda inferior (não é um cartão flutuante). */
 .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 16px;
-  padding: 14px 22px;
-  margin: 16px 24px 0;
+  height: 64px;
+  padding: 0 var(--space-5);
   background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  border-bottom: 1px solid var(--border);
 }
 
 .topbar-esquerda { display: flex; align-items: center; gap: 14px; }
@@ -263,9 +266,8 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
    sidebar está oculta, sem precisar de mais uma classe controlada por JS. */
 .btn-toggle-sidebar {
   position: absolute;
-  top: 20px;
-  left: 220px;
-  transform: translateX(-50%);
+  top: calc(var(--space-5) + 22px);
+  left: calc(var(--space-5) + 264px - 11px);
   width: 22px;
   height: 22px;
   margin: 0;
@@ -275,17 +277,16 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   justify-content: center;
   background: var(--card);
   border: 1px solid var(--border-strong);
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   color: var(--muted-strong);
   font-size: 12px;
   line-height: 1;
   cursor: pointer;
   z-index: 5;
 }
-.btn-toggle-sidebar:hover { background: rgba(var(--accent-rgb), 0.15); color: var(--text); }
+.btn-toggle-sidebar:hover { background: var(--surface-muted); color: var(--text); }
 .painel-shell:has(.painel-sidebar.sidebar-oculta) .btn-toggle-sidebar {
   left: 0;
-  transform: translateX(0);
 }
 
 /* .topbar-nav-link — desde a US53 o admin não usa mais nav no topbar (virou
@@ -310,14 +311,27 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 /* Menu lateral — compartilhado entre o painel do tenant e todas as páginas
    admin (US53); .topbar/.conteudo continuam as mesmas classes de sempre, só
    aninhadas dentro deste wrapper em vez de mudar as regras delas. */
-.painel-shell { flex: 1; display: flex; width: 100%; position: relative; }
+.painel-shell {
+  flex: 1;
+  display: flex;
+  width: 100%;
+  position: relative;
+  gap: var(--space-5);
+  padding: var(--space-5);
+  align-items: flex-start;
+}
 
+/* Sidebar em cartão (padrão Kyvvo People). */
 .painel-sidebar {
-  width: 220px;
+  width: 264px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  padding: 20px 16px;
+  gap: 4px;
+  padding: 18px 14px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
 }
 
 /* Opção de ocultar o menu — o botão (.btn-toggle-sidebar) é irmão da
@@ -341,14 +355,14 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   display: flex;
   align-items: center;
   gap: 11px;
-  padding: 10px 14px;
+  height: 40px;
+  padding: 0 12px;
   cursor: pointer;
   color: var(--muted-strong);
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 500;
   text-decoration: none;
-  border-radius: 8px;
-  border-left: 3px solid transparent;
+  border-radius: var(--radius-md);
 }
 
 /* Ícone do item de menu (DS: "Item de menu / Padrão", 18x18, lucide) —
@@ -356,12 +370,12 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
    hover/active já pinta o ícone junto sem regra extra. */
 .menu-icon { width: 18px; height: 18px; flex-shrink: 0; }
 
-.menu-item:hover { color: var(--text); background: rgba(var(--accent-rgb), 0.08); }
+.menu-item:hover { color: var(--text); background: var(--surface-muted); }
 
 .menu-item.active {
-  color: var(--text);
-  background: rgba(var(--accent-rgb), 0.15);
-  border-left-color: var(--accent);
+  color: var(--accent-strong);
+  background: var(--accent-tint);
+  font-weight: 600;
 }
 
 /* Cabeçalho de seção da área admin (Visão geral/Clientes/Operação/Sistema) —
@@ -386,17 +400,17 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 14px;
+  height: 40px;
+  padding: 0 12px;
   cursor: pointer;
   color: var(--muted-strong);
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 500;
-  border-radius: 8px;
-  border-left: 3px solid transparent;
+  border-radius: var(--radius-md);
 }
 
-.menu-item-grupo:hover { color: var(--text); background: rgba(var(--accent-rgb), 0.08); }
-.menu-item-grupo.tem-filho-ativo { color: var(--text); background: rgba(var(--accent-rgb), 0.15); border-left-color: var(--accent); }
+.menu-item-grupo:hover { color: var(--text); background: var(--surface-muted); }
+.menu-item-grupo.tem-filho-ativo { color: var(--accent-strong); background: var(--accent-tint); font-weight: 600; }
 
 /* Ícone antes do texto, glifo trocado de verdade via ::before (não rotação
    de triângulo): ">" recolhido / "⌵" expandido — pedido explícito do
@@ -687,24 +701,26 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
    todos dentro do dropdown. */
 .user-menu { position: relative; }
 
+/* Gatilho do menu de perfil — pílula (padrão Kyvvo People). */
 .user-menu-toggle {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   width: auto;
+  height: 40px;
   margin: 0;
-  padding: 4px 8px;
-  background: transparent;
+  padding: 4px 10px 4px 4px;
+  background: var(--surface-muted);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-full);
   cursor: pointer;
 }
 
-.user-menu-toggle:hover { background: rgba(var(--accent-rgb), 0.08); }
+.user-menu-toggle:hover { background: var(--surface-hover); }
 
 .user-menu-avatar {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   background: var(--accent);
   color: #fff;
@@ -727,11 +743,11 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  min-width: 220px;
+  min-width: 240px;
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 12px 32px rgba(var(--shadow-rgb), 0.18);
   padding: 8px;
   z-index: 50;
 }

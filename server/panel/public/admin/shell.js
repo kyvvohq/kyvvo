@@ -21,8 +21,6 @@ const LUCIDE_ICONS = {
   settings: '<path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/>',
   history: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>',
   code: '<path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/>',
-  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
-  moon: '<path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"/>',
 };
 
 function svgIcone(nome, classe) {
@@ -43,29 +41,9 @@ document.querySelectorAll('.menu-item[data-icon]').forEach((item) => {
   item.insertBefore(svgIcone(item.dataset.icon, 'menu-icon'), item.firstChild);
 });
 
-// Tema claro/escuro (US57) — só o portal admin expõe o toggle; o painel do
-// tenant nunca seta data-theme e continua sempre escuro. O valor já foi
-// aplicado ao <html> por um script síncrono no <head> de cada página (evita
-// flash do tema errado); aqui só cuidamos do botão e de persistir a troca.
-const btnTema = document.getElementById('btn-tema-toggle');
-if (btnTema) {
-  function temaAtual() {
-    return document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
-  }
-  function pintarBotaoTema() {
-    btnTema.innerHTML = '';
-    btnTema.appendChild(svgIcone(temaAtual() === 'light' ? 'moon' : 'sun'));
-    btnTema.setAttribute('aria-label', temaAtual() === 'light' ? 'Mudar para tema escuro' : 'Mudar para tema claro');
-    btnTema.title = btnTema.getAttribute('aria-label');
-  }
-  pintarBotaoTema();
-  btnTema.addEventListener('click', () => {
-    const novoTema = temaAtual() === 'light' ? 'dark' : 'light';
-    document.documentElement.setAttribute('data-theme', novoTema);
-    localStorage.setItem('kyvvo_admin_tema', novoTema);
-    pintarBotaoTema();
-  });
-}
+// Tema: o painel (tenant + admin) adotou o layout claro do Kyvvo People,
+// modo único, sem toggle. Os tokens vêm do @kyvvohq/design-system (:root =
+// claro); nenhum data-theme é setado.
 
 const token = localStorage.getItem('kyvvo_admin_token');
 const adminNome = localStorage.getItem('kyvvo_admin_nome') || '';

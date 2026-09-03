@@ -6,7 +6,6 @@
   if (!localStorage.getItem('kyvvo_admin_token')) {
     window.location.href = '/login.html';
   }
-  document.documentElement.setAttribute('data-theme', localStorage.getItem('kyvvo_admin_tema') || 'dark');
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Admin — Kyvvo</title>
@@ -44,7 +43,6 @@
         <div class="admin-badge">🛠 Área administrativa</div>
       </div>
       <div class="topbar-direita">
-        <button class="btn-topbar-icone" id="btn-tema-toggle"></button>
         <div class="user-menu" id="user-menu">
         <button class="user-menu-toggle" id="user-menu-toggle">
           <div class="user-menu-avatar" id="user-menu-avatar"></div>
