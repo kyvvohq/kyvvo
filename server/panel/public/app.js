@@ -420,12 +420,20 @@ injetarIconesMenu();
 function temaAtual() {
   return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
 }
+// O wordmark é imagem (mesmo asset do People) — cor gravada no SVG, não
+// currentColor, então themear é trocar o <img src> inteiro, não recolorir.
+function aplicarLogo(escuro) {
+  document.querySelectorAll('.js-logo-kyvvo').forEach((img) => {
+    img.src = escuro ? '/ds/logo-dark.svg' : '/ds/logo.svg';
+  });
+}
 function sincronizarTema() {
   const escuro = temaAtual() === 'dark';
   const btn = document.getElementById('btn-tema-toggle');
   if (btn) btn.setAttribute('aria-checked', String(escuro));
   const estado = document.getElementById('user-menu-tema-estado');
   if (estado) estado.textContent = escuro ? 'Escuro' : 'Claro';
+  aplicarLogo(escuro);
 }
 function definirTema(tema) {
   document.documentElement.setAttribute('data-theme', tema);
