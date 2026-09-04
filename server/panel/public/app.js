@@ -765,6 +765,18 @@ function gerarHorariosGrade() {
   return horarios;
 }
 
+// Resumo do rodapé da grade Dia — livres/agendados/previsto, calculado no
+// cliente a partir dos mesmos horários e agendamentos que a grade já usa
+// (mesmo bucket de horaChaveGradeBucket), sem pedir nada novo ao backend.
+function resumoGradeDia(agendamentos) {
+  const horarios = gerarHorariosGrade();
+  const bucketsComItem = new Set(agendamentos.map((ag) => horaChaveGradeBucket(ag.data_hora)));
+  const livres = horarios.filter((h) => !bucketsComItem.has(h)).length;
+  const validos = agendamentos.filter((ag) => ag.status !== 'cancelado');
+  const previsto = validos.reduce((soma, ag) => soma + Number(ag.preco || 0), 0);
+  return { livres, agendados: validos.length, previsto };
+}
+
 // Anterior/Próximo na view Dia nunca param num dia fora de
 // configuracao.dias_funcionamento — pula direto pro próximo dia aberto na
 // direção da navegação (+1/-1). Limite de 14 tentativas é só uma trava de
@@ -4039,7 +4051,8 @@ function renderAgendamentoGradeCard(ag) {
   return `
     <div class="grade-ag-card${cancelado ? ' agendamento-cancelado' : ''}" data-id="${ag.id}">
       <div class="grade-ag-linha-principal" ${semAcoes ? '' : `data-acoes-toggle="${ag.id}"`}>
-        <div>
+        <span class="grade-ag-avatar" aria-hidden="true">${iniciaisNome(ag.cliente || '')}</span>
+        <div class="grade-ag-textos">
           <div class="grade-ag-servico">${ag.servico}</div>
           <div class="grade-ag-cliente">${ag.cliente || ag.cliente_telefone}</div>
           <div class="grade-ag-meta">
@@ -4342,6 +4355,16 @@ async function renderDia() {
 
   agendamentosAtuais = data.agendamentos;
   html += renderGradeHorariosDoDia(iso, data.agendamentos);
+
+  const resumo = resumoGradeDia(data.agendamentos);
+  html += `
+    <div class="grade-resumo">
+      <span>${resumo.livres} ${resumo.livres === 1 ? 'horário livre' : 'horários livres'}</span>
+      <span class="grade-resumo-separador">·</span>
+      <span>${resumo.agendados} ${resumo.agendados === 1 ? 'agendamento' : 'agendamentos'}</span>
+      <span class="grade-resumo-total">${formatarPreco(resumo.previsto)}</span>
+    </div>
+  `;
 
   conteudo.innerHTML = html;
   conteudo.querySelector('[data-nav="-1"]').addEventListener('click', () => {

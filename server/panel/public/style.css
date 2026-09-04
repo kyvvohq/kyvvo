@@ -929,7 +929,9 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   flex: 0 0 64px;
   padding: 10px 8px;
   font-size: 12px;
+  font-family: ui-monospace, monospace;
   color: var(--muted-strong);
+  background: var(--sunken);
   border-right: 1px solid var(--border-strong);
   display: flex;
   align-items: flex-start;
@@ -958,6 +960,9 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 .grade-linha-hora-atual .grade-linha-hora {
   color: var(--accent);
   font-weight: 600;
+  /* sobrepõe o --sunken da régua — senão o opaco esconde o tint da linha
+     "agora" embaixo dela. */
+  background: rgba(var(--accent-rgb), 0.08);
 }
 
 .grade-ag-grupo {
@@ -966,13 +971,42 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   width: 100%;
 }
 
+.grade-ag-linha-principal {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
 .grade-ag-card {
-  background: var(--surface-muted);
+  background: var(--card);
   border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
   border-radius: 8px;
   padding: 8px 10px;
   min-width: 0;
+  transition: border-color .15s;
 }
+.grade-ag-card:hover { border-color: var(--accent); }
+.grade-ag-card.agendamento-cancelado { border-left-color: var(--border-strong); }
+
+/* Avatar com as iniciais do cliente — mesmo padrão do avatar do user-menu
+   (iniciaisNome()), só pra dar um ponto de identificação rápida na grade. */
+.grade-ag-avatar {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: var(--accent-tint);
+  color: var(--accent-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.grade-ag-textos { min-width: 0; flex: 1; }
 
 .grade-ag-servico {
   font-weight: 600;
@@ -1092,6 +1126,8 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 .semana-coluna .grade-linha-conteudo { padding: 6px 30px 6px 6px; }
 .semana-coluna .grade-ag-grupo { grid-template-columns: 1fr !important; gap: 4px; }
 .semana-coluna .grade-ag-card { padding: 6px 8px; }
+.semana-coluna .grade-ag-linha-principal { gap: 6px; }
+.semana-coluna .grade-ag-avatar { width: 20px; height: 20px; font-size: 8px; }
 .semana-coluna .grade-linha-add { width: 20px; height: 20px; font-size: 13px; right: 4px; }
 
 @media (max-width: 900px) {
@@ -1666,6 +1702,24 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .nav-periodo button:hover { background: var(--accent-tint); color: var(--accent-strong); border-color: transparent; }
 
+/* Resumo do rodapé da grade Dia (livres/agendados/previsto) — calculado em
+   resumoGradeDia(), puramente informativo. */
+.grade-resumo {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 10px;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-muted);
+  font-size: 12px;
+  color: var(--muted);
+}
+.grade-resumo-separador { color: var(--border-strong); }
+.grade-resumo-total { margin-left: auto; font-size: 13px; font-weight: 600; color: var(--text); }
+
 /* Busca da listagem de tenants (US27) — full width no mobile, até 400px
    alinhado à esquerda no desktop (CA06). */
 .busca-tenants-wrapper {
@@ -2204,7 +2258,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   font-weight: 600;
 }
 
-.btn-acao-tabela:hover { background: var(--border); }
+.btn-acao-tabela:hover { background: var(--surface-hover); }
 .btn-acao-tabela.acao-perigo { color: var(--danger); border-color: rgba(var(--danger-rgb), 0.4); }
 
 .btn-acoes {
@@ -2219,7 +2273,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   flex-shrink: 0;
 }
 
-.btn-acoes:hover { background: var(--border); }
+.btn-acoes:hover { background: var(--surface-hover); }
 
 .menu-acoes {
   display: none;
@@ -2243,7 +2297,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   text-align: left;
 }
 
-.menu-acoes button:hover { background: var(--border); }
+.menu-acoes button:hover { background: var(--border-strong); }
 .menu-acoes button.acao-perigo { color: var(--danger); }
 
 /* Modais (US08) */
@@ -3163,7 +3217,7 @@ button.loading::after {
   border-radius: 6px;
 }
 
-.tabela-acoes-dropdown button:hover { background: var(--border); }
+.tabela-acoes-dropdown button:hover { background: var(--surface-hover); }
 .tabela-acoes-dropdown button.acao-perigo { color: var(--danger); }
 .tabela-acoes-divisor { height: 1px; background: var(--border); margin: 4px 2px; }
 
