@@ -11,18 +11,24 @@ const { normalizarTelefoneCliente } = require('../lib/clientes');
 // clientes inteira a cada acesso.
 const CLIENTES_TAMANHOS_VALIDOS = new Set([10, 50, 100]);
 const CLIENTES_STATUS_VALIDOS = new Set(['todos', 'ativo', 'novo', 'inativo']);
-// Status derivado (não é uma coluna) — mesmo limiar de 30 dias já usado
-// pra "clientes sem retorno" no dashboard Início (GET /api/inicio/resumo),
-// reaproveitado aqui em vez de inventar outro número:
-// novo = cadastrado nos últimos 30 dias; inativo = mais antigo que isso E
-// sem nenhum atendimento confirmado/concluído nos últimos 30 dias; o resto
-// é ativo.
+// Status derivado (não é uma coluna) — novo = cadastrado nos últimos 30 dias
+// (limiar fixo, não é o mesmo conceito do "inativo" abaixo); inativo = mais
+// antigo que isso E sem nenhum atendimento confirmado/concluído nos últimos
+// N dias, onde N é o `cliente_inativo_dias` configurável do tenant
+// (Preferências, default 30 — ver 065_tenants_cliente_inativo_dias.sql e
+// GET/PATCH /api/configuracao). Mesmo N usado pra "clientes sem retorno" no
+// dashboard Início (GET /api/inicio/resumo), reaproveitado aqui em vez de
+// inventar outra fonte pro mesmo número. Subquery correlacionada (em vez de
+// JOIN) porque essa string é injetada tanto no SELECT quanto no WHERE de
+// queries diferentes — um JOIN teria que ser repetido em cada uma.
 const CLIENTE_STATUS_SQL = `CASE
   WHEN c.criado_em >= now() - interval '30 days' THEN 'novo'
   WHEN NOT EXISTS (
     SELECT 1 FROM agendamentos a2
     WHERE a2.cliente_id = c.id AND a2.status IN ('confirmado', 'concluido')
-      AND a2.data_hora >= now() - interval '30 days'
+      AND a2.data_hora >= now() - make_interval(days => (
+        SELECT t.cliente_inativo_dias FROM tenants t WHERE t.id = c.tenant_id
+      ))
   ) THEN 'inativo'
   ELSE 'ativo'
 END`;

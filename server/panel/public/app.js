@@ -5495,6 +5495,7 @@ async function renderConfiguracao() {
   const almocoAtivo = !!configuracao.horario_almoco_ativo;
   const almocoInicio = (configuracao.horario_almoco_inicio || '12:00').slice(0, 5);
   const almocoFim = (configuracao.horario_almoco_fim || '13:00').slice(0, 5);
+  const clienteInativoDias = configuracao.cliente_inativo_dias || 30;
 
   const toggleDias = NOMES_DIAS.map((nome, idx) => `
     <label class="dia-toggle-cel">
@@ -5543,6 +5544,10 @@ async function renderConfiguracao() {
         </div>
       </div>
 
+      <label for="config-cliente-inativo-dias" style="margin-top:16px">Considerar cliente inativo após quantos dias sem retorno?</label>
+      <input type="number" id="config-cliente-inativo-dias" min="1" max="365" step="1" value="${clienteInativoDias}" style="max-width:120px">
+      <div class="modal-texto">Usado na tela Clientes (filtro "Inativo") e no card "Clientes sem retorno" do Início.</div>
+
       <button type="submit" id="btn-salvar-config">Salvar</button>
     </form>
   `;
@@ -5588,10 +5593,16 @@ async function renderConfiguracao() {
     const horarioAlmocoAtivo = almocoAtivoInput.checked;
     const horarioAlmocoInicio = horarioAlmocoAtivo ? document.getElementById('config-almoco-inicio').value : null;
     const horarioAlmocoFim = horarioAlmocoAtivo ? document.getElementById('config-almoco-fim').value : null;
+    const clienteInativoDias = parseInt(document.getElementById('config-cliente-inativo-dias').value, 10);
+    if (!Number.isInteger(clienteInativoDias) || clienteInativoDias < 1 || clienteInativoDias > 365) {
+      mostrarToast('Informe um número de dias entre 1 e 365 pra considerar cliente inativo.', 'erro');
+      return;
+    }
 
     const payload = {
       diasFuncionamento, horarioAbertura, horarioFechamento,
       horarioAlmocoAtivo, horarioAlmocoInicio, horarioAlmocoFim,
+      clienteInativoDias,
     };
 
     // Só avisa/confirma quando algum dia que ANTES estava marcado foi
