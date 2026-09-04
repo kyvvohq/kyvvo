@@ -226,7 +226,7 @@ async function start() {
   // padrão do /admin/tenants/:id acima: sem arquivo físico, sem auth aqui
   // (client-side, igual todo o resto do painel).
   const ROTAS_PAINEL_TENANT = [
-    '/agenda', '/servicos', '/profissionais', '/clientes', '/bloqueios',
+    '/quadro', '/agenda', '/servicos', '/profissionais', '/clientes', '/bloqueios',
     '/whatsapp', '/cobranca', '/perfil', '/empresa', '/equipe',
     '/preferencias', '/ajuda',
   ];

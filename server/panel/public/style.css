@@ -1181,6 +1181,29 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 .semana-item-pilha .semana-item-avatar:first-child { margin-left: 0; }
 .semana-item-avatar-extra { background: var(--surface-hover); color: var(--muted-strong); }
 
+/* Quadro (colunas = profissionais) — mesmo .semana-grade/.semana-grade-hora/
+   .semana-grade-cel da Semana, só o cabeçalho de coluna muda (avatar +
+   nome do profissional, sem estado ativo/recolhido — aqui não tem
+   accordion, o recorte já é um dia só). */
+.quadro-grade { overflow-x: auto; }
+.quadro-cab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-strong);
+  border-left: 1px solid var(--border);
+  background: var(--card);
+}
+.quadro-cab strong {
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.quadro-hora-atual { color: var(--accent); font-weight: 600; background: rgba(var(--accent-rgb), 0.08); }
+
 .vazio {
   color: var(--muted);
   font-size: 14px;
@@ -2562,6 +2585,11 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 .plano-opcao:has(input:not(:disabled)):hover { border-color: rgba(var(--accent-rgb), 0.4); }
 .plano-opcao:has(input:disabled) { cursor: default; }
 .plano-opcao:has(input:checked) { border-color: var(--accent); background: rgba(var(--accent-rgb), 0.06); }
+
+/* Card estático (sem <input>) da lista "Planos disponíveis" da aba Planos —
+   mesmo destaque visual de :has(input:checked) acima, só que aplicado
+   direto na classe porque aqui não tem radio pra disparar o :has(). */
+.plano-opcao-atual { cursor: default; border-color: var(--accent); background: rgba(var(--accent-rgb), 0.06); }
 
 /* Radio nativo com aparência custom (anel roxo + miolo preenchido quando
    marcado) em vez do radio padrão do navegador. */
