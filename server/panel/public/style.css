@@ -268,9 +268,17 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   background: none;
   border: none;
   cursor: pointer;
-  font-size: 20px;
+  display: flex;
+  align-items: center;
 }
 .topbar-logo:hover { background: none; opacity: 0.85; }
+
+/* Wordmark como imagem — mesmo asset do Kyvvo People
+   (@kyvvohq/design-system logo.svg/logo-dark.svg). Cor é gravada no SVG, não
+   currentColor (um <img src> não herda cor da página) — o tema troca o
+   arquivo inteiro via .js-logo-kyvvo, ver aplicarLogo() no app.js. */
+.topbar-logo-img { height: 22px; width: auto; display: block; }
+.rodape-logo-img { height: 14px; width: auto; vertical-align: middle; margin: 0 1px; }
 
 /* Alça de ocultar/exibir a sidebar — fica encostada na borda direita da
    sidebar (não mais no topbar), como uma "aba" entre ela e o conteúdo.
