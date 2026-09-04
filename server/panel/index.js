@@ -496,7 +496,7 @@ async function start() {
 
     const { rows: tenantRows } = await pool.query(
       `SELECT id, tecnologia, dias_funcionamento, horario_abertura, horario_fechamento,
-              horario_almoco_ativo, horario_almoco_inicio, horario_almoco_fim
+              horario_almoco_ativo, horario_almoco_inicio, horario_almoco_fim, cliente_inativo_dias
        FROM tenants WHERE id = $1`,
       [tenantId]
     );
@@ -524,13 +524,15 @@ async function start() {
       contarHorariosLivresNoDia(tenant, amanha),
       // "Sem retorno" exige que o cliente já tenha tido pelo menos 1
       // atendimento antes — cliente novo que nunca agendou não é "sem
-      // retorno" (nunca teve retorno nenhum pra medir).
+      // retorno" (nunca teve retorno nenhum pra medir). Limiar configurável
+      // por tenant (Preferências, cliente_inativo_dias) — mesmo número usado
+      // em CLIENTE_STATUS_SQL (routes/clientes.js) pro status "inativo".
       pool.query(
         `SELECT count(*)::int AS total FROM clientes c
          WHERE c.tenant_id = $1
            AND EXISTS (SELECT 1 FROM agendamentos a WHERE a.cliente_id = c.id AND a.status != 'cancelado')
-           AND (SELECT max(a.data_hora) FROM agendamentos a WHERE a.cliente_id = c.id AND a.status != 'cancelado') < now() - interval '30 days'`,
-        [tenantId]
+           AND (SELECT max(a.data_hora) FROM agendamentos a WHERE a.cliente_id = c.id AND a.status != 'cancelado') < now() - make_interval(days => $2::int)`,
+        [tenantId, tenant.cliente_inativo_dias]
       ),
     ]);
 
