@@ -617,6 +617,21 @@ function truncarTexto(texto, max) {
   return texto && texto.length > max ? texto.slice(0, max) + '…' : (texto || '');
 }
 
+// Cor por profissional na agenda (avatar/borda de acento) — determinística
+// por profissional_id, pra cada um manter sempre a mesma cor em qualquer
+// tela/sessão sem precisar guardar nada no backend. 6 tons distintos entre
+// si e sobre --card/--sunken nos dois temas (não são os tokens semânticos
+// --success/--danger/etc, pra não confundir cor-de-profissional com
+// cor-de-status).
+const PALETA_PROFISSIONAL = ['#7C5CFC', '#22C7F2', '#12B76A', '#F79009', '#F04438', '#9578FF'];
+function corProfissional(profissionalId) {
+  if (!profissionalId) return PALETA_PROFISSIONAL[0];
+  let hash = 0;
+  const chave = String(profissionalId);
+  for (let i = 0; i < chave.length; i++) hash = (hash * 31 + chave.charCodeAt(i)) >>> 0;
+  return PALETA_PROFISSIONAL[hash % PALETA_PROFISSIONAL.length];
+}
+
 function preencherUserMenu(perfil) {
   document.getElementById('user-menu-avatar').textContent = iniciaisNome(perfil.nome_responsavel);
   document.getElementById('user-menu-nome').textContent = perfil.nome_responsavel || '';
@@ -4048,15 +4063,24 @@ function renderAgendamentoGradeCard(ag) {
   const concluido = ag.status === 'concluido';
   const falta = ag.status === 'falta';
   const semAcoes = cancelado || concluido || falta;
+  // Com mais de um profissional cadastrado, "quem atende" é a primeira
+  // informação do card — avatar + nome do profissional (cor fixa por
+  // profissional_id, corProfissional), antes do serviço/cliente. Com um só
+  // profissional isso é óbvio, então o avatar volta a identificar o
+  // cliente (mais útil pra reconhecer clientes recorrentes de relance).
+  const multiProfissional = !!(contaStatus && contaStatus.mostrar_profissional);
+  const avatarIniciais = multiProfissional ? iniciaisNome(ag.profissional || '') : iniciaisNome(ag.cliente || '');
+  const avatarEstilo = multiProfissional ? ` style="background:${corProfissional(ag.profissional_id)};color:#fff"` : '';
   return `
     <div class="grade-ag-card${cancelado ? ' agendamento-cancelado' : ''}" data-id="${ag.id}">
       <div class="grade-ag-linha-principal" ${semAcoes ? '' : `data-acoes-toggle="${ag.id}"`}>
-        <span class="grade-ag-avatar" aria-hidden="true">${iniciaisNome(ag.cliente || '')}</span>
+        <span class="grade-ag-avatar" aria-hidden="true"${avatarEstilo}>${avatarIniciais}</span>
         <div class="grade-ag-textos">
+          ${multiProfissional ? `<div class="grade-ag-profissional">${ag.profissional}</div>` : ''}
           <div class="grade-ag-servico">${ag.servico}</div>
           <div class="grade-ag-cliente">${ag.cliente || ag.cliente_telefone}</div>
           <div class="grade-ag-meta">
-            ${formatarHora(ag.data_hora)} · ${ag.duracao_minutos}min · ${formatarPreco(ag.preco)}${contaStatus && contaStatus.mostrar_profissional ? ` · ${ag.profissional}` : ''}
+            ${formatarHora(ag.data_hora)} · ${ag.duracao_minutos}min · ${formatarPreco(ag.preco)}
             ${ag.encaixe ? '<span class="badge badge-encaixe">Encaixe</span>' : ''}
             ${cancelado ? '<span class="badge badge-cancelado">Cancelado</span>' : ''}
             ${concluido ? '<span class="badge badge-concluido">Concluído</span>' : ''}
@@ -4397,6 +4421,12 @@ function inicioDaSemana(dataRef) {
   return d;
 }
 
+// Coluna expandida do accordion da Semana (ISO "YYYY-MM-DD") — null até a
+// 1ª renderização, que escolhe hoje (se estiver na semana visível) ou o
+// primeiro dia aberto. Clique no cabeçalho de outra coluna troca; trocar de
+// semana com a coluna guardada fora do intervalo novo também reescolhe.
+let semanaColunaAtiva = null;
+
 async function renderSemana() {
   const iso = formatarDataISO(dataRef);
   conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
@@ -4422,9 +4452,6 @@ async function renderSemana() {
 
   // Uma coluna por dia da semana (segunda→domingo) que o negócio funciona —
   // dias fechados nem aparecem (diferente do Mês, que mostra desabilitado).
-  // Ao contrário da versão antiga (só listava dias que já tinham
-  // agendamento), toda semana aberta mostra as 7 (ou menos) colunas, cada
-  // uma com a grade de horários completa, igual à view Dia.
   const diasFuncionamento = configuracao.dias_funcionamento || [1, 2, 3, 4, 5, 6];
   const segunda = inicioDaSemana(dataRef);
   const diasAbertos = [];
@@ -4434,32 +4461,9 @@ async function renderSemana() {
     if (diasFuncionamento.includes(d.getDay())) diasAbertos.push(d);
   }
 
-  if (diasAbertos.length === 0) {
-    html += '<div class="vazio">Nenhum dia de funcionamento configurado nessa semana.</div>';
-  } else {
-    // Número de colunas setado inline (CSS puro não sabe quantos dias
-    // dias_funcionamento tem) — grid fluido sem min-width fixo, pra caber
-    // todos os dias abertos na tela sem precisar de scroll horizontal (PR8).
-    const hojeISO = formatarDataISO(new Date());
-    html += `<div class="semana-colunas" style="grid-template-columns:repeat(${diasAbertos.length},1fr)">`;
-    for (const d of diasAbertos) {
-      const diaISO = formatarDataISO(d);
-      const dataLabel = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' });
-      html += `
-        <div class="semana-coluna${diaISO === hojeISO ? ' semana-coluna-hoje' : ''}">
-          <div class="semana-coluna-cabecalho">
-            <div>
-              <strong>${nomeDiaSemana(d)}</strong>
-              <span>${dataLabel}</span>
-            </div>
-            <button class="semana-coluna-add" data-add-dia="${diaISO}" aria-label="Novo agendamento em ${dataLabel}">+</button>
-          </div>
-          ${renderGradeHorariosDoDia(diaISO, porDia[diaISO] || [])}
-        </div>
-      `;
-    }
-    html += '</div>';
-  }
+  html += diasAbertos.length === 0
+    ? '<div class="vazio">Nenhum dia de funcionamento configurado nessa semana.</div>'
+    : renderSemanaGrade(diasAbertos, porDia);
 
   conteudo.innerHTML = html;
   conteudo.querySelector('[data-nav="-7"]').addEventListener('click', () => {
@@ -4470,6 +4474,104 @@ async function renderSemana() {
     dataRef.setDate(dataRef.getDate() + 7);
     renderSemana();
   });
+  conteudo.querySelectorAll('[data-selecionar-coluna]').forEach((el) => {
+    el.addEventListener('click', () => {
+      semanaColunaAtiva = el.dataset.selecionarColuna;
+      renderSemana();
+    });
+  });
+}
+
+// Grid único: UMA régua de hora compartilhada (não uma por coluna — era o
+// que desalinhava a hora com o texto da coluna seguinte na versão antiga de
+// N grades independentes lado a lado) + uma coluna por dia aberto. O dia
+// selecionado (semanaColunaAtiva) expande (3fr, grade completa igual à
+// view Dia — mesmo card, mesmo kebab de ações, nada novo pra manter);
+// os outros recolhem (1fr, resumo por pilha de avatares). `minmax(0, Nfr)`
+// em vez de largura mínima fixa: encolhe pra caber todos os dias sem barra
+// de rolagem horizontal, e a transição de grid-template-columns anima a
+// troca (redesign do canvas Claude Design).
+function renderSemanaGrade(diasAbertos, porDia) {
+  const hojeISO = formatarDataISO(new Date());
+  const isoAbertos = diasAbertos.map(formatarDataISO);
+  if (!semanaColunaAtiva || !isoAbertos.includes(semanaColunaAtiva)) {
+    semanaColunaAtiva = isoAbertos.includes(hojeISO) ? hojeISO : isoAbertos[0];
+  }
+
+  const horarios = gerarHorariosGrade();
+  if (horarios.length === 0) {
+    return '<div class="vazio">Nenhum horário configurado (confira Abertura/Fechamento em Configuração).</div>';
+  }
+
+  const colunas = isoAbertos.map((di) => (di === semanaColunaAtiva ? 'minmax(0,3fr)' : 'minmax(0,1fr)')).join(' ');
+
+  let html = `<div class="semana-grade" style="grid-template-columns:62px ${colunas}">`;
+  html += '<div class="semana-grade-canto"></div>';
+  diasAbertos.forEach((d, i) => {
+    const diaISO = isoAbertos[i];
+    const ativa = diaISO === semanaColunaAtiva;
+    const qtd = (porDia[diaISO] || []).length;
+    const dataLabel = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' });
+    const nomeDia = nomeDiaSemana(d);
+    html += `
+      <div class="semana-cab${ativa ? ' semana-cab-ativa' : ''}${diaISO === hojeISO ? ' semana-cab-hoje' : ''}" data-selecionar-coluna="${diaISO}">
+        <strong>${ativa ? nomeDia : nomeDia.slice(0, 3)}</strong>
+        <span>${dataLabel}${qtd ? ` · ${qtd}` : ''}</span>
+      </div>
+    `;
+  });
+
+  for (const hora of horarios) {
+    html += `<div class="semana-grade-hora">${hora}</div>`;
+    diasAbertos.forEach((d, i) => {
+      const diaISO = isoAbertos[i];
+      const ativa = diaISO === semanaColunaAtiva;
+      const itens = (porDia[diaISO] || []).filter((ag) => horaChaveGradeBucket(ag.data_hora) === hora);
+      html += renderSemanaCelula(diaISO, hora, itens, ativa);
+    });
+  }
+  html += '</div>';
+  return html;
+}
+
+// Avatar (por profissional, se o tenant tem mais de um — corProfissional;
+// senão pelo cliente) usado tanto na pilha da coluna recolhida quanto,
+// via renderAgendamentoGradeCard, no card da coluna expandida.
+function semanaAvatarMini(ag) {
+  const multiProfissional = !!(contaStatus && contaStatus.mostrar_profissional);
+  const cor = multiProfissional ? corProfissional(ag.profissional_id) : 'var(--accent)';
+  const iniciais = iniciaisNome(multiProfissional ? ag.profissional : ag.cliente);
+  return `<span class="semana-item-avatar" style="background:${cor};color:#fff">${iniciais}</span>`;
+}
+
+function renderSemanaCelula(diaISO, hora, itens, ativa) {
+  if (!ativa) {
+    // Recolhida: só a pilha de avatares (quem tem agendamento nesse
+    // horário), sem detalhe — clique em qualquer parte expande a coluna.
+    if (!itens.length) return `<div class="semana-grade-cel" data-selecionar-coluna="${diaISO}"></div>`;
+    const visiveis = itens.slice(0, 3);
+    const extra = itens.length > 3 ? `<span class="semana-item-avatar semana-item-avatar-extra">+${itens.length - 3}</span>` : '';
+    return `
+      <div class="semana-grade-cel" data-selecionar-coluna="${diaISO}">
+        <span class="semana-item-pilha">${visiveis.map(semanaAvatarMini).join('')}${extra}</span>
+      </div>
+    `;
+  }
+
+  // Expandida: reaproveita literalmente o card da view Dia (kebab, menu de
+  // ações, badges) — side by side quando há mais de um no mesmo horário,
+  // igual .grade-ag-grupo da grade Dia.
+  const conteudo = !itens.length
+    ? '<span class="grade-linha-vazia">Disponível</span>'
+    : itens.length === 1
+      ? renderAgendamentoGradeCard(itens[0])
+      : `<div class="grade-ag-grupo" style="grid-template-columns:repeat(${itens.length},1fr)">${itens.map(renderAgendamentoGradeCard).join('')}</div>`;
+  return `
+    <div class="semana-grade-cel semana-grade-cel-ativa">
+      ${conteudo}
+      <button class="grade-linha-add" data-add-horario="${hora}" data-data="${diaISO}" aria-label="Novo agendamento às ${hora} em ${diaISO}">+</button>
+    </div>
+  `;
 }
 
 async function renderMes() {
