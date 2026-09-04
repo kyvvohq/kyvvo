@@ -929,7 +929,9 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   flex: 0 0 64px;
   padding: 10px 8px;
   font-size: 12px;
+  font-family: ui-monospace, monospace;
   color: var(--muted-strong);
+  background: var(--sunken);
   border-right: 1px solid var(--border-strong);
   display: flex;
   align-items: flex-start;
@@ -958,6 +960,9 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 .grade-linha-hora-atual .grade-linha-hora {
   color: var(--accent);
   font-weight: 600;
+  /* sobrepõe o --sunken da régua — senão o opaco esconde o tint da linha
+     "agora" embaixo dela. */
+  background: rgba(var(--accent-rgb), 0.08);
 }
 
 .grade-ag-grupo {
@@ -966,12 +971,55 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   width: 100%;
 }
 
+.grade-ag-linha-principal {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
 .grade-ag-card {
-  background: var(--surface-muted);
+  background: var(--card);
   border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
   border-radius: 8px;
   padding: 8px 10px;
   min-width: 0;
+  transition: border-color .15s;
+}
+.grade-ag-card:hover { border-color: var(--accent); }
+.grade-ag-card.agendamento-cancelado { border-left-color: var(--border-strong); }
+
+/* Avatar com as iniciais do cliente — mesmo padrão do avatar do user-menu
+   (iniciaisNome()), só pra dar um ponto de identificação rápida na grade. */
+.grade-ag-avatar {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: var(--accent-tint);
+  color: var(--accent-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.grade-ag-textos { min-width: 0; flex: 1; }
+
+/* Nome do profissional como primeira linha — só existe no card quando o
+   tenant tem mais de um profissional (contaStatus.mostrar_profissional);
+   com um só a identidade óbvia é o cliente, então não duplica. */
+.grade-ag-profissional {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--muted-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .grade-ag-servico {
@@ -1025,83 +1073,136 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   .grade-linha-add { width: 22px; height: 22px; font-size: 14px; right: 6px; }
 }
 
-/* Semana (PR3) — uma coluna por dia aberto, lado a lado, cada uma com a
-   mesma grade de horários da view Dia (.grade-horarios). Grid fluido (PR8,
-   contagem de colunas setada inline via JS em renderSemana) em vez do flex
-   com min-width fixo de antes — sem largura mínima, as colunas encolhem
-   pra caber todos os dias abertos na tela sem precisar de scroll
-   horizontal, junto com .conteudo-largo alargando o container. */
-.semana-colunas {
+/* Semana — grid único: UMA régua de hora compartilhada (coluna 62px) + uma
+   coluna por dia aberto (accordion: a selecionada expande 3fr, as outras
+   recolhem 1fr — renderSemanaGrade calcula grid-template-columns inline).
+   minmax(0, Nfr) em vez de largura mínima fixa: encolhe pra caber todos os
+   dias sem scroll horizontal, mesmo com a coluna ativa ocupando a maior
+   parte do espaço. */
+.semana-grade {
   display: grid;
-  gap: 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  overflow: hidden;
+  transition: grid-template-columns 220ms cubic-bezier(.2, .7, .3, 1);
 }
 
-.semana-coluna {
+.semana-grade-canto {
+  background: var(--sunken);
+  border-bottom: 1px solid var(--border-strong);
+}
+
+.semana-cab {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
   min-width: 0;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-strong);
+  border-left: 1px solid var(--border);
+  cursor: pointer;
+  background: var(--card);
+}
+.semana-cab:hover { background: var(--surface-hover); }
+
+.semana-cab strong {
+  font-size: 12px;
+  text-transform: capitalize;
+  color: var(--muted-strong);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* Destaque do dia atual (PR2) — borda de acento no cabeçalho da coluna,
-   mesmo padrão visual da linha de hora atual da grade Dia/Semana. */
-.semana-coluna-hoje .semana-coluna-cabecalho {
-  border-radius: 8px 8px 0 0;
-  box-shadow: inset 0 3px 0 var(--accent);
-  padding: 6px 4px 0;
-  margin: -6px -4px 8px;
+.semana-cab span {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
 }
 
-.semana-coluna-hoje .semana-coluna-cabecalho strong {
-  color: var(--accent);
+.semana-cab-ativa {
+  background: var(--accent-tint);
+}
+.semana-cab-ativa strong { color: var(--accent-strong); font-size: 15px; }
+.semana-cab-ativa span { color: var(--accent-strong); }
+
+.semana-cab-hoje:not(.semana-cab-ativa) strong { color: var(--accent); }
+
+.semana-grade-hora {
+  padding: 8px;
+  font-size: 11px;
+  font-family: ui-monospace, monospace;
+  color: var(--muted-strong);
+  background: var(--sunken);
+  border-top: 1px solid var(--border);
+  text-align: right;
 }
 
-.semana-coluna-cabecalho {
+.semana-grade-cel {
+  position: relative;
+  min-width: 0;
+  min-height: 40px;
+  padding: 4px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
+  border-top: 1px solid var(--border);
+  border-left: 1px solid var(--border);
+  cursor: pointer;
 }
 
-.semana-coluna-cabecalho strong {
-  display: block;
+.semana-grade-cel-ativa {
+  min-height: 54px;
+  padding: 6px 20px 6px 10px;
+  cursor: default;
+  align-items: stretch;
+}
+.semana-grade-cel-ativa .grade-linha-vazia { align-self: center; }
+.semana-grade-cel-ativa .grade-ag-card,
+.semana-grade-cel-ativa .grade-ag-grupo { width: 100%; }
+.semana-grade-cel-ativa:hover .grade-linha-add { opacity: 1; pointer-events: auto; }
+
+/* Pilha de avatares da coluna recolhida — resumo de "quem tem horário
+   marcado" sem abrir o card (clique em qualquer parte expande a coluna). */
+.semana-item-pilha { display: flex; }
+.semana-item-avatar {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  font-weight: 600;
+  border: 1.5px solid var(--card);
+  margin-left: -6px;
+}
+.semana-item-pilha .semana-item-avatar:first-child { margin-left: 0; }
+.semana-item-avatar-extra { background: var(--surface-hover); color: var(--muted-strong); }
+
+/* Quadro (colunas = profissionais) — mesmo .semana-grade/.semana-grade-hora/
+   .semana-grade-cel da Semana, só o cabeçalho de coluna muda (avatar +
+   nome do profissional, sem estado ativo/recolhido — aqui não tem
+   accordion, o recorte já é um dia só). */
+.quadro-grade { overflow-x: auto; }
+.quadro-cab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-strong);
+  border-left: 1px solid var(--border);
+  background: var(--card);
+}
+.quadro-cab strong {
   font-size: 13px;
-  text-transform: capitalize;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-
-.semana-coluna-cabecalho span {
-  font-size: 12px;
-  color: var(--muted-strong);
-}
-
-.semana-coluna-add {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--accent);
-  color: #fff;
-  font-size: 15px;
-  line-height: 1;
-  padding: 0;
-  opacity: 0;
-  transition: opacity 0.15s;
-}
-
-.semana-coluna:hover .semana-coluna-add { opacity: 1; }
-
-/* Colunas mais estreitas que a grade cheia do Dia — encolhe fonte/padding
-   pra caber os cards sem quebrar o layout. */
-.semana-coluna .grade-linha-hora { flex-basis: 48px; font-size: 11px; padding: 8px 4px; }
-.semana-coluna .grade-linha-conteudo { padding: 6px 30px 6px 6px; }
-.semana-coluna .grade-ag-grupo { grid-template-columns: 1fr !important; gap: 4px; }
-.semana-coluna .grade-ag-card { padding: 6px 8px; }
-.semana-coluna .grade-linha-add { width: 20px; height: 20px; font-size: 13px; right: 4px; }
-
-@media (max-width: 900px) {
-  /* Abaixo desse ponto, mesmo o grid fluido deixaria cada coluna estreita
-     demais pra ler os cards — empilha uma coluna por dia em vez de
-     comprimir horizontalmente (continua sem scroll horizontal, só passa a
-     rolar verticalmente). !important pra sobrepor o grid-template-columns
-     inline setado por renderSemana. */
-  .semana-colunas { grid-template-columns: 1fr !important; }
-}
+.quadro-hora-atual { color: var(--accent); font-weight: 600; background: rgba(var(--accent-rgb), 0.08); }
 
 .vazio {
   color: var(--muted);
@@ -1666,6 +1767,24 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .nav-periodo button:hover { background: var(--accent-tint); color: var(--accent-strong); border-color: transparent; }
 
+/* Resumo do rodapé da grade Dia (livres/agendados/previsto) — calculado em
+   resumoGradeDia(), puramente informativo. */
+.grade-resumo {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 10px;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-muted);
+  font-size: 12px;
+  color: var(--muted);
+}
+.grade-resumo-separador { color: var(--border-strong); }
+.grade-resumo-total { margin-left: auto; font-size: 13px; font-weight: 600; color: var(--text); }
+
 /* Busca da listagem de tenants (US27) — full width no mobile, até 400px
    alinhado à esquerda no desktop (CA06). */
 .busca-tenants-wrapper {
@@ -2204,7 +2323,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   font-weight: 600;
 }
 
-.btn-acao-tabela:hover { background: var(--border); }
+.btn-acao-tabela:hover { background: var(--surface-hover); }
 .btn-acao-tabela.acao-perigo { color: var(--danger); border-color: rgba(var(--danger-rgb), 0.4); }
 
 .btn-acoes {
@@ -2219,7 +2338,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   flex-shrink: 0;
 }
 
-.btn-acoes:hover { background: var(--border); }
+.btn-acoes:hover { background: var(--surface-hover); }
 
 .menu-acoes {
   display: none;
@@ -2243,7 +2362,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   text-align: left;
 }
 
-.menu-acoes button:hover { background: var(--border); }
+.menu-acoes button:hover { background: var(--border-strong); }
 .menu-acoes button.acao-perigo { color: var(--danger); }
 
 /* Modais (US08) */
@@ -2466,6 +2585,11 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 .plano-opcao:has(input:not(:disabled)):hover { border-color: rgba(var(--accent-rgb), 0.4); }
 .plano-opcao:has(input:disabled) { cursor: default; }
 .plano-opcao:has(input:checked) { border-color: var(--accent); background: rgba(var(--accent-rgb), 0.06); }
+
+/* Card estático (sem <input>) da lista "Planos disponíveis" da aba Planos —
+   mesmo destaque visual de :has(input:checked) acima, só que aplicado
+   direto na classe porque aqui não tem radio pra disparar o :has(). */
+.plano-opcao-atual { cursor: default; border-color: var(--accent); background: rgba(var(--accent-rgb), 0.06); }
 
 /* Radio nativo com aparência custom (anel roxo + miolo preenchido quando
    marcado) em vez do radio padrão do navegador. */
@@ -3061,13 +3185,13 @@ body.conta-bloqueada .btn-novo-agendamento:not(#btn-cadastrar-pagamento) {
 }
 
 .aviso-critico {
-  background: rgba(var(--danger-rgb), 0.14);
-  color: #ffb4b4;
+  background: var(--danger-bg);
+  color: var(--danger);
 }
 
 .aviso-info {
-  background: rgba(var(--accent-rgb), 0.1);
-  color: #d8d2ff;
+  background: var(--accent-tint);
+  color: var(--accent-strong);
 }
 
 .aviso-acoes {
@@ -3163,7 +3287,7 @@ button.loading::after {
   border-radius: 6px;
 }
 
-.tabela-acoes-dropdown button:hover { background: var(--border); }
+.tabela-acoes-dropdown button:hover { background: var(--surface-hover); }
 .tabela-acoes-dropdown button.acao-perigo { color: var(--danger); }
 .tabela-acoes-divisor { height: 1px; background: var(--border); margin: 4px 2px; }
 

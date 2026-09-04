@@ -387,6 +387,7 @@ const ICON_PATHS = {
   'credit-card': '<rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/>',
   wallet: '<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>',
   'chart-column': '<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>',
+  kanban: '<path d="M5 3v14"/><path d="M12 3v8"/><path d="M19 3v18"/>',
   'sun-moon': '<path d="M12 2v2"/><path d="M14.837 16.385a6 6 0 1 1-7.223-7.222c.624-.147.97.66.715 1.248a4 4 0 0 0 5.26 5.259c.589-.255 1.396.09 1.248.715"/><path d="M16 12a4 4 0 0 0-4-4"/><path d="m19 5-1.256 1.256"/><path d="M20 12h2"/>',
 };
 
@@ -453,6 +454,7 @@ sincronizarTema();
 // painel.html — é só o app.js que decide o que renderizar a partir do path.
 const ROTAS_MENU = {
   inicio: '/painel',
+  quadro: '/quadro',
   agendamento: '/agenda',
   servicos: '/servicos',
   profissionais: '/profissionais',
@@ -617,6 +619,21 @@ function truncarTexto(texto, max) {
   return texto && texto.length > max ? texto.slice(0, max) + '…' : (texto || '');
 }
 
+// Cor por profissional na agenda (avatar/borda de acento) — determinística
+// por profissional_id, pra cada um manter sempre a mesma cor em qualquer
+// tela/sessão sem precisar guardar nada no backend. 6 tons distintos entre
+// si e sobre --card/--sunken nos dois temas (não são os tokens semânticos
+// --success/--danger/etc, pra não confundir cor-de-profissional com
+// cor-de-status).
+const PALETA_PROFISSIONAL = ['#7C5CFC', '#22C7F2', '#12B76A', '#F79009', '#F04438', '#9578FF'];
+function corProfissional(profissionalId) {
+  if (!profissionalId) return PALETA_PROFISSIONAL[0];
+  let hash = 0;
+  const chave = String(profissionalId);
+  for (let i = 0; i < chave.length; i++) hash = (hash * 31 + chave.charCodeAt(i)) >>> 0;
+  return PALETA_PROFISSIONAL[hash % PALETA_PROFISSIONAL.length];
+}
+
 function preencherUserMenu(perfil) {
   document.getElementById('user-menu-avatar').textContent = iniciaisNome(perfil.nome_responsavel);
   document.getElementById('user-menu-nome').textContent = perfil.nome_responsavel || '';
@@ -763,6 +780,18 @@ function gerarHorariosGrade() {
     horarios.push(`${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`);
   }
   return horarios;
+}
+
+// Resumo do rodapé da grade Dia — livres/agendados/previsto, calculado no
+// cliente a partir dos mesmos horários e agendamentos que a grade já usa
+// (mesmo bucket de horaChaveGradeBucket), sem pedir nada novo ao backend.
+function resumoGradeDia(agendamentos) {
+  const horarios = gerarHorariosGrade();
+  const bucketsComItem = new Set(agendamentos.map((ag) => horaChaveGradeBucket(ag.data_hora)));
+  const livres = horarios.filter((h) => !bucketsComItem.has(h)).length;
+  const validos = agendamentos.filter((ag) => ag.status !== 'cancelado');
+  const previsto = validos.reduce((soma, ag) => soma + Number(ag.preco || 0), 0);
+  return { livres, agendados: validos.length, previsto };
 }
 
 // Anterior/Próximo na view Dia nunca param num dia fora de
@@ -1636,6 +1665,14 @@ conteudo.addEventListener('click', (e) => {
     return;
   }
 
+  // Abas Planos/Cobrança/Histórico de "Plano e cobrança".
+  const tabPagamentos = e.target.closest('[data-pagamentos-aba]');
+  if (tabPagamentos) {
+    abaPagamentosAtiva = tabPagamentos.dataset.pagamentosAba;
+    renderPagamentos();
+    return;
+  }
+
   // Pills de filtro por tipo (Todas/Receitas/Despesas) nas Movimentações.
   const tipoLancamentoBtn = e.target.closest('[data-financeiro-filtro-tipo]');
   if (tipoLancamentoBtn) {
@@ -2445,9 +2482,19 @@ function formatarMeioHistorico(meio) {
   return meio || '—';
 }
 
+// "Plano e cobrança" em 3 abas (Planos / Cobrança / Histórico) — mesmo
+// padrão de abas do Financeiro (abaFinanceiroAtiva/data-financeiro-aba):
+// a lógica condicional por status (trial com/sem pagamento agendado, sem
+// meio cadastrado, ativo/inadimplente/suspenso/cancelado) é a mesma de
+// sempre, só reorganizada em qual das 3 strings de HTML cada pedaço cai.
+let abaPagamentosAtiva = 'planos';
+
 async function renderPagamentos() {
   conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
-  const dados = await api('/api/pagamentos');
+  const [dados, planosDisponiveis] = await Promise.all([
+    api('/api/pagamentos'),
+    api('/api/planos'),
+  ]);
   if (!dados) return;
 
   const meioLabel = dados.meio_pagamento === 'cartao'
@@ -2456,19 +2503,23 @@ async function renderPagamentos() {
       ? 'Pix recorrente'
       : 'Não cadastrado';
 
-  let html = '<div class="nav-periodo"><strong>Plano</strong></div>';
+  let planosHtml = '';
+  let cobrancaHtml = '';
+  let historicoHtml = '';
 
   if (dados.status === 'trial' && dados.meio_pagamento) {
     // CA05 (US37) — pagamento já cadastrado durante o trial: a cobrança está
     // agendada pro fim do trial, mas ainda não aconteceu (por isso o tenant
     // continua em 'trial', não 'ativo' — ver /api/pagamentos/cadastrar).
-    html += `
+    planosHtml = `
+      <div class="financeiro-resumo-card financeiro-resumo-card-3linhas" style="margin-bottom:16px">
+        <div class="financeiro-resumo-label">Plano Atual</div>
+        <div class="financeiro-resumo-linha2">${dados.plano_nome || 'A definir'}</div>
+        <div class="financeiro-resumo-linha3">${dados.valor_plano != null ? formatarPreco(dados.valor_plano) : '—'}</div>
+      </div>
+    `;
+    cobrancaHtml = `
       <div class="financeiro-resumo">
-        <div class="financeiro-resumo-card financeiro-resumo-card-3linhas">
-          <div class="financeiro-resumo-label">Plano Atual</div>
-          <div class="financeiro-resumo-linha2">${dados.plano_nome || 'A definir'}</div>
-          <div class="financeiro-resumo-linha3">${dados.valor_plano != null ? formatarPreco(dados.valor_plano) : '—'}</div>
-        </div>
         <div class="financeiro-resumo-card financeiro-resumo-card-3linhas">
           <div class="financeiro-resumo-label">Meio de pagamento</div>
           <div class="financeiro-resumo-linha2">${meioLabel}</div>
@@ -2482,22 +2533,24 @@ async function renderPagamentos() {
       <p class="modal-texto">
         Próxima cobrança: ${dados.proxima_cobranca ? `${formatarPreco(dados.proxima_cobranca.valor)} em ${formatarDataCurtaISO(dados.proxima_cobranca.data)}` : 'não disponível'}
       </p>
-      <button class="btn-secundario" id="btn-cadastrar-pagamento" style="margin-bottom:16px">Alterar forma de pagamento</button>
+      <button class="btn-secundario" id="btn-cadastrar-pagamento">Alterar forma de pagamento</button>
     `;
   } else if (dados.status === 'trial') {
     const trialInfo = await api('/api/pagamentos/status');
     if (!trialInfo) return;
 
-    html += `
+    planosHtml = `
       <div class="financeiro-resumo-card" style="margin-bottom:16px">
         <div class="financeiro-resumo-label">Plano atual</div>
         <div>${dados.plano_nome || 'A definir'}${dados.valor_plano != null ? ` — ${formatarPreco(dados.valor_plano)}/mês após o trial` : ''}</div>
       </div>
+    `;
+    cobrancaHtml = `
       ${renderBlocoTrial(trialInfo)}
       <button class="btn-novo-agendamento" id="btn-cadastrar-pagamento">${trialInfo.trial_ativo ? 'Cadastrar pagamento' : 'Escolher plano'}</button>
     `;
   } else if (!dados.meio_pagamento) {
-    html += `
+    cobrancaHtml = `
       <p class="modal-texto">Nenhum meio de pagamento cadastrado.</p>
       <button class="btn-novo-agendamento" id="btn-cadastrar-pagamento">Cadastrar forma de pagamento</button>
     `;
@@ -2512,7 +2565,7 @@ async function renderPagamentos() {
     const ativo = dados.status === 'ativo';
     const statusBadgeClasse = PAGAMENTOS_STATUS_BADGE[dados.status] || 'badge-status-inativo';
 
-    html += `
+    planosHtml = `
       <div class="pagamento-plano-card">
         <div class="pagamento-plano-linha">
           <span class="pagamento-plano-nome">${dados.plano_nome || '—'}</span>
@@ -2529,10 +2582,9 @@ async function renderPagamentos() {
             : '<button type="button" class="btn-secundario btn-pequeno" id="btn-trocar-plano">Alterar plano</button>'}
         </div>
       </div>
+    `;
 
-      <div class="pagamento-secao-divisor"></div>
-      <h3 class="inicio-secao-titulo">Cobrança</h3>
-
+    cobrancaHtml = `
       ${cancelado
         ? `<p class="modal-texto">Seu acesso está ativo até ${formatarDataCurtaISO(dados.acesso_ate)}. Após essa data, o sistema será suspenso.</p>`
         : `<p class="modal-texto">
@@ -2540,18 +2592,6 @@ async function renderPagamentos() {
               ? `${dados.proxima_cobranca.plano_nome || dados.plano_nome || 'Plano'}, ${formatarPreco(dados.proxima_cobranca.valor)} em ${formatarDataCurtaISO(dados.proxima_cobranca.data)}`
               : 'não disponível'}
           </p>`}
-
-      <h4 class="pagamento-historico-titulo">Histórico de cobranças</h4>
-      <div class="tabela-wrapper">
-        <table class="tabela-tenants">
-          <thead><tr><th>Data da cobrança</th><th>Plano</th><th>Valor</th><th>Tipo</th><th>Meio de pagamento</th><th>Status</th></tr></thead>
-          <tbody>
-            ${dados.historico.length
-              ? dados.historico.map((h) => `<tr><td>${formatarDataCurtaISO(h.data)}</td><td>${h.plano_nome || '—'}</td><td>${formatarPreco(h.valor)}</td><td>${h.ciclo || 'Mensal'}</td><td>${formatarMeioHistorico(h.meio)}</td><td>${renderHistoricoStatus(h.status)}</td></tr>`).join('')
-              : '<tr><td colspan="6">Nenhuma cobrança registrada ainda.</td></tr>'}
-          </tbody>
-        </table>
-      </div>
 
       ${cancelado ? '' : `
         <div class="pagamento-detalhes">
@@ -2568,7 +2608,39 @@ async function renderPagamentos() {
         </div>
       `}
     `;
+
+    const historico = dados.historico || [];
+    historicoHtml = `
+      <div class="tabela-wrapper">
+        <table class="tabela-tenants">
+          <thead><tr><th>Data da cobrança</th><th>Plano</th><th>Valor</th><th>Tipo</th><th>Meio de pagamento</th><th>Status</th></tr></thead>
+          <tbody>
+            ${historico.length
+              ? historico.map((h) => `<tr><td>${formatarDataCurtaISO(h.data)}</td><td>${h.plano_nome || '—'}</td><td>${formatarPreco(h.valor)}</td><td>${h.ciclo || 'Mensal'}</td><td>${formatarMeioHistorico(h.meio)}</td><td>${renderHistoricoStatus(h.status)}</td></tr>`).join('')
+              : '<tr><td colspan="6">Nenhuma cobrança registrada ainda.</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    `;
   }
+
+  // Aba Planos sempre ganha a lista de planos disponíveis (vitrine
+  // read-only, comparação lado a lado) — trocar de plano continua sendo
+  // pelo botão "Alterar plano" (abre o mesmo modal de sempre, com
+  // confirmação); a lista aqui não decide nada sozinha, só informa.
+  planosHtml += renderListaPlanosDisponiveis(planosDisponiveis, dados.plano_slug);
+  if (!historicoHtml) historicoHtml = '<p class="modal-texto">Sem cobranças registradas ainda.</p>';
+
+  const abas = { planos: planosHtml, cobranca: cobrancaHtml, historico: historicoHtml };
+  const html = `
+    <div class="nav-periodo"><strong>Plano e cobrança</strong></div>
+    <div class="subtabs-financeiro" role="tablist" data-testid="tabs-pagamentos">
+      <div class="tab ${abaPagamentosAtiva === 'planos' ? 'active' : ''}" role="tab" aria-selected="${abaPagamentosAtiva === 'planos'}" data-pagamentos-aba="planos">Planos</div>
+      <div class="tab ${abaPagamentosAtiva === 'cobranca' ? 'active' : ''}" role="tab" aria-selected="${abaPagamentosAtiva === 'cobranca'}" data-pagamentos-aba="cobranca">Cobrança</div>
+      <div class="tab ${abaPagamentosAtiva === 'historico' ? 'active' : ''}" role="tab" aria-selected="${abaPagamentosAtiva === 'historico'}" data-pagamentos-aba="historico">Histórico</div>
+    </div>
+    ${abas[abaPagamentosAtiva]}
+  `;
 
   conteudo.innerHTML = html;
   const btnCadastrar = document.getElementById('btn-cadastrar-pagamento');
@@ -2583,7 +2655,7 @@ async function renderPagamentos() {
   // renderizado (oculto) dentro do conteúdo acima, só falta ligar o toggle e
   // o wiring do formulário/cancelamento. `.expandido` no botão troca o
   // glifo do `.menu-chevron` (> recolhido / ⌵ expandido, mesma convenção do
-  // menu lateral — ver style.css).
+  // menu lateral — ver style.css). Só existe na aba Cobrança.
   const btnToggleDetalhes = document.getElementById('btn-toggle-detalhes');
   if (btnToggleDetalhes) {
     btnToggleDetalhes.addEventListener('click', () => {
@@ -2597,6 +2669,32 @@ async function renderPagamentos() {
     const btnCancelarAssinatura = document.getElementById('btn-cancelar-assinatura');
     if (btnCancelarAssinatura) btnCancelarAssinatura.addEventListener('click', () => abrirModalCancelarAssinatura(dados));
   }
+}
+
+function renderListaPlanosDisponiveis(planos, planoSlugAtual) {
+  if (!planos || !planos.length) return '';
+  const cards = planos.map((p, i) => {
+    const atual = p.slug === planoSlugAtual;
+    return `
+      <div class="plano-opcao${atual ? ' plano-opcao-atual' : ''}">
+        <span class="plano-opcao-icone plano-opcao-icone-${i % PLANO_TROCA_ICONES.length}" aria-hidden="true">${PLANO_TROCA_ICONES[i % PLANO_TROCA_ICONES.length]}</span>
+        <span class="plano-opcao-corpo">
+          <span class="plano-opcao-nome">${p.nome}${atual ? ' <span class="badge badge-status-ativo">Seu plano</span>' : ''}</span>
+          ${p.frase_beneficio ? `<span class="plano-opcao-desc">${p.frase_beneficio}</span>` : ''}
+          <span class="plano-opcao-badges">${badgesLimitesPlano(p.limites)}</span>
+        </span>
+        <span class="plano-opcao-preco">
+          <span class="plano-opcao-preco-valor">${formatarPreco(Number(p.preco_mensal))}<small>/mês</small></span>
+          <span class="plano-opcao-preco-nota">Cobrados mensalmente</span>
+        </span>
+      </div>
+    `;
+  }).join('');
+  return `
+    <div class="pagamento-secao-divisor"></div>
+    <h3 class="inicio-secao-titulo">Planos disponíveis</h3>
+    <div class="plano-opcoes">${cards}</div>
+  `;
 }
 
 // Rótulos dos limites vindos de GET /api/planos (plano.limites) — mesmo
@@ -2758,9 +2856,10 @@ async function render() {
   // grade de horários e, principalmente, pras colunas da Semana caberem sem
   // scroll horizontal — as demais telas (Perfil, Fatura, Serviços...)
   // continuam nos 720px padrão, estreitos de propósito pra formulário.
-  conteudo.classList.toggle('conteudo-largo', menuAtual === 'inicio' || menuAtual === 'agendamento' || menuAtual === 'clientes' || menuAtual === 'modulo:dashboards');
+  conteudo.classList.toggle('conteudo-largo', menuAtual === 'inicio' || menuAtual === 'quadro' || menuAtual === 'agendamento' || menuAtual === 'clientes' || menuAtual === 'modulo:dashboards');
 
   if (menuAtual === 'inicio') return renderInicio();
+  if (menuAtual === 'quadro') return renderQuadro();
   if (menuAtual === 'configuracao') return renderConfiguracao();
   if (menuAtual === 'perfil') return renderPerfil();
   if (menuAtual === 'empresa') return renderMinhaEmpresa();
@@ -4031,19 +4130,31 @@ async function renderRelatorios() {
 // com Reagendar/Encaixar/Cancelar), só que compacto o bastante pra caber
 // dividido em sub-colunas quando há mais de um profissional no mesmo
 // horário (CA da grade: "dividir a coluna ou dois componentes").
-function renderAgendamentoGradeCard(ag) {
+function renderAgendamentoGradeCard(ag, opts) {
   const cancelado = ag.status === 'cancelado';
   const concluido = ag.status === 'concluido';
   const falta = ag.status === 'falta';
   const semAcoes = cancelado || concluido || falta;
+  // Com mais de um profissional cadastrado, "quem atende" é a primeira
+  // informação do card — avatar + nome do profissional (cor fixa por
+  // profissional_id, corProfissional), antes do serviço/cliente. Com um só
+  // profissional isso é óbvio, então o avatar volta a identificar o
+  // cliente (mais útil pra reconhecer clientes recorrentes de relance).
+  // ocultarProfissional (Quadro): a coluna já É o profissional, repetir o
+  // nome em todo card seria redundante — mas cor/avatar continuam.
+  const multiProfissional = !(opts && opts.ocultarProfissional) && !!(contaStatus && contaStatus.mostrar_profissional);
+  const avatarIniciais = multiProfissional ? iniciaisNome(ag.profissional || '') : iniciaisNome(ag.cliente || '');
+  const avatarEstilo = multiProfissional ? ` style="background:${corProfissional(ag.profissional_id)};color:#fff"` : '';
   return `
     <div class="grade-ag-card${cancelado ? ' agendamento-cancelado' : ''}" data-id="${ag.id}">
       <div class="grade-ag-linha-principal" ${semAcoes ? '' : `data-acoes-toggle="${ag.id}"`}>
-        <div>
+        <span class="grade-ag-avatar" aria-hidden="true"${avatarEstilo}>${avatarIniciais}</span>
+        <div class="grade-ag-textos">
+          ${multiProfissional ? `<div class="grade-ag-profissional">${ag.profissional}</div>` : ''}
           <div class="grade-ag-servico">${ag.servico}</div>
           <div class="grade-ag-cliente">${ag.cliente || ag.cliente_telefone}</div>
           <div class="grade-ag-meta">
-            ${formatarHora(ag.data_hora)} · ${ag.duracao_minutos}min · ${formatarPreco(ag.preco)}${contaStatus && contaStatus.mostrar_profissional ? ` · ${ag.profissional}` : ''}
+            ${formatarHora(ag.data_hora)} · ${ag.duracao_minutos}min · ${formatarPreco(ag.preco)}
             ${ag.encaixe ? '<span class="badge badge-encaixe">Encaixe</span>' : ''}
             ${cancelado ? '<span class="badge badge-cancelado">Cancelado</span>' : ''}
             ${concluido ? '<span class="badge badge-concluido">Concluído</span>' : ''}
@@ -4343,6 +4454,16 @@ async function renderDia() {
   agendamentosAtuais = data.agendamentos;
   html += renderGradeHorariosDoDia(iso, data.agendamentos);
 
+  const resumo = resumoGradeDia(data.agendamentos);
+  html += `
+    <div class="grade-resumo">
+      <span>${resumo.livres} ${resumo.livres === 1 ? 'horário livre' : 'horários livres'}</span>
+      <span class="grade-resumo-separador">·</span>
+      <span>${resumo.agendados} ${resumo.agendados === 1 ? 'agendamento' : 'agendamentos'}</span>
+      <span class="grade-resumo-total">${formatarPreco(resumo.previsto)}</span>
+    </div>
+  `;
+
   conteudo.innerHTML = html;
   conteudo.querySelector('[data-nav="-1"]').addEventListener('click', () => {
     dataRef.setDate(dataRef.getDate() - 1);
@@ -4374,6 +4495,12 @@ function inicioDaSemana(dataRef) {
   return d;
 }
 
+// Coluna expandida do accordion da Semana (ISO "YYYY-MM-DD") — null até a
+// 1ª renderização, que escolhe hoje (se estiver na semana visível) ou o
+// primeiro dia aberto. Clique no cabeçalho de outra coluna troca; trocar de
+// semana com a coluna guardada fora do intervalo novo também reescolhe.
+let semanaColunaAtiva = null;
+
 async function renderSemana() {
   const iso = formatarDataISO(dataRef);
   conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
@@ -4399,9 +4526,6 @@ async function renderSemana() {
 
   // Uma coluna por dia da semana (segunda→domingo) que o negócio funciona —
   // dias fechados nem aparecem (diferente do Mês, que mostra desabilitado).
-  // Ao contrário da versão antiga (só listava dias que já tinham
-  // agendamento), toda semana aberta mostra as 7 (ou menos) colunas, cada
-  // uma com a grade de horários completa, igual à view Dia.
   const diasFuncionamento = configuracao.dias_funcionamento || [1, 2, 3, 4, 5, 6];
   const segunda = inicioDaSemana(dataRef);
   const diasAbertos = [];
@@ -4411,32 +4535,9 @@ async function renderSemana() {
     if (diasFuncionamento.includes(d.getDay())) diasAbertos.push(d);
   }
 
-  if (diasAbertos.length === 0) {
-    html += '<div class="vazio">Nenhum dia de funcionamento configurado nessa semana.</div>';
-  } else {
-    // Número de colunas setado inline (CSS puro não sabe quantos dias
-    // dias_funcionamento tem) — grid fluido sem min-width fixo, pra caber
-    // todos os dias abertos na tela sem precisar de scroll horizontal (PR8).
-    const hojeISO = formatarDataISO(new Date());
-    html += `<div class="semana-colunas" style="grid-template-columns:repeat(${diasAbertos.length},1fr)">`;
-    for (const d of diasAbertos) {
-      const diaISO = formatarDataISO(d);
-      const dataLabel = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' });
-      html += `
-        <div class="semana-coluna${diaISO === hojeISO ? ' semana-coluna-hoje' : ''}">
-          <div class="semana-coluna-cabecalho">
-            <div>
-              <strong>${nomeDiaSemana(d)}</strong>
-              <span>${dataLabel}</span>
-            </div>
-            <button class="semana-coluna-add" data-add-dia="${diaISO}" aria-label="Novo agendamento em ${dataLabel}">+</button>
-          </div>
-          ${renderGradeHorariosDoDia(diaISO, porDia[diaISO] || [])}
-        </div>
-      `;
-    }
-    html += '</div>';
-  }
+  html += diasAbertos.length === 0
+    ? '<div class="vazio">Nenhum dia de funcionamento configurado nessa semana.</div>'
+    : renderSemanaGrade(diasAbertos, porDia);
 
   conteudo.innerHTML = html;
   conteudo.querySelector('[data-nav="-7"]').addEventListener('click', () => {
@@ -4447,6 +4548,211 @@ async function renderSemana() {
     dataRef.setDate(dataRef.getDate() + 7);
     renderSemana();
   });
+  conteudo.querySelectorAll('[data-selecionar-coluna]').forEach((el) => {
+    el.addEventListener('click', () => {
+      semanaColunaAtiva = el.dataset.selecionarColuna;
+      renderSemana();
+    });
+  });
+}
+
+// Grid único: UMA régua de hora compartilhada (não uma por coluna — era o
+// que desalinhava a hora com o texto da coluna seguinte na versão antiga de
+// N grades independentes lado a lado) + uma coluna por dia aberto. O dia
+// selecionado (semanaColunaAtiva) expande (3fr, grade completa igual à
+// view Dia — mesmo card, mesmo kebab de ações, nada novo pra manter);
+// os outros recolhem (1fr, resumo por pilha de avatares). `minmax(0, Nfr)`
+// em vez de largura mínima fixa: encolhe pra caber todos os dias sem barra
+// de rolagem horizontal, e a transição de grid-template-columns anima a
+// troca (redesign do canvas Claude Design).
+function renderSemanaGrade(diasAbertos, porDia) {
+  const hojeISO = formatarDataISO(new Date());
+  const isoAbertos = diasAbertos.map(formatarDataISO);
+  if (!semanaColunaAtiva || !isoAbertos.includes(semanaColunaAtiva)) {
+    semanaColunaAtiva = isoAbertos.includes(hojeISO) ? hojeISO : isoAbertos[0];
+  }
+
+  const horarios = gerarHorariosGrade();
+  if (horarios.length === 0) {
+    return '<div class="vazio">Nenhum horário configurado (confira Abertura/Fechamento em Configuração).</div>';
+  }
+
+  const colunas = isoAbertos.map((di) => (di === semanaColunaAtiva ? 'minmax(0,3fr)' : 'minmax(0,1fr)')).join(' ');
+
+  let html = `<div class="semana-grade" style="grid-template-columns:62px ${colunas}">`;
+  html += '<div class="semana-grade-canto"></div>';
+  diasAbertos.forEach((d, i) => {
+    const diaISO = isoAbertos[i];
+    const ativa = diaISO === semanaColunaAtiva;
+    const qtd = (porDia[diaISO] || []).length;
+    const dataLabel = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' });
+    const nomeDia = nomeDiaSemana(d);
+    html += `
+      <div class="semana-cab${ativa ? ' semana-cab-ativa' : ''}${diaISO === hojeISO ? ' semana-cab-hoje' : ''}" data-selecionar-coluna="${diaISO}">
+        <strong>${ativa ? nomeDia : nomeDia.slice(0, 3)}</strong>
+        <span>${dataLabel}${qtd ? ` · ${qtd}` : ''}</span>
+      </div>
+    `;
+  });
+
+  for (const hora of horarios) {
+    html += `<div class="semana-grade-hora">${hora}</div>`;
+    diasAbertos.forEach((d, i) => {
+      const diaISO = isoAbertos[i];
+      const ativa = diaISO === semanaColunaAtiva;
+      const itens = (porDia[diaISO] || []).filter((ag) => horaChaveGradeBucket(ag.data_hora) === hora);
+      html += renderSemanaCelula(diaISO, hora, itens, ativa);
+    });
+  }
+  html += '</div>';
+  return html;
+}
+
+// Avatar (por profissional, se o tenant tem mais de um — corProfissional;
+// senão pelo cliente) usado tanto na pilha da coluna recolhida quanto,
+// via renderAgendamentoGradeCard, no card da coluna expandida.
+function semanaAvatarMini(ag) {
+  const multiProfissional = !!(contaStatus && contaStatus.mostrar_profissional);
+  const cor = multiProfissional ? corProfissional(ag.profissional_id) : 'var(--accent)';
+  const iniciais = iniciaisNome(multiProfissional ? ag.profissional : ag.cliente);
+  return `<span class="semana-item-avatar" style="background:${cor};color:#fff">${iniciais}</span>`;
+}
+
+function renderSemanaCelula(diaISO, hora, itens, ativa) {
+  if (!ativa) {
+    // Recolhida: só a pilha de avatares (quem tem agendamento nesse
+    // horário), sem detalhe — clique em qualquer parte expande a coluna.
+    if (!itens.length) return `<div class="semana-grade-cel" data-selecionar-coluna="${diaISO}"></div>`;
+    const visiveis = itens.slice(0, 3);
+    const extra = itens.length > 3 ? `<span class="semana-item-avatar semana-item-avatar-extra">+${itens.length - 3}</span>` : '';
+    return `
+      <div class="semana-grade-cel" data-selecionar-coluna="${diaISO}">
+        <span class="semana-item-pilha">${visiveis.map(semanaAvatarMini).join('')}${extra}</span>
+      </div>
+    `;
+  }
+
+  // Expandida: reaproveita literalmente o card da view Dia (kebab, menu de
+  // ações, badges) — side by side quando há mais de um no mesmo horário,
+  // igual .grade-ag-grupo da grade Dia.
+  const conteudo = !itens.length
+    ? '<span class="grade-linha-vazia">Disponível</span>'
+    : itens.length === 1
+      ? renderAgendamentoGradeCard(itens[0])
+      : `<div class="grade-ag-grupo" style="grid-template-columns:repeat(${itens.length},1fr)">${itens.map(renderAgendamentoGradeCard).join('')}</div>`;
+  return `
+    <div class="semana-grade-cel semana-grade-cel-ativa">
+      ${conteudo}
+      <button class="grade-linha-add" data-add-horario="${hora}" data-data="${diaISO}" aria-label="Novo agendamento às ${hora} em ${diaISO}">+</button>
+    </div>
+  `;
+}
+
+// ---------- Quadro (kanban: colunas = profissionais, raias = horários) ----------
+// Só visualização por ora (clique no card abre o mesmo menu de ações do
+// resto da agenda — concluir/reagendar/encaixar/falta/cancelar); arrastar
+// pra reagendar fica pra uma leva futura. Um dia por vez, mesma navegação
+// ←/→ e mesmos horários de Preferências que a view Dia (gerarHorariosGrade
+// já lê configuracao.horario_abertura/fechamento/almoço).
+async function renderQuadro() {
+  dataRef = proximoDiaAberto(dataRef, 1);
+
+  const iso = formatarDataISO(dataRef);
+  conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
+  const [data, profs] = await Promise.all([
+    api(`/api/agendamentos?view=dia&data=${iso}`),
+    api('/api/profissionais'),
+  ]);
+  if (!data || !profs) return;
+
+  const dataLabel = dataRef.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'America/Sao_Paulo' });
+
+  let html = `
+    <div class="nav-periodo">
+      <button data-nav="-1">← Anterior</button>
+      <div class="nav-periodo-data">
+        <strong>${dataLabel}</strong>
+        <div class="nav-periodo-dia-semana">${nomeDiaSemana(dataRef)}</div>
+      </div>
+      <button data-nav="1">Próximo →</button>
+    </div>
+  `;
+
+  agendamentosAtuais = data.agendamentos;
+  html += renderQuadroGrade(iso, profs.profissionais, data.agendamentos);
+
+  conteudo.innerHTML = html;
+  conteudo.querySelector('[data-nav="-1"]').addEventListener('click', () => {
+    dataRef.setDate(dataRef.getDate() - 1);
+    dataRef = proximoDiaAberto(dataRef, -1);
+    renderQuadro();
+  });
+  conteudo.querySelector('[data-nav="1"]').addEventListener('click', () => {
+    dataRef.setDate(dataRef.getDate() + 1);
+    dataRef = proximoDiaAberto(dataRef, 1);
+    renderQuadro();
+  });
+}
+
+// Mesma técnica de grid da Semana (renderSemanaGrade) — régua de hora
+// compartilhada (classes .semana-grade/.semana-grade-hora reaproveitadas,
+// não é conceito exclusivo de "semana") — só que aqui as colunas são
+// profissionais, fixas (não têm accordion: já é o recorte de um dia só,
+// não precisa recolher nada pra caber).
+function renderQuadroGrade(diaISO, profissionais, agendamentos) {
+  if (!profissionais.length) {
+    return '<div class="vazio">Nenhum profissional cadastrado — cadastre em Configurações → Profissionais.</div>';
+  }
+
+  const horarios = gerarHorariosGrade();
+  if (horarios.length === 0) {
+    return '<div class="vazio">Nenhum horário configurado (confira Abertura/Fechamento em Configuração).</div>';
+  }
+
+  const porProfissional = {};
+  for (const ag of agendamentos) {
+    if (!porProfissional[ag.profissional_id]) porProfissional[ag.profissional_id] = [];
+    porProfissional[ag.profissional_id].push(ag);
+  }
+
+  const colunas = profissionais.map(() => 'minmax(160px,1fr)').join(' ');
+  const ehHoje = diaISO === formatarDataISO(new Date());
+  const horaAtualBucket = ehHoje ? horaChaveGradeBucket(new Date().toISOString()) : null;
+
+  let html = `<div class="semana-grade quadro-grade" style="grid-template-columns:62px ${colunas}">`;
+  html += '<div class="semana-grade-canto"></div>';
+  profissionais.forEach((p) => {
+    html += `
+      <div class="quadro-cab">
+        <span class="grade-ag-avatar" aria-hidden="true" style="background:${corProfissional(p.id)};color:#fff">${iniciaisNome(p.nome)}</span>
+        <strong>${p.nome}</strong>
+      </div>
+    `;
+  });
+
+  for (const hora of horarios) {
+    html += `<div class="semana-grade-hora${hora === horaAtualBucket ? ' quadro-hora-atual' : ''}">${hora}</div>`;
+    profissionais.forEach((p) => {
+      const itens = (porProfissional[p.id] || []).filter((ag) => horaChaveGradeBucket(ag.data_hora) === hora);
+      html += renderQuadroCelula(diaISO, hora, itens);
+    });
+  }
+  html += '</div>';
+  return html;
+}
+
+function renderQuadroCelula(diaISO, hora, itens) {
+  const conteudo = !itens.length
+    ? '<span class="grade-linha-vazia">Disponível</span>'
+    : itens.length === 1
+      ? renderAgendamentoGradeCard(itens[0], { ocultarProfissional: true })
+      : `<div class="grade-ag-grupo" style="grid-template-columns:repeat(${itens.length},1fr)">${itens.map((ag) => renderAgendamentoGradeCard(ag, { ocultarProfissional: true })).join('')}</div>`;
+  return `
+    <div class="semana-grade-cel semana-grade-cel-ativa">
+      ${conteudo}
+      <button class="grade-linha-add" data-add-horario="${hora}" data-data="${diaISO}" aria-label="Novo agendamento às ${hora}">+</button>
+    </div>
+  `;
 }
 
 async function renderMes() {
