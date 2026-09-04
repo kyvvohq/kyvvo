@@ -335,11 +335,17 @@ function saudacaoPorHorario() {
 // US57 — extraído em função pra poder re-renderizar a saudação assim que o
 // nome muda em "Meu Perfil", sem precisar de logout/login pra refletir
 // (antes só `kyvvo_nome` no localStorage era lido, e só uma vez, no load).
-function atualizarSaudacao() {
+function textoSaudacao() {
   const nomeUsuario = (localStorage.getItem('kyvvo_nome') || '').split(' ')[0] || '';
-  document.getElementById('saudacao').textContent = `${saudacaoPorHorario()}${nomeUsuario ? ', ' + nomeUsuario : ''}!`;
+  return `${saudacaoPorHorario()}${nomeUsuario ? ', ' + nomeUsuario : ''}!`;
 }
-atualizarSaudacao();
+// A saudação virou o título da página Início (paridade com o Kyvvo People,
+// que mostra "Olá, {nome}" no topo do conteúdo, não no cabeçalho fixo). O
+// elemento só existe enquanto renderInicio está montado — daí a guarda.
+function atualizarSaudacao() {
+  const el = document.getElementById('inicio-saudacao');
+  if (el) el.textContent = textoSaudacao();
+}
 
 const conteudo = document.getElementById('conteudo');
 const menuEl = document.querySelector('.menu');
@@ -362,6 +368,75 @@ const gruposMenu = Array.from(document.querySelectorAll('.menu-item-grupo[data-s
   toggle,
   submenu: document.getElementById(toggle.dataset.submenu),
 }));
+
+// ---------- Ícones do menu (Lucide inline, sem CDN) ----------
+// Mesmo dialeto do shell do Kyvvo People (span[data-icon] -> <svg>). Os
+// paths ficam aqui e não em cada HTML pra não duplicar; o SVG usa
+// currentColor, então hover/active do .menu-item já pinta o ícone junto.
+const ICON_PATHS = {
+  'layout-dashboard': '<rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/>',
+  'calendar-days': '<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/><path d="M16 18h.01"/>',
+  scissors: '<circle cx="6" cy="6" r="3"/><path d="M8.12 8.12 12 12"/><path d="M20 4 8.12 15.88"/><circle cx="6" cy="18" r="3"/><path d="M14.8 14.8 20 20"/>',
+  briefcase: '<path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/><rect width="20" height="14" x="2" y="6" rx="2"/>',
+  users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><path d="M16 3.128a4 4 0 0 1 0 7.744"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><circle cx="9" cy="7" r="4"/>',
+  settings: '<path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/>',
+  'building-2': '<path d="M10 12h4"/><path d="M10 8h4"/><path d="M14 21v-3a2 2 0 0 0-4 0v3"/><path d="M6 10H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2"/><path d="M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16"/>',
+  'sliders-horizontal': '<path d="M10 5H3"/><path d="M12 19H3"/><path d="M14 3v4"/><path d="M16 17v4"/><path d="M21 12h-9"/><path d="M21 19h-5"/><path d="M21 5h-7"/><path d="M8 10v4"/><path d="M8 12H3"/>',
+  'calendar-x': '<path d="M8 2v3"/><path d="M16 2v3"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="m14 13-4 4"/><path d="m10 13 4 4"/>',
+  'message-circle': '<path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719"/>',
+  'credit-card': '<rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/>',
+  wallet: '<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>',
+  'chart-column': '<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>',
+  'sun-moon': '<path d="M12 2v2"/><path d="M14.837 16.385a6 6 0 1 1-7.223-7.222c.624-.147.97.66.715 1.248a4 4 0 0 0 5.26 5.259c.589-.255 1.396.09 1.248.715"/><path d="M16 12a4 4 0 0 0-4-4"/><path d="m19 5-1.256 1.256"/><path d="M20 12h2"/>',
+};
+
+function svgIcone(nome) {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '2');
+  svg.setAttribute('stroke-linecap', 'round');
+  svg.setAttribute('stroke-linejoin', 'round');
+  svg.setAttribute('class', 'menu-icon');
+  svg.innerHTML = ICON_PATHS[nome] || '';
+  return svg;
+}
+
+// Prefixa o ícone em cada .menu-item / .menu-item-grupo que tenha data-icon
+// e ainda não tenha um SVG. Idempotente — pode rodar de novo depois que o
+// menu dinâmico (por módulo) inserir itens novos.
+function injetarIconesMenu() {
+  document.querySelectorAll('.menu-item[data-icon], .menu-item-grupo[data-icon]').forEach((item) => {
+    if (item.querySelector('svg.menu-icon')) return;
+    item.insertBefore(svgIcone(item.dataset.icon), item.firstChild);
+  });
+}
+injetarIconesMenu();
+
+// ---------- Tema claro/escuro ----------
+// Aplicado antes do paint por um snippet no <head> (chave `kyvvo_tema`); aqui
+// só ligamos o toggle do menu de perfil e sincronizamos o rótulo do estado.
+function temaAtual() {
+  return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+}
+function sincronizarTema() {
+  const escuro = temaAtual() === 'dark';
+  const btn = document.getElementById('btn-tema-toggle');
+  if (btn) btn.setAttribute('aria-checked', String(escuro));
+  const estado = document.getElementById('user-menu-tema-estado');
+  if (estado) estado.textContent = escuro ? 'Escuro' : 'Claro';
+}
+function definirTema(tema) {
+  document.documentElement.setAttribute('data-theme', tema);
+  localStorage.setItem('kyvvo_tema', tema);
+  sincronizarTema();
+}
+const btnTemaToggle = document.getElementById('btn-tema-toggle');
+if (btnTemaToggle) {
+  btnTemaToggle.addEventListener('click', () => definirTema(temaAtual() === 'dark' ? 'light' : 'dark'));
+}
+sincronizarTema();
 
 // URL própria por seção do menu (favoritar/compartilhar/recarregar direto
 // numa seção, botão voltar funcionando entre elas — antes só /painel
@@ -560,16 +635,19 @@ async function carregarModulosNoMenu() {
   // de Configurações. GET /api/tenant/modulos já ordena por nome, então
   // Financeiro cai antes de Relatórios sozinho (F < R).
   const ancora = document.getElementById('menu-modulos-anchor');
+  const ICONE_MODULO = { financeiro: 'wallet', dashboards: 'chart-column', relatorios: 'chart-column' };
   resultado.modulos
     .filter((m) => m.key !== 'agenda_inteligente')
     .forEach((m) => {
       const item = document.createElement('div');
       item.className = 'menu-item';
       item.dataset.menu = `modulo:${m.key}`;
+      item.dataset.icon = ICONE_MODULO[m.key] || 'layout-dashboard';
       item.textContent = m.nome;
       item.addEventListener('click', () => ativarMenuItem(item));
       ancora.parentNode.insertBefore(item, ancora);
     });
+  injetarIconesMenu();
 }
 
 tabs.forEach((tab) => {
@@ -4158,7 +4236,7 @@ async function renderInicio() {
 
   let html = `
     <div class="inicio-cabecalho">
-      <h2>Início</h2>
+      <h2 id="inicio-saudacao">${textoSaudacao()}</h2>
       <button class="btn-novo-agendamento" id="btn-inicio-novo-agendamento">+ Novo agendamento</button>
     </div>
 
