@@ -6,6 +6,9 @@
   if (!localStorage.getItem('kyvvo_token')) {
     window.location.href = '/login';
   }
+  // Tema aplicado antes do primeiro paint (evita flash). Chave `kyvvo_tema`,
+  // valores 'light'/'dark' — o mesmo dialeto data-theme do @kyvvohq/design-system.
+  document.documentElement.setAttribute('data-theme', localStorage.getItem('kyvvo_tema') || 'light');
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Painel — Kyvvo</title>
@@ -23,9 +26,7 @@
 <div class="topbar">
   <div class="topbar-esquerda">
     <button class="logo topbar-logo" id="topbar-logo" aria-label="Ir para o início">ky<span class="logo-vv">vv</span>o</button>
-    <div class="topbar-textos">
-      <div class="saudacao" id="saudacao"></div>
-    </div>
+    <span class="topbar-produto-tag">Studio</span>
   </div>
   <div class="user-menu" id="user-menu">
     <button class="user-menu-toggle" id="user-menu-toggle">
@@ -40,6 +41,10 @@
       <div class="user-menu-item" data-menu="perfil">Meu Perfil</div>
       <div class="user-menu-item" data-menu="equipe" data-somente-admin data-somente-plano-custom>Equipe</div>
       <div class="user-menu-item" data-menu="ajuda">Ajuda</div>
+      <button class="user-menu-tema" id="btn-tema-toggle" type="button" role="switch" aria-checked="false">
+        <span>Tema</span>
+        <span class="user-menu-tema-estado" id="user-menu-tema-estado">Claro</span>
+      </button>
       <div class="user-menu-divisor"></div>
       <button class="user-menu-sair" id="btn-sair"><span aria-hidden="true">⎋</span> Sair</button>
     </div>
@@ -52,22 +57,22 @@
 <div class="painel-shell">
   <aside class="painel-sidebar" id="painel-sidebar">
     <nav class="menu">
-      <div class="menu-item active" data-menu="inicio">Início</div>
-      <div class="menu-item" data-menu="agendamento">Agenda</div>
-      <div class="menu-item" data-menu="servicos">Serviços</div>
-      <div class="menu-item" data-menu="profissionais" data-somente-plano-custom>Profissionais</div>
-      <div class="menu-item" data-menu="clientes">Clientes</div>
+      <div class="menu-item active" data-menu="inicio" data-icon="layout-dashboard">Início</div>
+      <div class="menu-item" data-menu="agendamento" data-icon="calendar-days">Agenda</div>
+      <div class="menu-item" data-menu="servicos" data-icon="scissors">Serviços</div>
+      <div class="menu-item" data-menu="profissionais" data-somente-plano-custom data-icon="briefcase">Profissionais</div>
+      <div class="menu-item" data-menu="clientes" data-icon="users">Clientes</div>
       <div id="menu-modulos-anchor"></div>
-      <div class="menu-item-grupo" id="menu-config-toggle" data-submenu="menu-config-submenu">
-        <span class="menu-chevron" aria-hidden="true"></span>
+      <div class="menu-item-grupo" id="menu-config-toggle" data-submenu="menu-config-submenu" data-icon="settings">
         <span>Configurações</span>
+        <span class="menu-chevron" aria-hidden="true"></span>
       </div>
       <div class="menu-submenu" id="menu-config-submenu">
-        <div class="menu-item" data-menu="empresa" data-somente-admin>Meu negócio</div>
-        <div class="menu-item" data-menu="configuracao" data-somente-admin>Preferências</div>
-        <div class="menu-item" data-menu="bloqueios">Bloqueio de agenda</div>
-        <div class="menu-item" data-menu="whatsapp">WhatsApp</div>
-        <div class="menu-item" data-menu="pagamentos" data-somente-admin>Plano e cobrança</div>
+        <div class="menu-item" data-menu="empresa" data-somente-admin data-icon="building-2">Meu negócio</div>
+        <div class="menu-item" data-menu="configuracao" data-somente-admin data-icon="sliders-horizontal">Preferências</div>
+        <div class="menu-item" data-menu="bloqueios" data-icon="calendar-x">Bloqueio de agenda</div>
+        <div class="menu-item" data-menu="whatsapp" data-icon="message-circle">WhatsApp</div>
+        <div class="menu-item" data-menu="pagamentos" data-somente-admin data-icon="credit-card">Plano e cobrança</div>
       </div>
     </nav>
   </aside>

@@ -205,10 +205,24 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   border-bottom: 1px solid var(--border);
 }
 
-.topbar-esquerda { display: flex; align-items: center; gap: 14px; }
+.topbar-esquerda { display: flex; align-items: center; gap: 10px; }
 .topbar-textos { display: flex; flex-direction: column; gap: 2px; }
 .topbar .logo { margin: 0; font-size: 20px; }
 .saudacao { font-size: 13px; color: var(--muted-strong); }
+
+/* Nome do produto ao lado do logo (paridade com o Kyvvo People, que mostra
+   "People" como tag). A marca é única (@kyvvohq/design-system) — o que
+   diferencia é o nome do produto. */
+.topbar-produto-tag {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted-strong);
+  padding: 3px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  line-height: 1;
+}
 
 /* Título da página (DS: "Página" 19px Space Grotesk + eyebrow abaixo) —
    só as páginas admin passam essa div; o painel do tenant continua sem
@@ -421,6 +435,10 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 .menu-chevron { font-size: 13px; line-height: 1; width: 12px; text-align: center; display: inline-block; }
 .menu-chevron::before { content: '>'; }
 .expandido .menu-chevron::before { content: '⌵'; }
+
+/* No cabeçalho de grupo o ícone vem antes do rótulo (injetado pelo app.js,
+   como nos .menu-item) e o chevron é empurrado pra direita. */
+.menu-item-grupo .menu-chevron { margin-left: auto; }
 
 .menu-submenu {
   display: none;
@@ -762,6 +780,37 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .user-menu-item:hover { background: var(--surface-hover); }
 
+/* Linha "Tema" com o estado atual à direita (paridade com o toggle de tema
+   do Kyvvo People). É um <button> — desfaz o reset genérico de button. Fora
+   do loop de clique dos .user-menu-item de propósito (não navega, só alterna
+   o tema e mantém o menu aberto). */
+.user-menu-tema {
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: none;
+  border: none;
+  font-weight: 400;
+  text-align: left;
+}
+.user-menu-tema:hover { background: var(--surface-hover); }
+.user-menu-tema-estado {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted-strong);
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+}
+
 .user-menu-divisor { height: 1px; background: var(--border); margin: 8px 4px; }
 
 /* Ícone e texto vermelhos (pedido explícito) — caractere Unicode simples em
@@ -862,7 +911,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   position: relative;
   display: flex;
   align-items: stretch;
-  border-bottom: 1px solid #1c2038;
+  border-bottom: 1px solid var(--border);
   min-height: 56px;
 }
 
@@ -873,7 +922,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   padding: 10px 8px;
   font-size: 12px;
   color: var(--muted-strong);
-  border-right: 1px solid #1c2038;
+  border-right: 1px solid var(--border);
   display: flex;
   align-items: flex-start;
 }
@@ -910,7 +959,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 .grade-ag-card {
-  background: #171b34;
+  background: var(--surface-muted);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 8px 10px;
@@ -1369,7 +1418,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   font-size: 13px;
   font-weight: 600;
 }
-.pagamento-detalhes-toggle:hover { background: #171b34; }
+.pagamento-detalhes-toggle:hover { background: var(--surface-muted); }
 .pagamento-detalhes-conteudo {
   margin-top: 12px;
   padding: 16px;
@@ -1494,7 +1543,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   align-items: center;
   gap: 8px;
   padding: 10px 4px;
-  background: #1b2040;
+  background: var(--surface-muted);
   border: 1px solid var(--border-strong);
   border-radius: 10px;
   cursor: pointer;
@@ -1599,9 +1648,15 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 .nav-periodo button {
   width: auto;
   margin: 0;
-  padding: 6px 12px;
-  background: var(--border);
+  padding: 6px 14px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  font-weight: 500;
 }
+
+.nav-periodo button:hover { background: var(--accent-tint); color: var(--accent-strong); border-color: transparent; }
 
 /* Busca da listagem de tenants (US27) — full width no mobile, até 400px
    alinhado à esquerda no desktop (CA06). */
@@ -2251,7 +2306,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .chat-bolha-cliente {
   align-self: flex-start;
-  background: #191f3d;
+  background: var(--surface-muted);
   border-bottom-left-radius: 2px;
 }
 
@@ -2444,7 +2499,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   align-items: center;
   gap: 4px;
   padding: 3px 10px;
-  background: #1c2140;
+  background: var(--surface-muted);
   border: 1px solid var(--border-strong);
   border-radius: 999px;
   color: var(--muted-strong);
@@ -2633,8 +2688,8 @@ textarea:focus { outline: none; border-color: var(--accent); }
   animation: toast-entrar 0.25s ease both;
 }
 
-.toast-sucesso { background: #1c3a2e; color: var(--success); border: 1px solid #2a5c44; }
-.toast-erro { background: #3a1c22; color: var(--danger); border: 1px solid #5c2a33; }
+.toast-sucesso { background: var(--success-bg); color: var(--success); border: 1px solid rgba(var(--success-rgb), 0.35); }
+.toast-erro { background: var(--danger-bg); color: var(--danger); border: 1px solid rgba(var(--danger-rgb), 0.35); }
 
 .toast-saindo { animation: toast-sair 0.25s ease both; }
 
