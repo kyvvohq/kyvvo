@@ -902,7 +902,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 .grade-horarios {
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: 10px;
   overflow: hidden;
 }
@@ -911,7 +911,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   position: relative;
   display: flex;
   align-items: stretch;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-strong);
   min-height: 56px;
 }
 
@@ -922,7 +922,7 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
   padding: 10px 8px;
   font-size: 12px;
   color: var(--muted-strong);
-  border-right: 1px solid var(--border);
+  border-right: 1px solid var(--border-strong);
   display: flex;
   align-items: flex-start;
 }
@@ -1860,6 +1860,14 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 .agendamento-cancelado { opacity: 0.55; }
 .agendamento-cancelado .agendamento-hora { text-decoration: line-through; }
 
+/* Nas grades Dia/Semana o card cancelado não pode sumir (opacity 0.55 sobre
+   --surface-muted fica ilegível no tema claro) — mantém opaco e sinaliza o
+   cancelamento por cor esmaecida + risco no título. */
+.grade-ag-card.agendamento-cancelado { opacity: 1; }
+.grade-ag-card.agendamento-cancelado .grade-ag-servico { color: var(--muted); text-decoration: line-through; }
+.grade-ag-card.agendamento-cancelado .grade-ag-cliente,
+.grade-ag-card.agendamento-cancelado .grade-ag-meta { color: var(--muted); }
+
 /* Listagem de tenants (US26) */
 .badge-status { margin-left: 0; }
 .badge-trial-ativo { background: rgba(var(--success-rgb), 0.15); color: var(--success); }
@@ -2579,8 +2587,12 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .modal-acoes button { margin-top: 0; }
 
-.btn-secundario { background: var(--border); }
-.btn-secundario:hover { background: var(--border-strong); }
+.btn-secundario {
+  background: var(--surface-muted);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+}
+.btn-secundario:hover { background: var(--surface-hover); }
 .btn-perigo { background: #e0455a; }
 .btn-perigo:hover { background: #c93a4d; }
 .btn-primario { background: var(--accent); }
