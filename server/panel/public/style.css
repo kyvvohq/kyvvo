@@ -1785,6 +1785,164 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
 .grade-resumo-separador { color: var(--border-strong); }
 .grade-resumo-total { margin-left: auto; font-size: 13px; font-weight: 600; color: var(--text); }
 
+/* ============ View Dia — rebuild do mock do canvas (artefato 6614742c) ============ */
+
+/* Cabeçalho do dia: ‹ Hoje › + data + "N atendimentos · R$ total" */
+.agenda-topo {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.agenda-topo-nav { display: flex; align-items: center; gap: 6px; }
+.agenda-nav-btn,
+.agenda-nav-hoje {
+  width: auto;
+  margin: 0;
+  height: 34px;
+  padding: 0 12px;
+  background: var(--card);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  color: var(--muted-strong);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.agenda-nav-btn { width: 34px; padding: 0; font-size: 18px; line-height: 1; }
+.agenda-nav-hoje { color: var(--text); }
+.agenda-nav-btn:hover,
+.agenda-nav-hoje:hover { background: var(--surface-hover); border-color: var(--border-strong); }
+.agenda-topo-data strong { display: block; font-family: var(--font-display); font-size: 20px; font-weight: 700; }
+.agenda-topo-data span { font-size: 13px; color: var(--muted); text-transform: capitalize; }
+
+/* Chips de filtro por profissional */
+.agenda-filtros { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.agenda-chip {
+  width: auto;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 14px 0 6px;
+  background: var(--card);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-full);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.agenda-chip:not(:has(.agenda-chip-avatar)) { padding: 0 14px; }
+.agenda-chip-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 600;
+}
+.agenda-chip-ativo { background: var(--accent-tint); border-color: transparent; color: var(--accent-strong); }
+
+/* Grade: régua de hora (--sunken) + conteúdo */
+.agenda-grade {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.agenda-linha {
+  position: relative;
+  display: grid;
+  grid-template-columns: 78px minmax(0, 1fr);
+  align-items: stretch;
+  border-top: 1px solid var(--border);
+  min-height: 56px;
+}
+.agenda-linha:first-child { border-top: none; }
+.agenda-rail {
+  padding: 10px 12px 10px 0;
+  text-align: right;
+  background: var(--sunken);
+  border-right: 1px solid var(--border-strong);
+}
+.agenda-rail-hora { font: 500 12px/1.2 ui-monospace, monospace; color: var(--muted-strong); }
+.agenda-rail-nota { display: block; margin-top: 4px; font-size: 10px; color: var(--muted); }
+.agenda-linha-agora .agenda-rail { background: rgba(var(--accent-rgb), 0.1); }
+.agenda-linha-agora .agenda-rail-hora { color: var(--accent); font-weight: 700; }
+.agenda-linha-agora { box-shadow: inset 3px 0 0 var(--accent); }
+.agenda-conteudo { display: flex; align-items: center; padding: 6px 40px 6px 12px; min-width: 0; }
+.agenda-linha-intervalo .agenda-conteudo { padding: 6px 12px; }
+.agenda-livre { font-size: 13px; color: var(--muted); }
+.agenda-intervalo { font-style: italic; }
+
+/* Card horizontal (1 no horário) */
+.agenda-card {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 10px;
+  background: var(--card);
+  min-width: 0;
+}
+.agenda-card-h { width: 100%; }
+.agenda-card-h-linha {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+.agenda-card-hora { font: 500 12px/1.2 ui-monospace, monospace; color: var(--muted-strong); flex: none; }
+.agenda-card-h .grade-ag-avatar { flex: none; }
+.agenda-card-cliente { font-size: 14px; font-weight: 600; color: var(--text); flex: none; white-space: nowrap; }
+.agenda-card-servico { font-size: 13px; color: var(--muted-strong); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agenda-card-meta { margin-left: auto; font-size: 12px; color: var(--muted); flex: none; }
+.agenda-card-h .badge { flex: none; }
+.agenda-card-h .btn-acoes { flex: none; }
+
+/* Cards compactos lado a lado (2+ no horário) */
+.agenda-multi { display: flex; gap: 6px; width: 100%; min-width: 0; }
+.agenda-card-c { position: relative; flex: 1 1 0; min-width: 0; }
+.agenda-card-c-linha { display: flex; align-items: center; gap: 8px; padding: 7px 9px; cursor: pointer; min-width: 0; }
+.agenda-card-c .grade-ag-avatar { flex: none; }
+.agenda-card-c-txt { min-width: 0; }
+.agenda-card-c .agenda-card-hora { font-size: 10px; }
+.agenda-card-c .agenda-card-cliente { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agenda-card-c .agenda-card-servico { font-size: 10px; color: var(--muted-strong); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agenda-card-c .menu-acoes {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 20;
+  min-width: 168px;
+  margin-top: 4px;
+  padding: 6px;
+  background: var(--card);
+  border: 1px solid var(--border-strong);
+  border-top: 1px solid var(--border-strong);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(var(--shadow-rgb), 0.2);
+}
+
+/* Tons por status — borda esquerda + fundo sutil. O texto fica na cor
+   normal (tintar deixava ilegível no claro). */
+.agenda-tom-ok { border-left-color: var(--success); background: var(--success-bg); }
+.agenda-tom-warn { border-left-color: var(--warning); background: var(--warning-bg); }
+.agenda-tom-bad { border-left-color: var(--danger); background: var(--danger-bg); }
+.agenda-card.agendamento-cancelado .agenda-card-servico { text-decoration: line-through; }
+
+@media (max-width: 720px) {
+  .agenda-linha { grid-template-columns: 56px minmax(0, 1fr); }
+  .agenda-card-h-linha { flex-wrap: wrap; }
+  .agenda-card-meta { margin-left: 0; width: 100%; }
+  .agenda-multi { flex-direction: column; }
+}
+
 /* Busca da listagem de tenants (US27) — full width no mobile, até 400px
    alinhado à esquerda no desktop (CA06). */
 .busca-tenants-wrapper {

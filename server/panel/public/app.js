@@ -4425,6 +4425,139 @@ async function renderInicio() {
   document.getElementById('btn-inicio-novo-agendamento').addEventListener('click', () => abrirModalNovoAgendamento());
 }
 
+// Filtro de coluna/profissional da view Dia — null = "Todos". Client-side:
+// renderDia já busca o dia inteiro, o chip só filtra o que desenha.
+let filtroProfissionalDia = null;
+
+// Tom de cor por status do agendamento (borda esquerda + fundo sutil +
+// pílula). Enum real: confirmado/concluido/falta/cancelado/reagendado
+// (migrations 001/042/060) — o mock do canvas tinha "aguardando"/"em
+// atendimento" que não existem no nosso modelo.
+const TOM_STATUS_AGENDA = {
+  confirmado: { classe: 'agenda-tom-neutro', pill: '', pillClasse: '' },
+  concluido: { classe: 'agenda-tom-ok', pill: 'Concluído', pillClasse: 'badge-concluido' },
+  falta: { classe: 'agenda-tom-warn', pill: 'Falta', pillClasse: 'badge-falta' },
+  cancelado: { classe: 'agenda-tom-bad', pill: 'Cancelado', pillClasse: 'badge-cancelado' },
+  reagendado: { classe: 'agenda-tom-neutro', pill: 'Reagendado', pillClasse: 'badge-status-inativo' },
+};
+const AG_STATUS_SEM_ACOES = ['cancelado', 'concluido', 'falta'];
+
+function menuAcoesAgendamentoHtml(id) {
+  return `
+    <div class="menu-acoes" id="menu-acoes-${id}">
+      <button data-acao="concluir" data-id="${id}">Concluir</button>
+      <button data-acao="reagendar" data-id="${id}">Reagendar</button>
+      <button data-acao="encaixar" data-id="${id}">Encaixar</button>
+      <button data-acao="falta" data-id="${id}">Marcar falta</button>
+      <button data-acao="cancelar" data-id="${id}" class="acao-perigo">Cancelar</button>
+    </div>
+  `;
+}
+
+// Horários da grade Dia COM as faixas de almoço marcadas (gerarHorariosGrade
+// pula o almoço — aqui ele vira uma linha "Intervalo", como no mock).
+function gerarHorariosGradeDia() {
+  const abertura = horarioParaMinutosFrontend(configuracao.horario_abertura || '08:00');
+  const fechamento = horarioParaMinutosFrontend(configuracao.horario_fechamento || '20:00');
+  const almocoAtivo = configuracao.horario_almoco_ativo;
+  const almocoIni = almocoAtivo ? horarioParaMinutosFrontend(configuracao.horario_almoco_inicio) : null;
+  const almocoFim = almocoAtivo ? horarioParaMinutosFrontend(configuracao.horario_almoco_fim) : null;
+  const linhas = [];
+  for (let m = abertura; m < fechamento; m += SLOT_INTERVALO_MINUTOS) {
+    const hhmm = `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+    linhas.push({ hora: hhmm, intervalo: !!(almocoAtivo && m >= almocoIni && m < almocoFim) });
+  }
+  return linhas;
+}
+function minutosIntervaloAlmoco() {
+  if (!configuracao.horario_almoco_ativo) return 0;
+  return horarioParaMinutosFrontend(configuracao.horario_almoco_fim) - horarioParaMinutosFrontend(configuracao.horario_almoco_inicio);
+}
+
+// Card horizontal da view Dia (1 agendamento no horário) — hora · avatar do
+// profissional · cliente · serviço … meta · pílula de status. Reaproveita
+// data-acoes-toggle / .menu-acoes / data-id do resto da agenda (o handler
+// delegado em #conteudo já cobre).
+function renderDiaCardHorizontal(ag) {
+  const tom = TOM_STATUS_AGENDA[ag.status] || TOM_STATUS_AGENDA.confirmado;
+  const semAcoes = AG_STATUS_SEM_ACOES.includes(ag.status);
+  return `
+    <div class="agenda-card agenda-card-h ${tom.classe}${ag.status === 'cancelado' ? ' agendamento-cancelado' : ''}" data-id="${ag.id}">
+      <div class="agenda-card-h-linha" ${semAcoes ? '' : `data-acoes-toggle="${ag.id}"`}>
+        <span class="agenda-card-hora">${formatarHora(ag.data_hora)}</span>
+        <span class="grade-ag-avatar" aria-hidden="true" style="background:${corProfissional(ag.profissional_id)};color:#fff">${iniciaisNome(ag.profissional || '')}</span>
+        <span class="agenda-card-cliente">${ag.cliente || ag.cliente_telefone}</span>
+        <span class="agenda-card-servico">${ag.servico}</span>
+        <span class="agenda-card-meta">${ag.duracao_minutos}min · ${formatarPreco(ag.preco)} · ${ag.profissional}</span>
+        ${ag.encaixe ? '<span class="badge badge-encaixe">Encaixe</span>' : ''}
+        ${tom.pill ? `<span class="badge ${tom.pillClasse}">${tom.pill}</span>` : ''}
+        ${semAcoes ? '' : '<button class="btn-acoes" aria-label="Ações">⋮</button>'}
+      </div>
+      ${semAcoes ? '' : menuAcoesAgendamentoHtml(ag.id)}
+    </div>
+  `;
+}
+
+// Card compacto lado a lado (2+ no mesmo horário). Sem kebab (não cabe) — o
+// clique abre o mesmo .menu-acoes, posicionado por baixo via CSS.
+function renderDiaCardCompacto(ag) {
+  const tom = TOM_STATUS_AGENDA[ag.status] || TOM_STATUS_AGENDA.confirmado;
+  const semAcoes = AG_STATUS_SEM_ACOES.includes(ag.status);
+  return `
+    <div class="agenda-card agenda-card-c ${tom.classe}${ag.status === 'cancelado' ? ' agendamento-cancelado' : ''}" data-id="${ag.id}">
+      <div class="agenda-card-c-linha" ${semAcoes ? '' : `data-acoes-toggle="${ag.id}"`}>
+        <span class="grade-ag-avatar" aria-hidden="true" style="background:${corProfissional(ag.profissional_id)};color:#fff">${iniciaisNome(ag.profissional || '')}</span>
+        <div class="agenda-card-c-txt">
+          <div class="agenda-card-hora">${formatarHora(ag.data_hora)}</div>
+          <div class="agenda-card-cliente">${ag.cliente || ag.cliente_telefone}</div>
+          <div class="agenda-card-servico">${ag.servico}</div>
+        </div>
+      </div>
+      ${semAcoes ? '' : menuAcoesAgendamentoHtml(ag.id)}
+    </div>
+  `;
+}
+
+function renderDiaGrade(diaISO, agendamentos) {
+  const linhas = gerarHorariosGradeDia();
+  if (linhas.length === 0) {
+    return '<div class="vazio">Nenhum horário configurado (confira Abertura/Fechamento em Configuração).</div>';
+  }
+
+  const porHorario = {};
+  for (const ag of agendamentos) {
+    const chave = horaChaveGradeBucket(ag.data_hora);
+    (porHorario[chave] = porHorario[chave] || []).push(ag);
+  }
+
+  const ehHoje = diaISO === formatarDataISO(new Date());
+  const horaAtualBucket = ehHoje ? horaChaveGradeBucket(new Date().toISOString()) : null;
+
+  const corpo = linhas.map(({ hora, intervalo }) => {
+    const itens = intervalo ? [] : (porHorario[hora] || []);
+    const multi = itens.length > 1;
+    const conteudoLinha = intervalo
+      ? '<span class="agenda-livre agenda-intervalo">Intervalo</span>'
+      : !itens.length
+        ? '<span class="agenda-livre">Livre</span>'
+        : itens.length === 1
+          ? renderDiaCardHorizontal(itens[0])
+          : `<div class="agenda-multi">${itens.map(renderDiaCardCompacto).join('')}</div>`;
+    return `
+      <div class="agenda-linha${hora === horaAtualBucket ? ' agenda-linha-agora' : ''}${intervalo ? ' agenda-linha-intervalo' : ''}">
+        <div class="agenda-rail">
+          <span class="agenda-rail-hora">${hora}</span>
+          ${multi ? `<span class="agenda-rail-nota">${itens.length} em paralelo</span>` : ''}
+        </div>
+        <div class="agenda-conteudo">${conteudoLinha}</div>
+        ${intervalo ? '' : `<button class="grade-linha-add" data-add-horario="${hora}" data-data="${diaISO}" aria-label="Novo agendamento às ${hora}">+</button>`}
+      </div>
+    `;
+  }).join('');
+
+  return `<div class="agenda-grade">${corpo}</div>`;
+}
+
 async function renderDia() {
   // Anterior/Próximo (e a primeira carga da aba) nunca param num dia fora
   // do horário de funcionamento configurado — pula direto pro próximo dia
@@ -4433,47 +4566,92 @@ async function renderDia() {
 
   const iso = formatarDataISO(dataRef);
   conteudo.innerHTML = '<div class="vazio">Carregando...</div>';
-  const data = await api(`/api/agendamentos?view=dia&data=${iso}`);
-  if (!data) return;
-
-  const dataLabel = dataRef.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'America/Sao_Paulo' });
-
-  // US02.5 — nome do dia da semana logo abaixo da data, mesmo padrão que a
-  // view Semana já usa nos cabeçalhos de cada dia.
-  let html = `
-    <div class="nav-periodo">
-      <button data-nav="-1">← Anterior</button>
-      <div class="nav-periodo-data">
-        <strong>${dataLabel}</strong>
-        <div class="nav-periodo-dia-semana">${nomeDiaSemana(dataRef)}</div>
-      </div>
-      <button data-nav="1">Próximo →</button>
-    </div>
-  `;
+  const [data, profs] = await Promise.all([
+    api(`/api/agendamentos?view=dia&data=${iso}`),
+    api('/api/profissionais'),
+  ]);
+  if (!data || !profs) return;
 
   agendamentosAtuais = data.agendamentos;
-  html += renderGradeHorariosDoDia(iso, data.agendamentos);
 
-  const resumo = resumoGradeDia(data.agendamentos);
+  // Filtro de profissional é client-side (o dia inteiro já veio) — some se o
+  // profissional filtrado não tem agendamento hoje? não: o chip continua,
+  // mostra a coluna vazia. Só limpa se o profissional sumiu do cadastro.
+  if (filtroProfissionalDia && !profs.profissionais.some((p) => p.id === filtroProfissionalDia)) {
+    filtroProfissionalDia = null;
+  }
+  const agsVisiveis = filtroProfissionalDia
+    ? data.agendamentos.filter((ag) => ag.profissional_id === filtroProfissionalDia)
+    : data.agendamentos;
+
+  const dataLabel = dataRef.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'America/Sao_Paulo' });
+  const validos = agsVisiveis.filter((ag) => ag.status !== 'cancelado');
+  const totalDia = validos.reduce((soma, ag) => soma + Number(ag.preco || 0), 0);
+
+  const chipsHtml = profs.profissionais.length > 1
+    ? `
+      <div class="agenda-filtros">
+        ${profs.profissionais.map((p) => `
+          <button class="agenda-chip${filtroProfissionalDia === p.id ? ' agenda-chip-ativo' : ''}" data-filtro-prof="${p.id}">
+            <span class="agenda-chip-avatar" style="background:${corProfissional(p.id)};color:#fff">${iniciaisNome(p.nome)}</span>
+            ${(p.nome || '').split(' ')[0]}
+          </button>
+        `).join('')}
+        <button class="agenda-chip${!filtroProfissionalDia ? ' agenda-chip-ativo' : ''}" data-filtro-prof="">Todos</button>
+      </div>
+    `
+    : '';
+
+  let html = `
+    <div class="agenda-topo">
+      <div class="agenda-topo-nav">
+        <button class="agenda-nav-btn" data-nav="-1" aria-label="Dia anterior">‹</button>
+        <button class="agenda-nav-hoje" data-nav="hoje">Hoje</button>
+        <button class="agenda-nav-btn" data-nav="1" aria-label="Próximo dia">›</button>
+      </div>
+      <div class="agenda-topo-data">
+        <strong>${dataLabel}</strong>
+        <span>${nomeDiaSemana(dataRef)} · ${validos.length} ${validos.length === 1 ? 'atendimento' : 'atendimentos'} · ${formatarPreco(totalDia)}</span>
+      </div>
+    </div>
+    ${chipsHtml}
+  `;
+
+  html += renderDiaGrade(iso, agsVisiveis);
+
+  const resumo = resumoGradeDia(agsVisiveis);
+  const intervaloMin = minutosIntervaloAlmoco();
+  const intervaloLabel = intervaloMin >= 60 && intervaloMin % 60 === 0
+    ? `${intervaloMin / 60}h de intervalo`
+    : intervaloMin > 0 ? `${intervaloMin}min de intervalo` : '';
   html += `
     <div class="grade-resumo">
       <span>${resumo.livres} ${resumo.livres === 1 ? 'horário livre' : 'horários livres'}</span>
       <span class="grade-resumo-separador">·</span>
-      <span>${resumo.agendados} ${resumo.agendados === 1 ? 'agendamento' : 'agendamentos'}</span>
-      <span class="grade-resumo-total">${formatarPreco(resumo.previsto)}</span>
+      <span>${resumo.agendados} ${resumo.agendados === 1 ? 'marcado' : 'marcados'}</span>
+      ${intervaloLabel ? `<span class="grade-resumo-separador">·</span><span>${intervaloLabel}</span>` : ''}
+      <span class="grade-resumo-total">${formatarPreco(resumo.previsto)} previstos</span>
     </div>
   `;
 
   conteudo.innerHTML = html;
-  conteudo.querySelector('[data-nav="-1"]').addEventListener('click', () => {
-    dataRef.setDate(dataRef.getDate() - 1);
-    dataRef = proximoDiaAberto(dataRef, -1);
-    renderDia();
+  conteudo.querySelectorAll('[data-nav]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const nav = btn.dataset.nav;
+      if (nav === 'hoje') {
+        dataRef = new Date();
+      } else {
+        dataRef.setDate(dataRef.getDate() + Number(nav));
+      }
+      dataRef = proximoDiaAberto(dataRef, nav === '-1' ? -1 : 1);
+      renderDia();
+    });
   });
-  conteudo.querySelector('[data-nav="1"]').addEventListener('click', () => {
-    dataRef.setDate(dataRef.getDate() + 1);
-    dataRef = proximoDiaAberto(dataRef, 1);
-    renderDia();
+  conteudo.querySelectorAll('[data-filtro-prof]').forEach((chip) => {
+    chip.addEventListener('click', () => {
+      filtroProfissionalDia = chip.dataset.filtroProf || null;
+      renderDia();
+    });
   });
 }
 
