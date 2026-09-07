@@ -1,79 +1,34 @@
-# Kyvvo
+# kyvvo
 
-CRM multi-tenant para pequenos negócios (MEI/ME) — agendamento via WhatsApp e painel web de gestão.
+Repositório **institucional** da Kyvvo — a página em `kyvvo.com.br`.
 
-## O que é
+Desde 2026-09-07 o produto foi separado em repos próprios:
 
-Kyvvo é uma plataforma SaaS que permite que negócios (salões de beleza, petshops, etc.) recebam e organizem agendamentos feitos pelos próprios clientes via WhatsApp. Cada negócio (tenant) tem seu próprio painel web para gerenciar agenda, clientes, serviços, financeiro e assinatura.
-
-## Componentes
-
-- **Bot WhatsApp**: fluxo conversacional em n8n + WhatsApp Cloud API (oficial da Meta), guia o cliente final pelo agendamento.
-- **Painel do tenant** (`server/panel/public/`): app web onde o dono do negócio gerencia agenda (dia/semana/mês), clientes, serviços, financeiro, perfil e forma de pagamento da assinatura.
-- **Painel admin** (`server/panel/public/admin/`): área interna da Kyvvo para gestão de todos os tenants (busca, detalhe, CRUD).
-- **Landing do Studio** (`server/public-studio/`, `landing/`): página de vendas do produto, servida em studio.kyvvo.com.br junto com o painel.
-- **Landing da plataforma** (`server/public/`): página institucional da Kyvvo em kyvvo.com.br (hoje só esqueleto), publicada via AWS Amplify.
-
-## Stack
-
-| Camada | Tecnologia |
+| Repo | O quê |
 |---|---|
-| Bot / Automação | n8n + WhatsApp Cloud API (oficial da Meta) |
-| Backend (painel + admin) | Node.js + Fastify + PostgreSQL |
-| Pagamentos | Asaas (Pix recorrente + cartão de crédito, tokenização server-side) |
-| E-mail transacional | Resend |
-| Analytics / funil | PostHog (`POSTHOG_KEY` / `POSTHOG_HOST` — landing e painel; sem chave configurada, tracking fica desligado) |
-| Testes | Playwright |
-| Infra | EC2 (Docker Compose) atrás de Cloudflare |
-| CI/CD | GitHub Actions (deploy automático em push na `main`) |
+| **`kyvvohq/kyvvo`** (este) | landing institucional `kyvvo.com.br` (`server/public/`), publicada via AWS Amplify |
+| `kyvvohq/kyvvo-studio` | o produto — painel do tenant + admin + landing `studio.kyvvo.com.br` |
+| `kyvvohq/kyvvo-n8n` | workflows n8n (bot WhatsApp) |
+| `kyvvohq/kyvvo-design-system` | tokens + componentes compartilhados |
+| `kyvvohq/kyvvo-platform` | serviço de auth/sessão/entitlements/billing |
+| `kyvvohq/kyvvo-infra` | espelho versionado do docker-compose + nginx da EC2 |
+| `kyvvohq/kyvvo-integrations` | pacotes `@kyvvohq/*` (asaas, db-migrate, platform-client) |
 
-## Estrutura do repositório
+O histórico completo do monorepo antigo está preservado aqui e em
+`kyvvo-studio` (os dois são descendentes deste repo).
+
+## Conteúdo
 
 ```
-kyvvo/
-├── docs/                     # Documentação do produto (escopo, épicos, arquitetura)
-├── landing/                  # Landing page e lista de espera
-├── server/
-│   ├── index.js              # Landing page / API pública
-│   ├── db/                   # Migrations SQL sequenciais (NNN_descricao.sql)
-│   └── panel/
-│       ├── index.js          # API do painel (tenant + admin)
-│       ├── asaas-service.js  # Integração com o gateway Asaas
-│       ├── token-service.js  # Verificação de e-mail / tokens
-│       ├── tests/            # Suíte Playwright
-│       └── public/
-│           ├── (painel do tenant)
-│           └── admin/        # Painel admin da Kyvvo
-└── .github/workflows/        # Deploy automático pra EC2
+server/public/      # kyvvo.com.br — HTML/CSS estático, deploy via Amplify
+├── index.html
+├── favicon.svg
+└── robots.txt
+landing/index.html  # stub de redirect (GitHub Pages)
 ```
-
-## Desenvolvimento
-
-### Pré-requisitos
-- Node.js 18+
-- PostgreSQL
-- Número de WhatsApp Business configurado na Meta (Cloud API) para teste
-
-### Rodando os testes (painel)
-```bash
-cd server/panel
-npm install
-npx playwright test
-```
-
-### Migrations
-Aplicadas manualmente em produção, em ordem, via `psql`. Ao criar uma nova, use o próximo número sequencial disponível em `server/db/`.
 
 ## Deploy
 
-Deploy automático via GitHub Actions (`.github/workflows/deploy.yml`) a cada push na `main`: copia os arquivos alterados (landing e/ou painel, conforme o path) pra EC2 e reinicia o(s) container(s) via Docker Compose.
-
-## Links úteis
-
-- [WhatsApp Cloud API Docs](https://developers.facebook.com/docs/whatsapp/cloud-api)
-- [n8n Docs](https://docs.n8n.io)
-- [Asaas API Docs](https://docs.asaas.com)
-
-## Licença
-
-Privado — todos os direitos reservados © 2026 Kyvvo.
+`server/public/` é publicado pelo **AWS Amplify Hosting** (build config no
+console da AWS, observa a branch `main` deste repo). Não há GitHub Actions
+aqui — o deploy do Studio vive em `kyvvohq/kyvvo-studio`.
