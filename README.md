@@ -32,7 +32,6 @@ Kyvvo é uma plataforma SaaS que permite que negócios (salões de beleza, petsh
 ```
 kyvvo/
 ├── docs/                     # Documentação do produto (escopo, épicos, arquitetura)
-├── n8n/                      # Fluxos do bot WhatsApp (JSON)
 ├── landing/                  # Landing page e lista de espera
 ├── server/
 │   ├── index.js              # Landing page / API pública
