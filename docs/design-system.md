@@ -100,7 +100,7 @@ desenhar do zero.
 
 ## Fora de escopo por enquanto
 
-- **Kyvvo People** (repo `brbpalves/kyvvo-people`, `people.kyvvo.com.br`):
+- **Kyvvo People** (repo `kyvvohq/kyvvo-people`, `people.kyvvo.com.br`):
   o DS já tem um componente "Lateral / People", mas nenhuma adoção foi
   feita no código do People ainda — decisão do Bruno, pendente de mais
   direção.
