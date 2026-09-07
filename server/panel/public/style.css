@@ -12,7 +12,8 @@ body {
   min-height: 100vh;
   /* Rodapé sempre ancorado no fim da viewport (nunca "flutuando" no meio da
      tela em páginas com pouco conteúdo) — o miolo da página cresce via
-     `.conteudo { flex: 1 }` abaixo e empurra footer.rodape-app pro final. */
+     `.conteudo { flex: 1 }` abaixo e empurra o <footer data-ds-rodape> pro
+     final. */
   display: flex;
   flex-direction: column;
 }
@@ -66,40 +67,9 @@ body {
   border-radius: 2px;
 }
 
-/* Cartão flutuante (DS: rodapé "Base") — mesmo tratamento do .topbar
-   novo: fundo/borda/radius de cartão em vez da linha divisória simples de
-   antes (US57). Sem reaproveitar o rodapé institucional completo do DS
-   (colunas Plataforma/Produtos/Empresa/Legal, redes sociais) — não faz
-   sentido pra uma ferramenta interna da equipe nem pras telas de auth do
-   tenant; só o tratamento visual (cartão) foi trazido. */
-/* Rodapé de área logada — versão mínima (padrão Kyvvo People): linha de
-   borda no topo, centralizado, sem cartão. */
-footer.rodape-app {
-  padding: 22px var(--space-5);
-  border-top: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.rodape-app-copy {
-  font-size: 12px;
-  color: var(--muted-strong);
-}
-
-/* Logo substituindo a palavra "Kyvvo" dentro do próprio texto do rodapé
-   (em vez de um bloco separado antes do parágrafo) — precisa ficar inline
-   e sem os resets de bloco (centralização/margem) que .logo usa nos outros
-   contextos. */
-.rodape-logo-inline {
-  display: inline;
-  margin: 0;
-  text-align: left;
-  font-size: 13px;
-  vertical-align: baseline;
-}
+/* Rodapé de área logada — agora é o componente `<footer data-ds-rodape>` do
+   @kyvvohq/design-system (components.css/.js). O CSS local (footer.rodape-app,
+   .rodape-app-copy, .rodape-logo-inline, .rodape-logo-img) saiu daqui. */
 
 label {
   display: block;
@@ -278,7 +248,6 @@ input:disabled, select:disabled { opacity: 0.5; cursor: not-allowed; }
    currentColor (um <img src> não herda cor da página) — o tema troca o
    arquivo inteiro via .js-logo-kyvvo, ver aplicarLogo() no app.js. */
 .topbar-logo-img { height: 22px; width: auto; display: block; }
-.rodape-logo-img { height: 14px; width: auto; vertical-align: middle; margin: 0 1px; }
 
 /* Alça de ocultar/exibir a sidebar — fica encostada na borda direita da
    sidebar (não mais no topbar), como uma "aba" entre ela e o conteúdo.

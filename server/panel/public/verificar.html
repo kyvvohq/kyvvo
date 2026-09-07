@@ -15,6 +15,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="/ds/tokens.css">
+<link rel="stylesheet" href="/ds/components.css">
 <link rel="stylesheet" href="/style.css">
 <script src="/analytics.js"></script>
 </head>
@@ -39,10 +40,7 @@
     </p>
   </div>
 </div>
-<footer class="rodape-app">
-  <div class="logo">ky<span class="logo-vv">vv</span>o</div>
-  <p class="rodape-app-copy">© 2026 Kyvvo. Todos os direitos reservados.</p>
-</footer>
+<footer data-ds-rodape></footer>
 <script>
   const token = localStorage.getItem('kyvvo_token');
   const form = document.getElementById('form-token');
@@ -178,5 +176,6 @@
     }
   });
 </script>
+<script src="/ds/components.js"></script>
 </body>
 </html>
