@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -16,6 +16,17 @@
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<!-- Só pro rodapé público (.ds-rodape-publico, componente do DS) — o resto
+     da página continua com as variáveis/CSS locais no <style> abaixo, que
+     vêm DEPOIS no documento e vencem em empate de especificidade pra tudo
+     que já existia (mesmo nome de variável, ex. --border/--muted).
+     URL ABSOLUTA pro domínio do Studio (não /ds/... relativo): este site é
+     hospedado no AWS Amplify, sem o nginx da EC2 que serve /ds/* como
+     proxy nos outros produtos — /ds/tokens.css relativo dava 404 aqui.
+     <link>/<script> cross-origin funcionam sem CORS (isso só importa pra
+     fetch/XHR), então servir do host do Studio é seguro. -->
+<link rel="stylesheet" href="https://studio.kyvvo.com.br/ds/tokens.css">
+<link rel="stylesheet" href="https://studio.kyvvo.com.br/ds/components.css">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -56,13 +67,18 @@ h1{font-family:var(--font-d);font-weight:800;font-size:clamp(1.9rem,4vw,3rem);li
 .produto-nome{font-family:var(--font-d);font-weight:700;font-size:1.05rem;margin-bottom:6px}
 .produto-desc{font-size:.85rem;color:var(--muted)}
 
-footer{padding:36px 6%;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px}
-.footer-copy{font-size:.78rem;color:var(--muted)}
-.footer-links{display:flex;gap:20px;flex-wrap:wrap}
-.footer-links a{font-size:.82rem;color:var(--muted);text-decoration:none}
-.footer-links a:hover{color:var(--text)}
+/* Rodapé público novo (.ds-rodape-publico, componente do DS) — undo do
+   border-top acima: a própria .ds-rodape-publico-conteudo já desenha o
+   dela (::before, barra em gradiente), duplicava a linha. */
+.ds-rodape-publico{border-top:none}
+/* kyvvo-claro.svg é o wordmark horizontal (522x240, com retângulo branco de
+   fundo embutido no próprio SVG) — o slot do DS é 1:1 com object-fit:cover,
+   pensado pra uma foto real de post do Instagram; com "cover" o logo fica
+   cortado (mesmo bug corrigido no rodapé do Studio e do People).
+   "contain" mostra o logo inteiro até ter uma foto de verdade pra trocar. */
+.ds-rodape-publico-imagem img{object-fit:contain}
 
-@media(max-width:640px){nav.site-header{padding:16px 4%}footer{padding:28px 4%}}
+@media(max-width:640px){nav.site-header{padding:16px 4%}}
 </style>
 </head>
 <body>
@@ -94,14 +110,58 @@ footer{padding:36px 6%;border-top:1px solid var(--border);display:flex;align-ite
   </div>
 </main>
 
-<footer>
-  <a class="logo" href="/">ky<span class="logo-vv">vv</span>o</a>
-  <nav class="footer-links">
-    <a href="https://studio.kyvvo.com.br/privacidade.html">Política de Privacidade</a>
-    <a href="https://studio.kyvvo.com.br/termos.html">Termos de Uso</a>
-  </nav>
-  <p class="footer-copy">© 2026 Kyvvo. Todos os direitos reservados.</p>
+<footer class="ds-rodape-publico">
+  <div class="ds-rodape-publico-conteudo">
+    <figure class="ds-rodape-publico-social">
+      <a class="ds-rodape-publico-imagem" href="https://www.instagram.com/somoskyvvo" tabindex="-1" aria-hidden="true">
+        <img src="/images/kyvvo-claro.svg" alt="">
+      </a>
+      <figcaption class="ds-rodape-publico-texto">Siga a Kyvvo no <a href="https://www.instagram.com/somoskyvvo">Instagram</a></figcaption>
+    </figure>
+    <div class="ds-rodape-publico-produtos">
+      <h2 class="ds-rodape-publico-titulo" id="rp-produtos">Nossos produtos</h2>
+      <div class="ds-carrossel" data-ds-carrossel aria-labelledby="rp-produtos">
+        <div class="ds-carrossel-trilho">
+          <div class="ds-carrossel-slide">
+            <div class="ds-rodape-publico-produto">
+              <h3 class="ds-rodape-publico-produto-nome"><a href="https://www.studio.kyvvo.com.br">Studio</a></h3>
+              <p class="ds-rodape-publico-produto-texto">Agenda e WhatsApp inteligente pra salões e clínicas.</p>
+              <span class="ds-rodape-publico-produto-ir" aria-hidden="true">Conhecer &rarr;</span>
+            </div>
+          </div>
+          <div class="ds-carrossel-slide">
+            <div class="ds-rodape-publico-produto">
+              <h3 class="ds-rodape-publico-produto-nome"><a href="https://www.people.kyvvo.com.br">People</a></h3>
+              <p class="ds-rodape-publico-produto-texto">Recrutamento e seleção com avaliação comportamental.</p>
+              <span class="ds-rodape-publico-produto-ir" aria-hidden="true">Conhecer &rarr;</span>
+            </div>
+          </div>
+          <div class="ds-carrossel-slide">
+            <div class="ds-rodape-publico-produto">
+              <h3 class="ds-rodape-publico-produto-nome"><a href="https://www.crm.kyvvo.com.br">CRM</a></h3>
+              <p class="ds-rodape-publico-produto-texto">Gestão de clientes e vendas em um só lugar.</p>
+              <span class="ds-rodape-publico-produto-ir" aria-hidden="true">Conhecer &rarr;</span>
+            </div>
+          </div>
+        </div>
+        <div class="ds-carrossel-controles">
+          <button type="button" class="ds-carrossel-btn ds-carrossel-ant" aria-label="Anterior"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg></button>
+          <div class="ds-carrossel-pontos"></div>
+          <button type="button" class="ds-carrossel-btn ds-carrossel-prox" aria-label="Próximo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg></button>
+        </div>
+      </div>
+    </div>
+    <nav class="ds-rodape-publico-links" aria-label="Informações legais e ajuda">
+      <ul class="ds-rodape-publico-lista">
+        <li><a href="https://studio.kyvvo.com.br/privacidade.html">LGPD</a></li>
+        <li><a href="https://wa.me/553484285182?text=Ol%C3%A1!%20Preciso%20de%20ajuda%20com%20a%20Kyvvo.">Ajuda</a></li>
+        <li><a href="https://studio.kyvvo.com.br/privacidade.html">Política de Privacidade</a></li>
+        <li><a href="https://studio.kyvvo.com.br/termos.html">Termos de Uso</a></li>
+      </ul>
+    </nav>
+  </div>
 </footer>
 
+<script src="https://studio.kyvvo.com.br/ds/components.js"></script>
 </body>
 </html>
