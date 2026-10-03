@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>30 Dias para Pensar sua Carreira — Kyvvo People</title>
+<meta name="description" content="Um workbook digital de reflexão e desenvolvimento profissional, em 30 dias e 5 movimentos. Por Gabriela Matos, psicóloga, para a Kyvvo People.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://kyvvo.com.br/30dias/">
+<meta property="og:type" content="product">
+<meta property="og:site_name" content="Kyvvo People">
+<meta property="og:locale" content="pt_BR">
+<meta property="og:url" content="https://kyvvo.com.br/30dias/">
+<meta property="og:title" content="30 Dias para Pensar sua Carreira">
+<meta property="og:description" content="Você não precisa decidir sua carreira inteira hoje. Talvez precise apenas entender melhor o próximo passo.">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<!-- Tokens do Design System servidos ao vivo pelo host do Studio (este site
+     é Amplify, sem o /ds/ do nginx — mesmo motivo da landing em /index.html).
+     Os valores do :root abaixo são o fallback se o tokens.css não carregar. -->
+<link rel="stylesheet" href="https://studio.kyvvo.com.br/ds/tokens.css">
+<style>
+/* =====================================================================
+   CHECKOUT — único lugar a configurar: o link do checkout da Hotmart vai
+   em data-checkout no <body> (ver abaixo). Todos os botões
+   "Quero começar os 30 dias" usam esse link.
+   ===================================================================== */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#F8F9FC;--card:#FFFFFF;--surface-muted:#F1F3F8;--border:#E7EAF2;--border-strong:#D7DCE8;
+  --text:#0F111A;--text-secondary:#2B3040;--muted-strong:#5A6274;--muted:#6B7385;--text-faint:#8A90A0;
+  --accent:#7C5CFC;--accent-hover:#6A4CE0;--accent-dark:#6344E8;--accent-strong:#4E33C4;--accent-tint:#F1EEFF;--cyan:#22C7F2;
+  --font-display:'Space Grotesk',Arial,sans-serif;--font-ui:'Inter',Arial,sans-serif;
+  --papel:#FCFCFE;
+  --largura:1120px;
+}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{background:var(--papel);color:var(--text);font-family:var(--font-ui);font-size:17px;line-height:1.65;-webkit-font-smoothing:antialiased}
+img{max-width:100%;display:block}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px}
+.container{width:100%;max-width:var(--largura);margin:0 auto;padding:0 24px}
+.estreito{max-width:760px}
+section{padding:96px 0;position:relative}
+.secao-alt{background:var(--bg);border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.rotulo{display:inline-flex;align-items:center;gap:10px;font-size:12px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--accent-strong);margin-bottom:20px}
+.rotulo::before{content:'';width:24px;height:1px;background:var(--accent)}
+h1,h2,h3{font-family:var(--font-display);font-weight:600;letter-spacing:-.02em;color:var(--text);line-height:1.15}
+h2{font-size:clamp(28px,4vw,42px);margin-bottom:24px;max-width:22ch}
+h3{font-size:19px;margin-bottom:6px}
+p+p{margin-top:16px}
+.lead{font-size:clamp(18px,2vw,21px);color:var(--text-secondary);max-width:58ch}
+.suave{color:var(--muted-strong)}
+
+/* ---------- Topo ---------- */
+.topo{position:sticky;top:0;z-index:20;background:rgba(252,252,254,.86);backdrop-filter:saturate(1.4) blur(10px);-webkit-backdrop-filter:saturate(1.4) blur(10px);border-bottom:1px solid transparent;transition:border-color .2s}
+.topo.rolou{border-bottom-color:var(--border)}
+.topo .container{display:flex;align-items:center;justify-content:space-between;height:68px;gap:16px}
+.marca{display:flex;align-items:center;gap:10px;text-decoration:none}
+.marca img{height:26px;width:auto}
+.marca-produto{font-family:var(--font-display);font-weight:600;font-size:15px;color:var(--muted-strong);padding-left:10px;border-left:1px solid var(--border-strong);line-height:1}
+.topo .btn{padding:10px 18px;font-size:13px;opacity:0;transform:translateY(-4px);pointer-events:none;transition:opacity .2s,transform .2s}
+.topo.rolou .btn{opacity:1;transform:none;pointer-events:auto}
+
+/* ---------- Botões ---------- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;background:var(--accent-dark);color:#fff;font-family:var(--font-ui);font-weight:600;font-size:15px;letter-spacing:.04em;text-transform:uppercase;text-decoration:none;padding:18px 30px;border-radius:12px;border:0;cursor:pointer;transition:background .15s,transform .15s,box-shadow .15s;box-shadow:0 1px 0 rgba(15,17,26,.04),0 8px 24px -12px rgba(99,68,232,.55)}
+.btn:hover{background:var(--accent-hover);transform:translateY(-1px)}
+.btn svg{width:18px;height:18px;flex:none}
+.cta-info{margin-top:14px;font-size:14px;color:var(--muted)}
+.cta-info span{white-space:nowrap}
+
+/* ---------- Hero ---------- */
+.hero{padding:72px 0 96px;overflow:hidden}
+.hero-grade{display:grid;grid-template-columns:1.1fr .9fr;gap:64px;align-items:center}
+.hero h1{font-size:clamp(48px,8.4vw,104px);font-weight:700;line-height:.95;letter-spacing:-.045em;margin-bottom:28px}
+.hero h1 span{display:block}
+.hero h1 .destaque{color:var(--accent)}
+.hero-sub{font-family:var(--font-display);font-size:clamp(19px,2.2vw,23px);font-weight:500;color:var(--text-secondary);margin-bottom:28px}
+.hero-apoio{font-size:18px;color:var(--muted-strong);max-width:44ch;margin-bottom:36px;border-left:2px solid var(--accent);padding-left:18px}
+.hero-apoio strong{color:var(--text);font-weight:600}
+.hero-visual{position:relative;aspect-ratio:1310/1853;max-width:440px;justify-self:end;width:100%}
+/* "Capa" tipográfica do workbook — substituída pela imagem real (mockup)
+   quando houver: trocar o conteúdo de .capa por <img>. */
+.capa-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:4px 14px 14px 4px;border:1px solid var(--border);box-shadow:-12px 0 0 -6px var(--accent-tint),0 34px 70px -30px rgba(15,17,26,.4)}
+.capa{position:absolute;inset:0;justify-content:flex-start;gap:28px;background:var(--card);border:1px solid var(--border);border-radius:6px 18px 18px 6px;box-shadow:-14px 0 0 -6px var(--accent-tint),0 30px 60px -30px rgba(15,17,26,.35);padding:40px 34px;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden}
+.capa::before{content:'';position:absolute;left:18px;top:0;bottom:0;width:1px;background:var(--border)}
+.capa-topo{font-size:11px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);padding-left:12px}
+.capa-titulo{font-family:var(--font-display);font-weight:700;font-size:clamp(30px,3.6vw,42px);line-height:.98;letter-spacing:-.04em;padding-left:12px}
+.capa-titulo em{font-style:normal;color:var(--accent)}
+.capa-rodape{margin-top:auto;display:flex;justify-content:space-between;align-items:flex-end;padding-left:12px;font-size:12px;color:var(--muted)}
+.capa-rodape b{font-family:var(--font-display);color:var(--text);font-weight:600}
+.capa svg.percurso{position:absolute;right:-10px;bottom:16%;width:78%;opacity:.9}
+
+/* ---------- Identificação ---------- */
+.falas{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin:40px 0}
+.falas .fala{margin:0}
+.fala{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:22px 24px 22px 52px;position:relative;font-size:16px;color:var(--text-secondary)}
+.fala::before{content:'“';position:absolute;left:20px;top:12px;font-family:var(--font-display);font-size:38px;line-height:1;color:var(--accent)}
+.fecho{font-family:var(--font-display);font-size:clamp(19px,2.2vw,23px);font-weight:500;max-width:46ch;color:var(--text)}
+
+/* ---------- O que é ---------- */
+.dupla{display:grid;grid-template-columns:1.15fr .85fr;gap:64px;align-items:start}
+.nao-lista{list-style:none;border-top:1px solid var(--border)}
+.nao-lista li{padding:15px 0;border-bottom:1px solid var(--border);display:flex;gap:14px;align-items:baseline;color:var(--muted-strong);font-size:16px}
+.nao-lista li::before{content:'';flex:none;width:10px;height:1px;background:var(--text-faint);transform:translateY(-4px)}
+.nao-lista li.e{color:var(--text);font-weight:600;font-family:var(--font-display);font-size:18px}
+.nao-lista li.e::before{width:10px;height:10px;border-radius:50%;background:var(--accent);transform:translateY(-1px)}
+
+/* ---------- Movimentos ---------- */
+.movimentos{list-style:none;display:grid;grid-template-columns:repeat(5,1fr);gap:0;margin-top:56px;position:relative}
+.movimentos::before{content:'';position:absolute;top:21px;left:22px;right:22px;height:1px;background:repeating-linear-gradient(90deg,var(--accent) 0 6px,transparent 6px 12px);opacity:.6}
+.mov{padding-right:20px;position:relative}
+.mov-num{width:44px;height:44px;border-radius:50%;background:var(--papel);border:1px solid var(--accent);display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:600;font-size:14px;color:var(--accent-strong);position:relative;margin-bottom:22px}
+.mov:last-child .mov-num{background:var(--accent);color:#fff}
+.mov h3{font-size:15px;letter-spacing:.12em;text-transform:uppercase;margin-bottom:8px}
+.mov p{font-size:15px;color:var(--muted-strong);line-height:1.5}
+.dia{margin-top:56px;display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.dia div{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:22px}
+.dia b{display:block;font-family:var(--font-display);font-weight:600;font-size:17px;margin-bottom:4px}
+.dia span{font-size:15px;color:var(--muted-strong)}
+
+/* ---------- Listas com check ---------- */
+.checks{list-style:none;display:grid;grid-template-columns:repeat(2,1fr);gap:0 40px;margin-top:40px;border-top:1px solid var(--border)}
+.checks li{display:flex;gap:14px;align-items:flex-start;padding:16px 0;border-bottom:1px solid var(--border);font-size:16px}
+.checks li svg{flex:none;width:20px;height:20px;color:var(--accent);margin-top:3px}
+.checks li.forte{font-weight:600}
+
+/* ---------- Galeria (só aparece quando houver imagens reais) ---------- */
+.galeria{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:40px}
+.galeria figure{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.galeria a{display:block}
+.galeria img{width:100%;height:auto;aspect-ratio:953/1348;object-fit:cover;background:var(--surface-muted);transition:transform .3s}
+.galeria a:hover img{transform:scale(1.02)}
+.galeria figcaption{padding:12px 16px;font-size:14px;color:var(--muted-strong);border-top:1px solid var(--border)}
+
+/* ---------- Para quem é / não é ---------- */
+.perfis{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:40px}
+.perfil{display:flex;align-items:center;gap:14px;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px 22px;font-weight:500}
+.perfil svg{flex:none;width:22px;height:22px;color:var(--accent)}
+.xis{list-style:none;margin:32px 0;display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.xis li{display:flex;gap:12px;align-items:center;padding:16px 20px;border:1px dashed var(--border-strong);border-radius:12px;color:var(--muted-strong);font-size:16px}
+.xis li svg{flex:none;width:16px;height:16px;color:var(--text-faint)}
+
+/* ---------- Momentos ---------- */
+.momentos{display:grid;grid-template-columns:repeat(4,1fr);gap:0;margin-top:48px;border:1px solid var(--border);border-radius:18px;overflow:hidden;background:var(--card)}
+.momento{padding:32px 26px;border-right:1px solid var(--border)}
+.momento:last-child{border-right:0}
+.momento-ic{width:48px;height:48px;color:var(--accent);margin-bottom:22px}
+.momento h3{font-size:14px;letter-spacing:.14em;text-transform:uppercase;margin-bottom:10px}
+.momento p{font-size:15px;color:var(--muted-strong);line-height:1.55}
+
+/* ---------- Perguntas ---------- */
+.perguntas{list-style:none;columns:2;column-gap:48px;margin-top:40px}
+.perguntas li{break-inside:avoid;font-family:var(--font-display);font-size:clamp(19px,2vw,22px);font-weight:500;padding:14px 0;border-bottom:1px solid var(--border);display:flex;gap:16px;align-items:baseline}
+.perguntas li span{font-family:var(--font-ui);font-size:12px;font-weight:600;color:var(--accent-strong);letter-spacing:.08em;min-width:22px}
+
+/* ---------- Frase ---------- */
+.frase{background:var(--text);color:#fff;padding:120px 0;overflow:hidden}
+.frase blockquote{font-family:var(--font-display);font-weight:500;font-size:clamp(28px,4.6vw,54px);line-height:1.15;letter-spacing:-.03em;max-width:20ch}
+.frase blockquote em{font-style:normal;color:#B9A8FF}
+.frase svg{position:absolute;right:-60px;bottom:-40px;width:520px;opacity:.5;pointer-events:none}
+
+/* ---------- Investimento ---------- */
+.oferta{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:stretch}
+.recebe{list-style:none}
+.recebe li{display:flex;gap:12px;align-items:flex-start;padding:11px 0;font-size:16px}
+.recebe li svg{flex:none;width:20px;height:20px;color:var(--accent);margin-top:3px}
+.formato{margin-top:20px;display:inline-flex;gap:8px;align-items:center;font-size:14px;color:var(--muted-strong);background:var(--surface-muted);padding:8px 14px;border-radius:999px}
+.preco-card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:44px 40px;display:flex;flex-direction:column;justify-content:center;box-shadow:0 30px 60px -40px rgba(78,51,196,.45);position:relative;overflow:hidden}
+.preco-card::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,var(--accent),var(--cyan))}
+.preco-card .nome{font-family:var(--font-display);font-weight:700;font-size:22px;letter-spacing:-.01em;line-height:1.2;margin-bottom:12px}
+.preco-card .desc{color:var(--muted-strong);font-size:16px;margin-bottom:28px}
+.preco{font-family:var(--font-display);font-weight:700;font-size:56px;letter-spacing:-.03em;line-height:1}
+.preco small{font-size:22px;font-weight:600;vertical-align:top;margin-right:4px;line-height:1.6}
+.preco-nota{color:var(--muted);font-size:15px;margin:8px 0 28px}
+.preco-card .btn{width:100%}
+.seguro{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:14px;font-size:13px;color:var(--muted)}
+.seguro svg{width:15px;height:15px}
+
+/* ---------- Autora / marca ---------- */
+.autora{display:grid;grid-template-columns:280px 1fr;gap:56px;align-items:start}
+.autora-foto{aspect-ratio:4/5;border-radius:18px;background:var(--accent-tint);border:1px solid var(--border);display:flex;align-items:flex-end;padding:20px;overflow:hidden;position:relative}
+.autora-foto img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.autora-foto .iniciais{font-family:var(--font-display);font-size:72px;font-weight:700;color:var(--accent);letter-spacing:-.04em;line-height:1}
+.autora-nome{font-family:var(--font-display);font-weight:600;font-size:15px;color:var(--muted-strong);margin:-12px 0 24px}
+.marca-bloco{display:grid;grid-template-columns:auto 1fr;gap:40px;align-items:start;max-width:860px}
+.marca-bloco img{height:34px;width:auto;margin-top:6px}
+
+/* ---------- FAQ ---------- */
+.faq{margin-top:32px;border-top:1px solid var(--border)}
+.faq details{border-bottom:1px solid var(--border)}
+.faq summary{list-style:none;cursor:pointer;padding:22px 44px 22px 0;font-family:var(--font-display);font-weight:600;font-size:18px;position:relative}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:'';position:absolute;right:6px;top:50%;width:12px;height:12px;border-right:1.5px solid var(--muted);border-bottom:1.5px solid var(--muted);transform:translateY(-70%) rotate(45deg);transition:transform .2s}
+.faq details[open] summary::after{transform:translateY(-30%) rotate(-135deg)}
+.faq details p{padding:0 44px 22px 0;color:var(--muted-strong);font-size:16px}
+
+/* ---------- CTA final ---------- */
+.final{text-align:center;padding:120px 0}
+.final h2{margin:0 auto 28px;max-width:none}
+.final .texto{max-width:52ch;margin:0 auto 40px;color:var(--text-secondary);font-size:18px}
+.final .texto p+p{margin-top:12px}
+.final .texto .curta{font-family:var(--font-display);font-weight:500;color:var(--text)}
+
+/* ---------- Rodapé ---------- */
+.rodape{border-top:1px solid var(--border);background:var(--bg);padding:48px 0 40px;font-size:14px;color:var(--muted-strong)}
+.rodape-grade{display:flex;flex-wrap:wrap;justify-content:space-between;gap:32px}
+.rodape a{text-decoration:none}
+.rodape a:hover{color:var(--accent-strong);text-decoration:underline}
+.rodape-marca img{height:24px;width:auto;margin-bottom:10px}
+.rodape ul{list-style:none;display:flex;flex-direction:column;gap:8px}
+.rodape-tit{font-size:12px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--text-faint);margin-bottom:12px}
+.rodape-copy{margin-top:40px;padding-top:24px;border-top:1px solid var(--border);font-size:13px;color:var(--text-faint)}
+
+/* ---------- Responsivo ---------- */
+@media (max-width:960px){
+  section{padding:72px 0}
+  .hero{padding:40px 0 72px}
+  .hero-grade,.dupla,.oferta,.autora{grid-template-columns:1fr;gap:44px}
+  .hero-visual{justify-self:start;max-width:340px}
+  .movimentos{grid-template-columns:1fr;gap:28px;margin-top:40px}
+  .movimentos::before{top:22px;bottom:22px;left:21px;right:auto;width:1px;height:auto;background:repeating-linear-gradient(180deg,var(--accent) 0 6px,transparent 6px 12px)}
+  .mov{display:grid;grid-template-columns:44px 1fr;gap:0 20px;padding:0}
+  .mov-num{margin:0;grid-row:span 2}
+  .momentos{grid-template-columns:1fr 1fr}
+  .momento:nth-child(2){border-right:0}
+  .momento:nth-child(-n+2){border-bottom:1px solid var(--border)}
+  .perfis{grid-template-columns:1fr 1fr}
+  .galeria{grid-template-columns:1fr 1fr}
+  .autora-foto{max-width:260px}
+  .marca-bloco{grid-template-columns:1fr;gap:20px}
+}
+@media (max-width:640px){
+  body{font-size:16px}
+  .falas,.checks,.xis,.dia,.perfis{grid-template-columns:1fr}
+  .perguntas{columns:1}
+  .momentos{grid-template-columns:1fr}
+  .momento{border-right:0;border-bottom:1px solid var(--border)}
+  .momento:last-child{border-bottom:0}
+  .btn{width:100%;padding:18px 22px}
+  .topo .btn{width:auto}
+  .marca-produto{display:none}
+  .preco-card{padding:36px 24px}
+  .frase{padding:88px 0}
+  .final{padding:88px 0}
+}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}.btn,.topo .btn{transition:none}}
+</style>
+</head>
+<!-- data-checkout: link do checkout da Hotmart (ex.: https://pay.hotmart.com/XXXXXXX).
+     Vazio = os botões levam até a seção de investimento. -->
+<body data-checkout="https://pay.hotmart.com/E107854082W?off=2zjxevzx">
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.2 2.4 2.4 4.6-5"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+    <symbol id="i-seta" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-cadeado" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></symbol>
+    <symbol id="i-ponto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="6" cy="18" r="2.2"/><path d="M8.5 16.5c3-2 5-5 9.5-10.5" stroke-dasharray="2 3"/><circle cx="18.5" cy="5.5" r="1.4" fill="currentColor"/></symbol>
+  </defs>
+</svg>
+
+<header class="topo" id="topo">
+  <div class="container">
+    <a class="marca" href="/" aria-label="Kyvvo — página inicial">
+      <img src="https://studio.kyvvo.com.br/ds/logo.svg" alt="Kyvvo" width="83" height="26">
+      <span class="marca-produto">People</span>
+    </a>
+    <a class="btn" href="#investimento" data-cta>Quero começar</a>
+  </div>
+</header>
+
+<main>
+
+<!-- 1. HERO -->
+<section class="hero">
+  <div class="container hero-grade">
+    <div>
+      <div class="rotulo">Workbook · Kyvvo People</div>
+      <h1><span>30 dias</span><span>para pensar</span><span class="destaque">sua carreira</span></h1>
+      <p class="hero-sub">Um workbook de reflexão e desenvolvimento profissional.</p>
+      <p class="hero-apoio">Você não precisa decidir sua carreira inteira hoje.<br><strong>Talvez precise apenas entender melhor o próximo passo.</strong></p>
+      <p class="suave" style="max-width:48ch;margin-bottom:36px">Um material digital de 30 dias para olhar com mais atenção para a sua trajetória profissional, organizar pensamentos e explorar possibilidades.</p>
+      <a class="btn" href="#investimento" data-cta>Quero começar os 30 dias <svg aria-hidden="true"><use href="#i-seta"/></svg></a>
+      <p class="cta-info"><span>Material digital</span> • <span>R$ 37,00</span> • <span>Pagamento único</span></p>
+    </div>
+    <div class="hero-visual">
+      <img class="capa-img" src="/30dias/img/capa-grande.jpg" width="1310" height="1853" alt="Capa do workbook 30 Dias para Pensar sua Carreira, Kyvvo People" fetchpriority="high">
+    </div>
+  </div>
+</section>
+
+<!-- 2. IDENTIFICAÇÃO -->
+<section class="secao-alt">
+  <div class="container">
+    <div class="rotulo">Identificação</div>
+    <h2>Talvez você esteja vivendo um desses momentos...</h2>
+    <div class="falas">
+      <p class="fala">Não sei exatamente o que quero para minha carreira.</p>
+      <p class="fala">Sinto que preciso mudar, mas não sei por onde começar.</p>
+      <p class="fala">Meu trabalho atual já não faz tanto sentido.</p>
+      <p class="fala">Quero crescer profissionalmente, mas não sei qual direção seguir.</p>
+      <p class="fala">Tenho vontade de mudar de área, mas ainda tenho dúvidas.</p>
+      <p class="fala">Sei que quero alguma mudança, mas ainda não consigo definir qual.</p>
+      <p class="fala">Quero entender melhor minhas competências e possibilidades.</p>
+      <p class="fala">Preciso organizar meus próximos passos profissionais.</p>
+    </div>
+    <p class="fecho">Se alguma dessas situações parece familiar, talvez este material possa ser um bom espaço para começar.</p>
+  </div>
+</section>
+
+<!-- 3. O QUE É -->
+<section>
+  <div class="container dupla">
+    <div>
+      <div class="rotulo">O que é</div>
+      <h2>Um espaço estruturado para pensar sobre sua carreira.</h2>
+      <p class="lead">O 30 Dias para Pensar sua Carreira é um workbook digital de reflexão e desenvolvimento profissional.</p>
+      <p class="suave" style="margin-top:20px">Durante 30 dias, você será convidado(a) a olhar para sua trajetória, reconhecer experiências e competências, compreender o que importa para você, explorar possibilidades e organizar próximos passos.</p>
+      <p class="suave">O objetivo não é dizer qual caminho você deveria seguir.</p>
+      <p style="font-weight:600">É criar espaço para que você possa olhar para sua própria trajetória com mais atenção e construir suas próprias respostas.</p>
+    </div>
+    <ul class="nao-lista" aria-label="O que o workbook é e não é">
+      <li>Não é uma fórmula.</li>
+      <li>Não é um teste vocacional.</li>
+      <li>Não é terapia.</li>
+      <li>Não é mentoria individual.</li>
+      <li>Não promete uma transformação profissional.</li>
+      <li class="e">É um espaço estruturado para reflexão e desenvolvimento.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 4. COMO FUNCIONA -->
+<section class="secao-alt">
+  <div class="container">
+    <div class="rotulo">Como funciona</div>
+    <h2>30 dias. 5 movimentos. Um olhar mais atento para sua carreira.</h2>
+    <ol class="movimentos">
+      <li class="mov"><div class="mov-num">01</div><div><h3>Perceber</h3><p>Onde estou na minha trajetória?</p></div></li>
+      <li class="mov"><div class="mov-num">02</div><div><h3>Explorar</h3><p>O que importa para mim e o que tenho para oferecer?</p></div></li>
+      <li class="mov"><div class="mov-num">03</div><div><h3>Nomear</h3><p>O que eu quero, o que não quero e quais possibilidades existem?</p></div></li>
+      <li class="mov"><div class="mov-num">04</div><div><h3>Sistematizar</h3><p>O que eu tenho e o que preciso desenvolver?</p></div></li>
+      <li class="mov"><div class="mov-num">05</div><div><h3>Agir</h3><p>Como organizar meus próximos passos?</p></div></li>
+    </ol>
+    <div class="dia" aria-label="Como é cada dia">
+      <div><b>Uma reflexão</b><span>Um tema para pensar a cada dia.</span></div>
+      <div><b>Um exercício</b><span>Uma atividade prática sobre o tema.</span></div>
+      <div><b>Espaço para registrar</b><span>Lugar para escrever as suas próprias respostas.</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- 5. O QUE VOCÊ VAI ENCONTRAR -->
+<section>
+  <div class="container">
+    <div class="rotulo">Conteúdo</div>
+    <h2>Mais do que perguntas: um processo organizado de reflexão.</h2>
+    <ul class="checks">
+      <li class="forte"><svg aria-hidden="true"><use href="#i-check"/></svg>30 dias de exercícios</li>
+      <li class="forte"><svg aria-hidden="true"><use href="#i-check"/></svg>5 módulos de reflexão</li>
+      <li><svg aria-hidden="true"><use href="#i-check"/></svg>Exercícios sobre trajetória profissional</li>
+      <li><svg aria-hidden="true"><use href="#i-check"/></svg>Reflexões sobre valores e prioridades</li>
+      <li><svg aria-hidden="true"><use href="#i-check"/></svg>Identificação de competências e experiências</li>
+      <li><svg aria-hidden="true"><use href="#i-check"/></svg>Exploração de interesses e possibilidades</li>
+      <li><svg aria-hidden="true"><use href="#i-check"/></svg>Critérios para pensar decisões profissionais</li>
+      <li><svg aria-hidden="true"><use href="#i-check"/></svg>Mapa Profissional</li>
+      <li><svg aria-hidden="true"><use href="#i-check"/></svg>Plano de Próximos Passos</li>
+      <li><svg aria-hidden="true"><use href="#i-check"/></svg>Checklist de currículo</li>
+      <li><svg aria-hidden="true"><use href="#i-check"/></svg>Checklist de LinkedIn</li>
+      <li><svg aria-hidden="true"><use href="#i-check"/></svg>Plano de Desenvolvimento Profissional</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 6. VEJA POR DENTRO — páginas reais do PDF (renderizadas do arquivo
+     do produto). Não incluir páginas que não existam no workbook. -->
+<section class="secao-alt" id="por-dentro">
+  <div class="container">
+    <div class="rotulo">Por dentro</div>
+    <h2>Veja por dentro.</h2>
+    <p class="suave" style="max-width:60ch">Algumas páginas do workbook, como você vai recebê-las. São 68 páginas no total, em PDF.</p>
+    <div class="galeria">
+      <figure><a href="/30dias/img/capa.jpg" target="_blank" rel="noopener"><img src="/30dias/img/capa.jpg" width="953" height="1348" alt="Página do workbook: Capa" loading="lazy"></a><figcaption>Capa</figcaption></figure>
+      <figure><a href="/30dias/img/apresentacao.jpg" target="_blank" rel="noopener"><img src="/30dias/img/apresentacao.jpg" width="953" height="1348" alt="Página do workbook: Apresentação" loading="lazy"></a><figcaption>Apresentação</figcaption></figure>
+      <figure><a href="/30dias/img/exercicio.jpg" target="_blank" rel="noopener"><img src="/30dias/img/exercicio.jpg" width="953" height="1348" alt="Página do workbook: Exercício — Dia 01" loading="lazy"></a><figcaption>Exercício — Dia 01</figcaption></figure>
+      <figure><a href="/30dias/img/pausa.jpg" target="_blank" rel="noopener"><img src="/30dias/img/pausa.jpg" width="953" height="1348" alt="Página do workbook: Pausa" loading="lazy"></a><figcaption>Pausa</figcaption></figure>
+      <figure><a href="/30dias/img/mapa-profissional.jpg" target="_blank" rel="noopener"><img src="/30dias/img/mapa-profissional.jpg" width="953" height="1348" alt="Página do workbook: Meu Mapa Profissional" loading="lazy"></a><figcaption>Meu Mapa Profissional</figcaption></figure>
+      <figure><a href="/30dias/img/plano-proximos-passos.jpg" target="_blank" rel="noopener"><img src="/30dias/img/plano-proximos-passos.jpg" width="953" height="1348" alt="Página do workbook: Plano de Próximos Passos" loading="lazy"></a><figcaption>Plano de Próximos Passos</figcaption></figure>
+      <figure><a href="/30dias/img/checklist-curriculo.jpg" target="_blank" rel="noopener"><img src="/30dias/img/checklist-curriculo.jpg" width="953" height="1348" alt="Página do workbook: Checklist de Currículo" loading="lazy"></a><figcaption>Checklist de Currículo</figcaption></figure>
+      <figure><a href="/30dias/img/checklist-linkedin.jpg" target="_blank" rel="noopener"><img src="/30dias/img/checklist-linkedin.jpg" width="953" height="1348" alt="Página do workbook: Checklist de LinkedIn" loading="lazy"></a><figcaption>Checklist de LinkedIn</figcaption></figure>
+      <figure><a href="/30dias/img/plano-desenvolvimento.jpg" target="_blank" rel="noopener"><img src="/30dias/img/plano-desenvolvimento.jpg" width="953" height="1348" alt="Página do workbook: Plano de Desenvolvimento Profissional" loading="lazy"></a><figcaption>Plano de Desenvolvimento Profissional</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<!-- 7. PARA QUEM É -->
+<section class="secao-alt">
+  <div class="container">
+    <div class="rotulo">Para quem é</div>
+    <h2>Este workbook pode fazer sentido para você se...</h2>
+    <p class="lead">Este workbook é para pessoas que desejam refletir sobre sua trajetória profissional e compreender melhor seus próximos passos.</p>
+    <p class="suave" style="margin-top:16px;max-width:70ch">É indicado para quem está começando a carreira, busca crescimento, vive um momento de mudança, considera uma transição profissional, sente dúvidas ou insatisfação com o trabalho atual, ou simplesmente quer organizar melhor seus objetivos, competências, experiências e possibilidades.</p>
+    <div class="perfis">
+      <div class="perfil"><svg aria-hidden="true"><use href="#i-ponto"/></svg>Quem está começando</div>
+      <div class="perfil"><svg aria-hidden="true"><use href="#i-ponto"/></svg>Quem quer crescer</div>
+      <div class="perfil"><svg aria-hidden="true"><use href="#i-ponto"/></svg>Quem está pensando em mudar</div>
+      <div class="perfil"><svg aria-hidden="true"><use href="#i-ponto"/></svg>Quem está vivendo uma transição</div>
+      <div class="perfil"><svg aria-hidden="true"><use href="#i-ponto"/></svg>Quem quer se reposicionar</div>
+      <div class="perfil"><svg aria-hidden="true"><use href="#i-ponto"/></svg>Quem quer compreender melhor seus próximos passos</div>
+    </div>
+  </div>
+</section>
+
+<!-- 8. PARA QUEM NÃO É -->
+<section>
+  <div class="container estreito">
+    <div class="rotulo">Para quem não é</div>
+    <h2>O que você não vai encontrar aqui.</h2>
+    <ul class="xis">
+      <li><svg aria-hidden="true"><use href="#i-x"/></svg>Não é teste vocacional.</li>
+      <li><svg aria-hidden="true"><use href="#i-x"/></svg>Não é terapia.</li>
+      <li><svg aria-hidden="true"><use href="#i-x"/></svg>Não é mentoria individual.</li>
+      <li><svg aria-hidden="true"><use href="#i-x"/></svg>Não entrega uma profissão ou carreira ideal.</li>
+      <li><svg aria-hidden="true"><use href="#i-x"/></svg>Não oferece uma fórmula pronta.</li>
+      <li><svg aria-hidden="true"><use href="#i-x"/></svg>Não promete emprego ou promoção.</li>
+      <li><svg aria-hidden="true"><use href="#i-x"/></svg>Não decide por você.</li>
+    </ul>
+    <p class="lead">A proposta é diferente: oferecer perguntas, exercícios e espaço para que você possa construir suas próprias reflexões.</p>
+  </div>
+</section>
+
+<!-- 9. MOMENTOS DE CARREIRA -->
+<section class="secao-alt">
+  <div class="container">
+    <div class="rotulo">Momentos de carreira</div>
+    <h2>Sua carreira não precisa estar em crise para você querer refletir sobre ela.</h2>
+    <div class="momentos">
+      <div class="momento">
+        <svg class="momento-ic" viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="9" cy="27" r="4"/><path d="M13 27h18" stroke-dasharray="2 4" stroke-linecap="round"/></svg>
+        <h3>Começando</h3><p>Para quem está entrando no mercado e quer compreender melhor seus interesses, competências e possibilidades.</p>
+      </div>
+      <div class="momento">
+        <svg class="momento-ic" viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="7" cy="28" r="3"/><path d="M10 26c6-2 10-7 14-14" stroke-dasharray="2 4"/><circle cx="27" cy="9" r="3" fill="currentColor"/></svg>
+        <h3>Crescendo</h3><p>Para quem deseja entender como pode continuar se desenvolvendo profissionalmente.</p>
+      </div>
+      <div class="momento">
+        <svg class="momento-ic" viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="6" cy="18" r="3"/><path d="M9 18h7M16 18c4 0 5-8 11-8M16 18c4 0 5 8 11 8" stroke-dasharray="2 4"/><circle cx="29" cy="10" r="2.4"/><circle cx="29" cy="26" r="2.4" fill="currentColor"/></svg>
+        <h3>Mudando</h3><p>Para quem considera trocar de empresa, função, área ou contexto profissional.</p>
+      </div>
+      <div class="momento">
+        <svg class="momento-ic" viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M27 12a10 10 0 1 0 2 8" stroke-dasharray="2 4"/><path d="M28 5v7h-7"/><circle cx="18" cy="18" r="2.6" fill="currentColor"/></svg>
+        <h3>Recomeçando</h3><p>Para quem está vivendo uma nova fase e precisa reorganizar seus próximos passos.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 10. O QUE VOCÊ PODE ORGANIZAR -->
+<section>
+  <div class="container">
+    <div class="rotulo">Ao longo dos 30 dias</div>
+    <h2>Ao longo do processo, você vai olhar para:</h2>
+    <ol class="perguntas">
+      <li><span>01</span>Onde estou hoje?</li>
+      <li><span>02</span>O que está funcionando?</li>
+      <li><span>03</span>O que está me incomodando?</li>
+      <li><span>04</span>O que realmente importa para mim?</li>
+      <li><span>05</span>Quais são minhas competências?</li>
+      <li><span>06</span>O que eu gostaria de desenvolver?</li>
+      <li><span>07</span>O que eu quero continuar fazendo?</li>
+      <li><span>08</span>O que eu não quero repetir?</li>
+      <li><span>09</span>Quais possibilidades quero explorar?</li>
+      <li><span>10</span>O que preciso investigar?</li>
+      <li><span>11</span>Qual é meu próximo passo?</li>
+    </ol>
+  </div>
+</section>
+
+<!-- 11. FRASE -->
+<section class="frase">
+  <div class="container">
+    <blockquote>“Você não precisa decidir sua carreira inteira hoje. <em>Talvez precise apenas entender melhor o próximo passo.</em>”</blockquote>
+  </div>
+  <svg viewBox="0 0 520 300" fill="none" aria-hidden="true">
+    <path d="M10 290 C 120 290, 120 190, 230 190 S 350 80, 450 80 S 510 20, 515 10" stroke="#7C5CFC" stroke-width="1.5" stroke-dasharray="3 7" stroke-linecap="round"/>
+    <circle cx="230" cy="190" r="5" fill="#7C5CFC"/><circle cx="450" cy="80" r="5" fill="#7C5CFC"/><circle cx="515" cy="10" r="8" fill="#7C5CFC"/>
+  </svg>
+</section>
+
+<!-- 12 + 13. O QUE VOCÊ RECEBE + INVESTIMENTO -->
+<section id="investimento">
+  <div class="container oferta">
+    <div>
+      <div class="rotulo">O que você recebe</div>
+      <h2 style="font-size:clamp(24px,3vw,32px)">Ao adquirir o 30 Dias para Pensar sua Carreira, você recebe:</h2>
+      <ul class="recebe">
+        <li><svg aria-hidden="true"><use href="#i-check"/></svg>Workbook digital completo</li>
+        <li><svg aria-hidden="true"><use href="#i-check"/></svg>30 dias de exercícios e reflexões</li>
+        <li><svg aria-hidden="true"><use href="#i-check"/></svg>5 módulos</li>
+        <li><svg aria-hidden="true"><use href="#i-check"/></svg>Meu Mapa Profissional</li>
+        <li><svg aria-hidden="true"><use href="#i-check"/></svg>Plano de Próximos Passos</li>
+        <li><svg aria-hidden="true"><use href="#i-check"/></svg>Checklist de Currículo</li>
+        <li><svg aria-hidden="true"><use href="#i-check"/></svg>Checklist de LinkedIn</li>
+        <li><svg aria-hidden="true"><use href="#i-check"/></svg>Plano de Desenvolvimento Profissional</li>
+      </ul>
+      <p class="formato">Formato digital em PDF.</p>
+    </div>
+    <div class="preco-card">
+      <div class="rotulo" style="margin-bottom:14px">Investimento</div>
+      <p class="nome">30 Dias para Pensar sua Carreira</p>
+      <p class="desc">Um workbook para você dedicar tempo à sua trajetória profissional e organizar seus próximos passos.</p>
+      <p class="preco"><small>R$</small>37,00</p>
+      <p class="preco-nota">Pagamento único.</p>
+      <a class="btn" href="#investimento" data-cta>Quero começar os 30 dias <svg aria-hidden="true"><use href="#i-seta"/></svg></a>
+      <p class="seguro"><svg aria-hidden="true"><use href="#i-cadeado"/></svg>Compra segura através da Hotmart.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 14. AUTORA -->
+<section class="secao-alt">
+  <div class="container autora">
+    <div class="autora-foto"><img src="/30dias/img/gabriela.jpg" width="720" height="960" alt="Gabriela Matos, psicóloga" loading="lazy"></div>
+    <div>
+      <div class="rotulo">Sobre a autora</div>
+      <h2>Quem criou este material?</h2>
+      <p class="autora-nome">Gabriela Matos · Psicóloga</p>
+      <p class="lead">Gabriela Matos é psicóloga e profissional da área de Gestão de Pessoas, com experiência em desenvolvimento humano, carreira, liderança e processos de pessoas.</p>
+      <p class="suave" style="margin-top:16px">Sua atuação reúne conhecimentos da Psicologia e da área de Gestão de Pessoas para criar conteúdos e ferramentas que ajudem profissionais a refletirem sobre sua trajetória, desenvolvimento e relações com o trabalho.</p>
+      <p class="suave">O 30 Dias para Pensar sua Carreira nasceu dessa perspectiva: não oferecer respostas prontas, mas criar espaço para perguntas importantes e reflexões que possam ajudar cada pessoa a compreender melhor seu próprio caminho profissional.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 15. KYVVO PEOPLE -->
+<section>
+  <div class="container">
+    <div class="marca-bloco">
+      <img src="https://studio.kyvvo.com.br/ds/logo.svg" alt="Kyvvo" width="109" height="34">
+      <div>
+        <div class="rotulo">Kyvvo People</div>
+        <p class="lead">A Kyvvo People desenvolve conteúdos, ferramentas e soluções voltadas para pessoas, carreira e desenvolvimento profissional.</p>
+        <p class="suave" style="margin-top:16px">Acreditamos que desenvolvimento não precisa ser baseado em fórmulas prontas.</p>
+        <p style="font-family:var(--font-display);font-weight:500;font-size:19px">Pode começar por uma boa pergunta, uma reflexão sincera e um próximo passo possível.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 16. FAQ -->
+<section class="secao-alt">
+  <div class="container estreito">
+    <div class="rotulo">Perguntas frequentes</div>
+    <h2>Dúvidas sobre o workbook</h2>
+    <div class="faq">
+      <details><summary>O produto é físico?</summary><p>Não. O produto é digital e disponibilizado em formato PDF.</p></details>
+      <details><summary>Como receberei o material?</summary><p>Após a confirmação do pagamento, o acesso será disponibilizado pela Hotmart.</p></details>
+      <details><summary>Preciso fazer os 30 dias consecutivamente?</summary><p>A proposta é realizar um dia de cada vez, mas você pode adaptar o ritmo à sua rotina.</p></details>
+      <details><summary>Preciso estar pensando em mudar de emprego?</summary><p>Não. O workbook também pode ser utilizado por quem está satisfeito, mas deseja refletir sobre desenvolvimento, possibilidades e próximos passos.</p></details>
+      <details><summary>É um teste vocacional?</summary><p>Não. O material não identifica uma profissão ideal nem apresenta um resultado vocacional.</p></details>
+      <details><summary>É terapia?</summary><p>Não. O workbook é uma ferramenta de reflexão e desenvolvimento profissional e não substitui acompanhamento psicológico ou orientação profissional especializada quando necessários.</p></details>
+      <details><summary>O material garante que vou descobrir o que fazer da minha carreira?</summary><p>Não. O material não promete respostas prontas. Ele organiza perguntas e exercícios para ajudar você a refletir sobre sua trajetória e possibilidades.</p></details>
+    </div>
+  </div>
+</section>
+
+<!-- 17. CTA FINAL -->
+<section class="final">
+  <div class="container">
+    <h2>Você não precisa ter todas as respostas.</h2>
+    <div class="texto">
+      <p>Talvez você ainda não saiba exatamente para onde quer ir.</p>
+      <p class="curta">Tudo bem.</p>
+      <p>Comece entendendo melhor onde você está, o que importa para você, o que já construiu e o que gostaria de explorar.</p>
+      <p>Seu próximo passo não precisa resolver toda a sua carreira.</p>
+      <p class="curta">Ele só precisa fazer sentido para você agora.</p>
+    </div>
+    <a class="btn" href="#investimento" data-cta>Quero começar os 30 dias <svg aria-hidden="true"><use href="#i-seta"/></svg></a>
+    <p class="cta-info"><span>R$ 37,00</span> • <span>Pagamento único</span> • <span>Produto digital</span></p>
+  </div>
+</section>
+
+</main>
+
+<!-- 18. RODAPÉ -->
+<footer class="rodape">
+  <div class="container">
+    <div class="rodape-grade">
+      <div class="rodape-marca">
+        <img src="https://studio.kyvvo.com.br/ds/logo.svg" alt="Kyvvo" width="77" height="24">
+        <div>Kyvvo People</div>
+      </div>
+      <div>
+        <div class="rodape-tit">Instagram</div>
+        <ul>
+          <li><a href="https://www.instagram.com/somoskyvvo" target="_blank" rel="noopener">@somoskyvvo</a></li>
+          <li><a href="https://www.instagram.com/psigabrielamatos" target="_blank" rel="noopener">@psigabrielamatos</a> <span class="suave" style="font-size:13px">(profissional)</span></li>
+        </ul>
+      </div>
+      <div>
+        <div class="rodape-tit">Informações</div>
+        <ul>
+          <li><a href="/people/privacidade/">Política de Privacidade</a></li>
+          <li><a href="/people/termos/">Termos de Uso</a></li>
+          <li><a href="mailto:contato@kyvvo.com.br">Contato</a></li>
+        </ul>
+      </div>
+    </div>
+    <p class="rodape-copy">© <span id="ano">2026</span> Kyvvo People. Produto digital vendido e entregue pela Hotmart.</p>
+  </div>
+</footer>
+
+<script>
+  // Checkout: todos os botões [data-cta] apontam pro link em data-checkout
+  // do <body>. Sem link configurado, continuam levando à seção de preço.
+  (function () {
+    var checkout = (document.body.getAttribute('data-checkout') || '').trim();
+    if (checkout) {
+      document.querySelectorAll('[data-cta]').forEach(function (a) {
+        // Repassa parâmetros de campanha/afiliado (utm_*, src, sck) pro checkout.
+        var url = new URL(checkout);
+        new URLSearchParams(location.search).forEach(function (v, k) {
+          if (/^(utm_|src$|sck$|xcod$)/.test(k) && !url.searchParams.has(k)) url.searchParams.set(k, v);
+        });
+        a.href = url.toString();
+      });
+    }
+    var topo = document.getElementById('topo');
+    var marcar = function () { topo.classList.toggle('rolou', window.scrollY > 480); };
+    marcar();
+    window.addEventListener('scroll', marcar, { passive: true });
+    document.getElementById('ano').textContent = new Date().getFullYear();
+  })();
+</script>
+</body>
+</html>
