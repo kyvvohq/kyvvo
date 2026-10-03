@@ -80,9 +80,10 @@ p+p{margin-top:16px}
 .hero-sub{font-family:var(--font-display);font-size:clamp(19px,2.2vw,23px);font-weight:500;color:var(--text-secondary);margin-bottom:28px}
 .hero-apoio{font-size:18px;color:var(--muted-strong);max-width:44ch;margin-bottom:36px;border-left:2px solid var(--accent);padding-left:18px}
 .hero-apoio strong{color:var(--text);font-weight:600}
-.hero-visual{position:relative;aspect-ratio:4/5;max-width:440px;justify-self:end;width:100%}
+.hero-visual{position:relative;aspect-ratio:1310/1853;max-width:440px;justify-self:end;width:100%}
 /* "Capa" tipográfica do workbook — substituída pela imagem real (mockup)
    quando houver: trocar o conteúdo de .capa por <img>. */
+.capa-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:4px 14px 14px 4px;border:1px solid var(--border);box-shadow:-12px 0 0 -6px var(--accent-tint),0 34px 70px -30px rgba(15,17,26,.4)}
 .capa{position:absolute;inset:0;justify-content:flex-start;gap:28px;background:var(--card);border:1px solid var(--border);border-radius:6px 18px 18px 6px;box-shadow:-14px 0 0 -6px var(--accent-tint),0 30px 60px -30px rgba(15,17,26,.35);padding:40px 34px;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden}
 .capa::before{content:'';position:absolute;left:18px;top:0;bottom:0;width:1px;background:var(--border)}
 .capa-topo{font-size:11px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);padding-left:12px}
@@ -129,7 +130,9 @@ p+p{margin-top:16px}
 /* ---------- Galeria (só aparece quando houver imagens reais) ---------- */
 .galeria{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:40px}
 .galeria figure{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden}
-.galeria img{width:100%;aspect-ratio:3/4;object-fit:cover;background:var(--surface-muted)}
+.galeria a{display:block}
+.galeria img{width:100%;height:auto;aspect-ratio:953/1348;object-fit:cover;background:var(--surface-muted);transition:transform .3s}
+.galeria a:hover img{transform:scale(1.02)}
 .galeria figcaption{padding:12px 16px;font-size:14px;color:var(--muted-strong);border-top:1px solid var(--border)}
 
 /* ---------- Para quem é / não é ---------- */
@@ -248,7 +251,7 @@ p+p{margin-top:16px}
 </head>
 <!-- data-checkout: link do checkout da Hotmart (ex.: https://pay.hotmart.com/XXXXXXX).
      Vazio = os botões levam até a seção de investimento. -->
-<body data-checkout="">
+<body data-checkout="https://pay.hotmart.com/E107854082W?off=2zjxevzx">
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
@@ -284,19 +287,8 @@ p+p{margin-top:16px}
       <a class="btn" href="#investimento" data-cta>Quero começar os 30 dias <svg aria-hidden="true"><use href="#i-seta"/></svg></a>
       <p class="cta-info"><span>Material digital</span> • <span>R$ 37,00</span> • <span>Pagamento único</span></p>
     </div>
-    <div class="hero-visual" aria-hidden="true">
-      <div class="capa">
-        <div class="capa-topo">Workbook · 30 dias</div>
-        <svg class="percurso" viewBox="0 0 300 220" fill="none">
-          <path d="M8 200 C 70 200, 70 140, 130 140 S 190 70, 250 70 S 290 20, 292 12" stroke="#7C5CFC" stroke-width="1.5" stroke-dasharray="3 6" stroke-linecap="round"/>
-          <circle cx="8" cy="200" r="5" fill="#fff" stroke="#7C5CFC" stroke-width="1.5"/>
-          <circle cx="130" cy="140" r="4" fill="#7C5CFC"/>
-          <circle cx="250" cy="70" r="4" fill="#7C5CFC"/>
-          <circle cx="292" cy="12" r="6" fill="#7C5CFC"/>
-        </svg>
-        <div class="capa-titulo">30 dias<br>para pensar<br><em>sua carreira</em></div>
-        <div class="capa-rodape"><span>Gabriela Matos</span><b>Kyvvo People</b></div>
-      </div>
+    <div class="hero-visual">
+      <img class="capa-img" src="/30dias/img/capa-grande.jpg" width="1310" height="1853" alt="Capa do workbook 30 Dias para Pensar sua Carreira, Kyvvo People" fetchpriority="high">
     </div>
   </div>
 </section>
@@ -384,16 +376,23 @@ p+p{margin-top:16px}
   </div>
 </section>
 
-<!-- 6. VEJA POR DENTRO — escondida até haver imagens REAIS do workbook.
-     Para ativar: colocar as imagens em /30dias/img/ e preencher as <figure>
-     abaixo, depois remover o atributo `hidden` da <section>. Não usar páginas
-     que não existam no produto. -->
-<section class="secao-alt" id="por-dentro" hidden>
+<!-- 6. VEJA POR DENTRO — páginas reais do PDF (renderizadas do arquivo
+     do produto). Não incluir páginas que não existam no workbook. -->
+<section class="secao-alt" id="por-dentro">
   <div class="container">
     <div class="rotulo">Por dentro</div>
     <h2>Veja por dentro.</h2>
+    <p class="suave" style="max-width:60ch">Algumas páginas do workbook, como você vai recebê-las. São 68 páginas no total, em PDF.</p>
     <div class="galeria">
-      <!-- <figure><img src="/30dias/img/capa.jpg" alt="Capa do workbook" loading="lazy"><figcaption>Capa</figcaption></figure> -->
+      <figure><a href="/30dias/img/capa.jpg" target="_blank" rel="noopener"><img src="/30dias/img/capa.jpg" width="953" height="1348" alt="Página do workbook: Capa" loading="lazy"></a><figcaption>Capa</figcaption></figure>
+      <figure><a href="/30dias/img/apresentacao.jpg" target="_blank" rel="noopener"><img src="/30dias/img/apresentacao.jpg" width="953" height="1348" alt="Página do workbook: Apresentação" loading="lazy"></a><figcaption>Apresentação</figcaption></figure>
+      <figure><a href="/30dias/img/exercicio.jpg" target="_blank" rel="noopener"><img src="/30dias/img/exercicio.jpg" width="953" height="1348" alt="Página do workbook: Exercício — Dia 01" loading="lazy"></a><figcaption>Exercício — Dia 01</figcaption></figure>
+      <figure><a href="/30dias/img/pausa.jpg" target="_blank" rel="noopener"><img src="/30dias/img/pausa.jpg" width="953" height="1348" alt="Página do workbook: Pausa" loading="lazy"></a><figcaption>Pausa</figcaption></figure>
+      <figure><a href="/30dias/img/mapa-profissional.jpg" target="_blank" rel="noopener"><img src="/30dias/img/mapa-profissional.jpg" width="953" height="1348" alt="Página do workbook: Meu Mapa Profissional" loading="lazy"></a><figcaption>Meu Mapa Profissional</figcaption></figure>
+      <figure><a href="/30dias/img/plano-proximos-passos.jpg" target="_blank" rel="noopener"><img src="/30dias/img/plano-proximos-passos.jpg" width="953" height="1348" alt="Página do workbook: Plano de Próximos Passos" loading="lazy"></a><figcaption>Plano de Próximos Passos</figcaption></figure>
+      <figure><a href="/30dias/img/checklist-curriculo.jpg" target="_blank" rel="noopener"><img src="/30dias/img/checklist-curriculo.jpg" width="953" height="1348" alt="Página do workbook: Checklist de Currículo" loading="lazy"></a><figcaption>Checklist de Currículo</figcaption></figure>
+      <figure><a href="/30dias/img/checklist-linkedin.jpg" target="_blank" rel="noopener"><img src="/30dias/img/checklist-linkedin.jpg" width="953" height="1348" alt="Página do workbook: Checklist de LinkedIn" loading="lazy"></a><figcaption>Checklist de LinkedIn</figcaption></figure>
+      <figure><a href="/30dias/img/plano-desenvolvimento.jpg" target="_blank" rel="noopener"><img src="/30dias/img/plano-desenvolvimento.jpg" width="953" height="1348" alt="Página do workbook: Plano de Desenvolvimento Profissional" loading="lazy"></a><figcaption>Plano de Desenvolvimento Profissional</figcaption></figure>
     </div>
   </div>
 </section>
@@ -525,9 +524,7 @@ p+p{margin-top:16px}
 <!-- 14. AUTORA -->
 <section class="secao-alt">
   <div class="container autora">
-    <!-- Foto: colocar /30dias/img/gabriela.jpg e trocar o conteúdo abaixo por
-         <img src="/30dias/img/gabriela.jpg" alt="Gabriela Matos"> -->
-    <div class="autora-foto" aria-hidden="true"><span class="iniciais">GM</span></div>
+    <div class="autora-foto"><img src="/30dias/img/gabriela.jpg" width="720" height="960" alt="Gabriela Matos, psicóloga" loading="lazy"></div>
     <div>
       <div class="rotulo">Sobre a autora</div>
       <h2>Quem criou este material?</h2>
@@ -600,16 +597,16 @@ p+p{margin-top:16px}
       <div>
         <div class="rodape-tit">Instagram</div>
         <ul>
-          <li><a href="https://www.instagram.com/kyvvpeople" target="_blank" rel="noopener">@kyvvpeople</a></li>
+          <li><a href="https://www.instagram.com/somoskyvvo" target="_blank" rel="noopener">@somoskyvvo</a></li>
           <li><a href="https://www.instagram.com/psigabrielamatos" target="_blank" rel="noopener">@psigabrielamatos</a> <span class="suave" style="font-size:13px">(profissional)</span></li>
         </ul>
       </div>
       <div>
         <div class="rodape-tit">Informações</div>
         <ul>
-          <li><a href="https://studio.kyvvo.com.br/privacidade.html">Política de Privacidade</a></li>
-          <li><a href="https://studio.kyvvo.com.br/termos.html">Termos de Uso</a></li>
-          <li><a href="https://www.instagram.com/kyvvpeople" target="_blank" rel="noopener">Contato</a></li>
+          <li><a href="/people/privacidade/">Política de Privacidade</a></li>
+          <li><a href="/people/termos/">Termos de Uso</a></li>
+          <li><a href="mailto:contato@kyvvo.com.br">Contato</a></li>
         </ul>
       </div>
     </div>
